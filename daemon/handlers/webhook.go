@@ -23,7 +23,7 @@ func WebhookHandler(c *gin.Context) {
 	repoGroup := c.Param("repo_group")
 	platform := c.Param("platform")
 
-	validPlatforms := map[string]bool{"github": true, "gitlab": true, "gitea": true}
+	validPlatforms := map[string]bool{"github": true, "gitlab": true, "gitea": true, "forgejo": true, "codeberg": true}
 	if !validPlatforms[platform] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported platform: " + platform})
 		return

@@ -117,7 +117,7 @@ func validate(cfg *models.Config) error {
 			mode = "multi" // default
 		}
 		if mode == "single" {
-			if rg.GitHub == "" && rg.GitLab == "" && rg.Gitea == "" {
+			if rg.GitHub == "" && rg.GitLab == "" && rg.Gitea == "" && rg.Forgejo == "" && rg.Codeberg == "" {
 				return fmt.Errorf("single mode repo group %s requires at least one platform repo to be set", rg.Name)
 			}
 			if rg.MirrorPlatform == "" {
@@ -167,6 +167,8 @@ func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 			GitHub:         rg.GitHub,
 			GitLab:         rg.GitLab,
 			Gitea:          rg.Gitea,
+			Forgejo:        rg.Forgejo,
+			Codeberg:       rg.Codeberg,
 			DefaultBranch:  rg.DefaultBranch,
 			HookPath:       rg.HookPath,
 			CIProvider:     rg.CIProvider,
@@ -185,33 +187,37 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
         if mode == "" {
             mode = "multi"
         }
-        if rg.Name == name {
-            return &models.RepoGroup{
-                Name:           rg.Name,
-                Mode:           mode,
-                MirrorPlatform: rg.MirrorPlatform,
-                GitHub:         rg.GitHub,
-                GitLab:         rg.GitLab,
-                Gitea:          rg.Gitea,
-                DefaultBranch:  rg.DefaultBranch,
-                HookPath:       rg.HookPath,
-                CIProvider:     rg.CIProvider,
-                MergeQueue:     rg.MergeQueue,
-            }
-        }
-        if rg.Name == "default" {
-            defaultGroup = &models.RepoGroup{
-                Name:           rg.Name,
-                Mode:           mode,
-                MirrorPlatform: rg.MirrorPlatform,
-                GitHub:         rg.GitHub,
-                GitLab:         rg.GitLab,
-                Gitea:          rg.Gitea,
-                DefaultBranch:  rg.DefaultBranch,
-                HookPath:       rg.HookPath,
-                CIProvider:     rg.CIProvider,
-                MergeQueue:     rg.MergeQueue,
-            }
+         if rg.Name == name {
+             return &models.RepoGroup{
+                 Name:           rg.Name,
+                 Mode:           mode,
+                 MirrorPlatform: rg.MirrorPlatform,
+                 GitHub:         rg.GitHub,
+                 GitLab:         rg.GitLab,
+                 Gitea:          rg.Gitea,
+                 Forgejo:        rg.Forgejo,
+                 Codeberg:       rg.Codeberg,
+                 DefaultBranch:  rg.DefaultBranch,
+                 HookPath:       rg.HookPath,
+                 CIProvider:     rg.CIProvider,
+                 MergeQueue:     rg.MergeQueue,
+             }
+         }
+         if rg.Name == "default" {
+             defaultGroup = &models.RepoGroup{
+                 Name:           rg.Name,
+                 Mode:           mode,
+                 MirrorPlatform: rg.MirrorPlatform,
+                 GitHub:         rg.GitHub,
+                 GitLab:         rg.GitLab,
+                 Gitea:          rg.Gitea,
+                 Forgejo:        rg.Forgejo,
+                 Codeberg:       rg.Codeberg,
+                 DefaultBranch:  rg.DefaultBranch,
+                 HookPath:       rg.HookPath,
+                 CIProvider:     rg.CIProvider,
+                 MergeQueue:     rg.MergeQueue,
+             }
         }
     }
     if defaultGroup != nil {
@@ -231,6 +237,10 @@ func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, rep
         repoPath = group.GitLab
     case "gitea":
         repoPath = group.Gitea
+    case "forgejo":
+        repoPath = group.Forgejo
+    case "codeberg":
+        repoPath = group.Codeberg
     }
     if repoPath == "" {
         return "", ""

@@ -13,16 +13,18 @@ type User struct {
 
 // RepoGroup represents a repository group
 type RepoGroup struct {
-    Name           string          `json:"name"`
-    Mode           string          `json:"mode"`            // "multi" | "single"
-    MirrorPlatform string          `json:"mirror_platform"` // single mode source platform, e.g. "github"
-    GitHub         string          `json:"github"`
-    GitLab         string          `json:"gitlab"`
-    Gitea          string          `json:"gitea"`
-    DefaultBranch  string          `json:"default_branch"`
-    HookPath       string          `json:"hookpath"`
-    CIProvider     string          `json:"ci_provider"`
-    MergeQueue     MergeQueueConfig `json:"merge_queue"`
+    Name           string           `json:"name"`
+    Mode           string           `json:"mode"`            // "multi" | "single"
+    MirrorPlatform string           `json:"mirror_platform"` // single mode source platform, e.g. "github"
+    GitHub         string           `json:"github"`
+    GitLab         string           `json:"gitlab"`
+    Gitea          string           `json:"gitea"`
+    Forgejo        string           `json:"forgejo"`
+    Codeberg       string           `json:"codeberg"`
+    DefaultBranch  string           `json:"default_branch"`
+    HookPath       string           `json:"hookpath"`
+    CIProvider     string           `json:"ci_provider"`
+    MergeQueue     MergeQueueConfig  `json:"merge_queue"`
 }
 
 // PRBranchInfo holds branch metadata for rebase operations
@@ -37,7 +39,7 @@ type PRBranchInfo struct {
 type PRRecord struct {
 	ID                 string       `json:"id"` // UUID
 	RepoGroup          string       `json:"repo_group"`
-	Platform           string       `json:"platform"` // "github"|"gitlab"|"gitea"
+    Platform           string       `json:"platform"` // "github"|"gitlab"|"gitea"|"forgejo"|"codeberg"
 	PRNumber           int          `json:"pr_number"`
 	Title              string       `json:"title"`
 	Author             string       `json:"author"`
@@ -201,9 +203,11 @@ type GitConfig struct {
 
 // TokensConfig represents platform token configuration
 type TokensConfig struct {
-    GitHub string `toml:"github"`
-    GitLab string `toml:"gitlab"`
-    Gitea  string `toml:"gitea"`
+    GitHub   string `toml:"github"`
+    GitLab   string `toml:"gitlab"`
+    Gitea    string `toml:"gitea"`
+    Forgejo  string `toml:"forgejo"`
+    Codeberg string `toml:"codeberg"`
 }
 
 // RepoGroupConfig represents repository group configuration (TOML mapping)
@@ -214,6 +218,8 @@ type RepoGroupConfig struct {
 	GitHub         string           `toml:"github" json:"github"`
 	GitLab         string           `toml:"gitlab" json:"gitlab"`
 	Gitea          string           `toml:"gitea" json:"gitea"`
+	Forgejo        string           `toml:"forgejo" json:"forgejo"`
+	Codeberg       string           `toml:"codeberg" json:"codeberg"`
 	DefaultBranch  string           `toml:"default_branch" json:"default_branch"`
 	HookPath       string           `toml:"hookpath" json:"hookpath"`
 	CIProvider     string           `toml:"ci_provider" json:"ci_provider"`
@@ -222,7 +228,7 @@ type RepoGroupConfig struct {
 
 // SingleRepoConfig represents single repository configuration
 type SingleRepoConfig struct {
-    Platform      string `toml:"platform"` // mirror_platform in tasks.md, "github"|"gitlab"|"gitea"
+    Platform      string `toml:"platform"` // mirror_platform in tasks.md, "github"|"gitlab"|"gitea"|"forgejo"|"codeberg"
     Repo          string `toml:"repo"`
     DefaultBranch string `toml:"default_branch"`
     HookPath      string `toml:"hookpath"`
@@ -244,9 +250,10 @@ type Config struct {
 	HookPath    string            `toml:"hookpath" json:"hookpath"`
 	RepoGroups   []RepoGroupConfig `toml:"repo_groups" json:"repo_groups"`
 	SingleRepo   SingleRepoConfig  `toml:"single_repo" json:"single_repo"`
-	GitLabBaseURL string           `toml:"gitlab_base_url" json:"gitlab_base_url"`
-	GiteaBaseURL  string           `toml:"gitea_base_url" json:"gitea_base_url"`
-	Telegram      TelegramConfig   `toml:"telegram" json:"telegram"`
+	GitLabBaseURL  string          `toml:"gitlab_base_url" json:"gitlab_base_url"`
+	GiteaBaseURL   string          `toml:"gitea_base_url" json:"gitea_base_url"`
+	ForgejoBaseURL string          `toml:"forgejo_base_url" json:"forgejo_base_url"`
+	Telegram       TelegramConfig  `toml:"telegram" json:"telegram"`
 	Feishu        FeishuConfig     `toml:"feishu" json:"feishu"`
 	Discord       DiscordConfig    `toml:"discord" json:"discord"`
 	Updates       UpdatesConfig    `toml:"updates" json:"updates"`

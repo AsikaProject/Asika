@@ -209,6 +209,10 @@ func (s *Syncer) getTokenForPlatform(platform string) string {
 		return s.cfg.Tokens.GitLab
 	case platforms.PlatformGitea:
 		return s.cfg.Tokens.Gitea
+	case platforms.PlatformForgejo:
+		return s.cfg.Tokens.Forgejo
+	case platforms.PlatformCodeberg:
+		return s.cfg.Tokens.Codeberg
 	}
 	return ""
 }
@@ -237,6 +241,15 @@ func (s *Syncer) getRepoURL(platform, repo string) string {
         }
         base = strings.TrimSuffix(base, "/")
         return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
+    case platforms.PlatformForgejo:
+        base := s.cfg.ForgejoBaseURL
+        if base == "" {
+            base = "https://forgejo.example.com"
+        }
+        base = strings.TrimSuffix(base, "/")
+        return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
+    case platforms.PlatformCodeberg:
+        return fmt.Sprintf("https://codeberg.org/%s/%s.git", parts[0], parts[1])
     }
     return ""
 }

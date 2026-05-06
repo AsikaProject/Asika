@@ -223,9 +223,11 @@ func GetPR(c *gin.Context) {
 
 	// Multi mode: try all configured platforms
 	platforms := map[string]string{
-		"github": group.GitHub,
-		"gitlab": group.GitLab,
-		"gitea":  group.Gitea,
+		"github":   group.GitHub,
+		"gitlab":   group.GitLab,
+		"gitea":    group.Gitea,
+		"forgejo":  group.Forgejo,
+		"codeberg": group.Codeberg,
 	}
 
 	for plat, repoPath := range platforms {
@@ -988,7 +990,7 @@ func getClientForGroup(group *models.RepoGroup, platform string) platforms.Platf
 
 // getPlatformForGroup determines the platform for a repo group.
 // In single mode, it returns the MirrorPlatform (the authoritative source).
-// In multi mode, it returns the first configured platform (github > gitlab > gitea).
+// In multi mode, it returns the first configured platform (github > gitlab > gitea > forgejo > codeberg).
 func getPlatformForGroup(group *models.RepoGroup) string {
 	if group.Mode == "single" && group.MirrorPlatform != "" {
 		return group.MirrorPlatform
@@ -1001,6 +1003,12 @@ func getPlatformForGroup(group *models.RepoGroup) string {
 	}
 	if group.Gitea != "" {
 		return "gitea"
+	}
+	if group.Forgejo != "" {
+		return "forgejo"
+	}
+	if group.Codeberg != "" {
+		return "codeberg"
 	}
 	return ""
 }

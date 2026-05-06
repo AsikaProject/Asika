@@ -78,6 +78,20 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 			clients[platforms.PlatformGitea] = gc
 		}
 	}
+	if cfg.Tokens.Forgejo != "" {
+		forgejoURL := cfg.ForgejoBaseURL
+		if forgejoURL == "" {
+			forgejoURL = "https://forgejo.example.com"
+		}
+		if gc := platforms.NewForgejoClient(forgejoURL, cfg.Tokens.Forgejo, cfg.Events.WebhookSecret); gc != nil {
+			clients[platforms.PlatformForgejo] = gc
+		}
+	}
+	if cfg.Tokens.Codeberg != "" {
+		if gc := platforms.NewCodebergClient(cfg.Tokens.Codeberg, cfg.Events.WebhookSecret); gc != nil {
+			clients[platforms.PlatformCodeberg] = gc
+		}
+	}
 
 	events.Init()
 

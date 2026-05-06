@@ -488,3 +488,14 @@ func parseDiffFiles(diff string) []string {
 	}
 	return files
 }
+
+// NewForgejoClient creates a Forgejo client (reuses GiteaClient since Forgejo is a Gitea fork).
+func NewForgejoClient(baseURL, token string, webhookSecret string) *GiteaClient {
+	return NewGiteaClient(baseURL, token, webhookSecret)
+}
+
+// NewCodebergClient creates a Codeberg client (Codeberg is a hosted Forgejo instance).
+// Uses https://codeberg.org as the default base URL.
+func NewCodebergClient(token string, webhookSecret string) *GiteaClient {
+	return NewGiteaClient("https://codeberg.org", token, webhookSecret)
+}

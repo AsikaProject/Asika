@@ -53,6 +53,20 @@ func checkRepoMergeMethod(cfg *models.Config, clients map[PlatformType]PlatformC
 		}
 	}
 
+	// Check Forgejo
+	if repo.Forgejo != "" && clients[PlatformForgejo] != nil {
+		if err := checkPlatformMergeMethod(ctx, clients[PlatformForgejo], "forgejo", repo.Forgejo, repo.DefaultBranch); err != nil {
+			return err
+		}
+	}
+
+	// Check Codeberg
+	if repo.Codeberg != "" && clients[PlatformCodeberg] != nil {
+		if err := checkPlatformMergeMethod(ctx, clients[PlatformCodeberg], "codeberg", repo.Codeberg, repo.DefaultBranch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

@@ -32,9 +32,11 @@ workdir = "/var/lib/asika/work"
 
 # Platform tokens (or use env vars: ASIKA_GITHUB_TOKEN, etc.)
 [tokens]
-github = ""
-gitlab = ""
-gitea  = ""
+github   = ""
+gitlab   = ""
+gitea    = ""
+forgejo  = ""
+codeberg = ""
 
 # Merge queue defaults (overridable per repo group)
 [merge_queue]
@@ -154,6 +156,8 @@ mode           = "multi"         # overrides global mode per group
 github         = "my-org/my-repo"
 gitlab         = "my-org/my-repo"
 gitea          = "my-org/my-repo"
+forgejo        = "my-org/my-repo"   # optional: Forgejo instance
+codeberg       = "my-org/my-repo"   # optional: Codeberg (https://codeberg.org)
 default_branch = "main"
 hookpath       = ""
 ci_provider    = "github_actions"  # "github_actions" | "gitlab_ci" | "gitea_actions" | "none"
@@ -170,6 +174,11 @@ core_contributors  = ["senior-dev1", "senior-dev2"]
 # default_branch = "main"
 # hookpath       = ""
 # ci_provider    = "github_actions"
+
+# Custom base URLs for self-hosted instances
+# gitlab_base_url = "https://gitlab.example.com"
+# gitea_base_url  = "https://gitea.example.com"
+# forgejo_base_url = "https://forgejo.example.com"
 
 # Custom hook path (global)
 hookpath = ""

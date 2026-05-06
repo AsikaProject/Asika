@@ -10,9 +10,11 @@ import (
 type PlatformType string
 
 const (
-    PlatformGitHub PlatformType = "github"
-    PlatformGitLab PlatformType = "gitlab"
-    PlatformGitea  PlatformType = "gitea"
+    PlatformGitHub   PlatformType = "github"
+    PlatformGitLab   PlatformType = "gitlab"
+    PlatformGitea    PlatformType = "gitea"
+    PlatformForgejo  PlatformType = "forgejo"
+    PlatformCodeberg PlatformType = "codeberg"
 )
 
 // PlatformClient defines the unified platform operation interface

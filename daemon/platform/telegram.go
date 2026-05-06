@@ -1250,6 +1250,12 @@ func groupPlatforms(group *models.RepoGroup) []platforms.PlatformType {
 	if group.Gitea != "" {
 		result = append(result, platforms.PlatformGitea)
 	}
+	if group.Forgejo != "" {
+		result = append(result, platforms.PlatformForgejo)
+	}
+	if group.Codeberg != "" {
+		result = append(result, platforms.PlatformCodeberg)
+	}
 	return result
 }
 
