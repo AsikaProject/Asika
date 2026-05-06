@@ -57,6 +57,12 @@ func ListPRs(c *gin.Context) {
 		return
 	}
 
+	// In single mode, default platform filter to MirrorPlatform if not explicitly specified
+	effectivePlatform := platform
+	if effectivePlatform == "" && group.Mode == "single" && group.MirrorPlatform != "" {
+		effectivePlatform = group.MirrorPlatform
+	}
+
 	// Read PRs from local DB using index prefix scan for fast response
 	indexPrefix := repoGroup + ":"
 	_ = db.ForEachPrefix(db.BucketPRIndexByRG, db.BucketPRs, indexPrefix, func(key, value []byte) error {
@@ -64,7 +70,7 @@ func ListPRs(c *gin.Context) {
 		if err := json.Unmarshal(value, &pr); err != nil {
 			return nil
 		}
-		if platform != "" && pr.Platform != platform {
+		if effectivePlatform != "" && pr.Platform != effectivePlatform {
 			return nil
 		}
 		if state != "" && pr.State != state {
@@ -193,13 +199,35 @@ func GetPR(c *gin.Context) {
 	}
 
 	// Not in DB, try platform APIs
+	ctx := c.Request.Context()
+
+	// In single mode, only query the MirrorPlatform
+	if group.Mode == "single" && group.MirrorPlatform != "" {
+		plat := group.MirrorPlatform
+		client := getClientForGroup(group, plat)
+		if client != nil {
+			owner, repo := config.GetOwnerRepoFromGroup(group, plat)
+			if prNumber > 0 {
+				pr, err := client.GetPR(ctx, owner, repo, prNumber)
+				if err == nil && pr != nil {
+					pr.RepoGroup = repoGroup
+					pr.Platform = plat
+					c.JSON(http.StatusOK, pr)
+					return
+				}
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{"error": "PR not found"})
+		return
+	}
+
+	// Multi mode: try all configured platforms
 	platforms := map[string]string{
 		"github": group.GitHub,
 		"gitlab": group.GitLab,
 		"gitea":  group.Gitea,
 	}
 
-	ctx := c.Request.Context()
 	for plat, repoPath := range platforms {
 		if repoPath == "" {
 			continue
@@ -210,7 +238,6 @@ func GetPR(c *gin.Context) {
 		}
 		owner, repo := config.GetOwnerRepoFromGroup(group, plat)
 
-		prNumber, convErr := strconv.Atoi(prID)
 		if convErr != nil {
 			continue
 		}
@@ -959,8 +986,13 @@ func getClientForGroup(group *models.RepoGroup, platform string) platforms.Platf
 	return clients[platforms.PlatformType(platform)]
 }
 
-// getPlatformForGroup determines the platform for a repo group based on configured repos
+// getPlatformForGroup determines the platform for a repo group.
+// In single mode, it returns the MirrorPlatform (the authoritative source).
+// In multi mode, it returns the first configured platform (github > gitlab > gitea).
 func getPlatformForGroup(group *models.RepoGroup) string {
+	if group.Mode == "single" && group.MirrorPlatform != "" {
+		return group.MirrorPlatform
+	}
 	if group.GitHub != "" {
 		return "github"
 	}

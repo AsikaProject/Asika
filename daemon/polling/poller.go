@@ -75,6 +75,35 @@ func (p *Poller) pollOnce() {
 }
 
 func (p *Poller) pollRepoGroup(rg models.RepoGroupConfig) (success, failed int) {
+	mode := rg.Mode
+	if mode == "" {
+		mode = "multi"
+	}
+
+	// In single mode, only poll the MirrorPlatform
+	if mode == "single" && rg.MirrorPlatform != "" {
+		plat := rg.MirrorPlatform
+		var repo string
+		switch plat {
+		case "github":
+			repo = rg.GitHub
+		case "gitlab":
+			repo = rg.GitLab
+		case "gitea":
+			repo = rg.Gitea
+		}
+		if repo == "" {
+			return
+		}
+		client, ok := p.clients[platforms.PlatformType(plat)]
+		if !ok {
+			return
+		}
+		s, f := p.pollPlatform(client, rg.Name, plat, repo)
+		return s, f
+	}
+
+	// Multi mode: poll all configured platforms
 	platforms := []struct {
 		ptype platforms.PlatformType
 		repo  string

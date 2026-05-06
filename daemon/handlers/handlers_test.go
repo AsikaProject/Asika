@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -53,6 +54,7 @@ func setupHandlerTest(t *testing.T) (*gin.Engine, func()) {
 			prs.POST("/:pr_id/close", ClosePR)
 			prs.POST("/:pr_id/reopen", ReopenPR)
 			prs.POST("/:pr_id/spam", MarkSpam)
+			prs.POST("/:pr_id/comment", CommentPR)
 		}
 
 		queue := protected.Group("/queue/:repo_group")
@@ -647,4 +649,416 @@ func TestWebhookRouteRegistration(t *testing.T) {
 		},
 	}
 	config.Store(cfg)
+}
+
+// --- Single mode: getPlatformForGroup respects MirrorPlatform ---
+
+func TestGetPlatformForGroup_SingleMode(t *testing.T) {
+	tests := []struct {
+		name           string
+		group          *models.RepoGroup
+		wantPlatform   string
+	}{
+		{
+			name: "single mode with gitlab mirror",
+			group: &models.RepoGroup{
+				Name:           "test",
+				Mode:           "single",
+				MirrorPlatform: "gitlab",
+				GitHub:         "org/repo",
+				GitLab:         "group/repo",
+			},
+			wantPlatform: "gitlab",
+		},
+		{
+			name: "single mode with gitea mirror",
+			group: &models.RepoGroup{
+				Name:           "test",
+				Mode:           "single",
+				MirrorPlatform: "gitea",
+				Gitea:          "user/repo",
+			},
+			wantPlatform: "gitea",
+		},
+		{
+			name: "single mode with github mirror",
+			group: &models.RepoGroup{
+				Name:           "test",
+				Mode:           "single",
+				MirrorPlatform: "github",
+				GitHub:         "org/repo",
+			},
+			wantPlatform: "github",
+		},
+		{
+			name: "multi mode ignores MirrorPlatform",
+			group: &models.RepoGroup{
+				Name:           "test",
+				Mode:           "multi",
+				MirrorPlatform: "gitlab",
+				GitHub:         "org/repo",
+				GitLab:         "group/repo",
+			},
+			wantPlatform: "github",
+		},
+		{
+			name: "empty mode defaults to multi behavior",
+			group: &models.RepoGroup{
+				Name:           "test",
+				Mode:           "",
+				MirrorPlatform: "gitlab",
+				GitLab:         "group/repo",
+			},
+			wantPlatform: "gitlab",
+		},
+		{
+			name: "single mode with empty MirrorPlatform falls back to first platform",
+			group: &models.RepoGroup{
+				Name:           "test",
+				Mode:           "single",
+				MirrorPlatform: "",
+				Gitea:          "user/repo",
+			},
+			wantPlatform: "gitea",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := getPlatformForGroup(tt.group)
+			if got != tt.wantPlatform {
+				t.Errorf("getPlatformForGroup() = %q, want %q", got, tt.wantPlatform)
+			}
+		})
+	}
+}
+
+// --- Single mode: ListPRs filters by MirrorPlatform ---
+
+func TestListPRs_SingleMode_FiltersByMirrorPlatform(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:           "single-group",
+				Mode:           "single",
+				MirrorPlatform: "github",
+				GitHub:         "org/repo",
+			},
+		},
+	}
+	config.Store(cfg)
+
+	// Store PRs for different platforms under the same repo group
+	prGitHub := models.PRRecord{
+		ID:        "pr-gh-1",
+		RepoGroup: "single-group",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "GitHub PR",
+		State:     "open",
+	}
+	prGitLab := models.PRRecord{
+		ID:        "pr-gl-1",
+		RepoGroup: "single-group",
+		Platform:  "gitlab",
+		PRNumber:  2,
+		Title:     "GitLab PR",
+		State:     "open",
+	}
+	db.Put(db.BucketPRs, "single-group#github#1", mustMarshal(prGitHub))
+	db.Put(db.BucketPRs, "single-group#gitlab#2", mustMarshal(prGitLab))
+
+	// Without explicit platform filter, single mode should only return MirrorPlatform PRs
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/repos/single-group/prs", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result struct {
+		Data []models.PRRecord `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	// Should only return GitHub PRs (the MirrorPlatform), not GitLab
+	for _, pr := range result.Data {
+		if pr.Platform != "github" {
+			t.Errorf("single mode should only return MirrorPlatform PRs, got platform=%q", pr.Platform)
+		}
+	}
+
+	// With explicit platform=github, should also work
+	w2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest("GET", "/api/v1/repos/single-group/prs?platform=github", nil)
+	engine.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 with explicit platform, got %d: %s", w2.Code, w2.Body.String())
+	}
+}
+
+// --- Single mode: ApprovePR uses MirrorPlatform ---
+
+func TestApprovePR_SingleMode_UsesMirrorPlatform(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:           "single-approve",
+				Mode:           "single",
+				MirrorPlatform: "github",
+				GitHub:         "org/project",
+			},
+		},
+	}
+	config.Store(cfg)
+
+	// Store a PR
+	pr := models.PRRecord{
+		ID:        "single-pr-1",
+		RepoGroup: "single-approve",
+		Platform:  "github",
+		PRNumber:  42,
+		Title:     "Single mode PR",
+		Author:    "dev",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	db.Put(db.BucketPRs, "single-approve#42", data)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/repos/single-approve/prs/42/approve", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// --- Single mode: ClosePR uses MirrorPlatform ---
+
+func TestClosePR_SingleMode_UsesMirrorPlatform(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:           "single-close",
+				Mode:           "single",
+				MirrorPlatform: "github",
+				GitHub:         "org/project",
+			},
+		},
+	}
+	config.Store(cfg)
+
+	pr := models.PRRecord{
+		ID:        "single-close-pr-1",
+		RepoGroup: "single-close",
+		Platform:  "github",
+		PRNumber:  55,
+		Title:     "Close me",
+		Author:    "dev",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	db.Put(db.BucketPRs, "single-close#55", data)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/repos/single-close/prs/55/close", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// --- Single mode: MarkSpam uses MirrorPlatform ---
+
+func TestMarkSpam_SingleMode_UsesMirrorPlatform(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:           "single-spam",
+				Mode:           "single",
+				MirrorPlatform: "github",
+				GitHub:         "org/project",
+			},
+		},
+	}
+	config.Store(cfg)
+
+	pr := models.PRRecord{
+		ID:        "single-spam-pr-1",
+		RepoGroup: "single-spam",
+		Platform:  "github",
+		PRNumber:  66,
+		Title:     "Spam PR",
+		Author:    "spammer",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	db.Put(db.BucketPRs, "single-spam#66", data)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/repos/single-spam/prs/66/spam", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify PR was marked as spam
+	stored, err := db.Get(db.BucketPRs, "single-spam#66")
+	if err != nil {
+		t.Fatalf("PR not found after spam: %v", err)
+	}
+	var result models.PRRecord
+	json.Unmarshal(stored, &result)
+	if !result.SpamFlag {
+		t.Error("PR should be marked as spam")
+	}
+	if result.State != "spam" {
+		t.Errorf("state = %q, want spam", result.State)
+	}
+}
+
+// --- Single mode: ReopenPR uses MirrorPlatform ---
+
+func TestReopenPR_SingleMode_UsesMirrorPlatform(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:           "single-reopen",
+				Mode:           "single",
+				MirrorPlatform: "github",
+				GitHub:         "org/project",
+			},
+		},
+	}
+	config.Store(cfg)
+
+	pr := models.PRRecord{
+		ID:        "single-reopen-pr-1",
+		RepoGroup: "single-reopen",
+		Platform:  "github",
+		PRNumber:  77,
+		Title:     "Reopen me",
+		Author:    "dev",
+		State:     "spam",
+		SpamFlag:  true,
+	}
+	data, _ := json.Marshal(pr)
+	db.Put(db.BucketPRs, "single-reopen#77", data)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/repos/single-reopen/prs/77/reopen", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// --- Single mode: CommentPR uses MirrorPlatform ---
+
+func TestCommentPR_SingleMode_UsesMirrorPlatform(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:           "single-comment",
+				Mode:           "single",
+				MirrorPlatform: "github",
+				GitHub:         "org/project",
+			},
+		},
+	}
+	config.Store(cfg)
+
+	pr := models.PRRecord{
+		ID:        "single-comment-pr-1",
+		RepoGroup: "single-comment",
+		Platform:  "github",
+		PRNumber:  88,
+		Title:     "Comment on me",
+		Author:    "dev",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	db.Put(db.BucketPRs, "single-comment#88", data)
+
+	body := `{"body": "Test comment from single mode"}`
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/repos/single-comment/prs/88/comment", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// --- Single mode: MirrorPlatform=gitlab with only gitlab configured ---
+
+func TestSingleMode_GitlabOnlyMirror(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:           "gitlab-only",
+				Mode:           "single",
+				MirrorPlatform: "gitlab",
+				GitLab:         "group/project",
+			},
+		},
+	}
+	config.Store(cfg)
+
+	// Verify getPlatformForGroup returns gitlab
+	group := config.GetRepoGroupByName(cfg, "gitlab-only")
+	if group == nil {
+		t.Fatal("group not found")
+	}
+	plat := getPlatformForGroup(group)
+	if plat != "gitlab" {
+		t.Errorf("expected gitlab, got %q", plat)
+	}
+
+	// List PRs should work (return empty for single mode with gitlab mirror)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/repos/gitlab-only/prs", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// --- Helper ---
+
+func mustMarshal(v interface{}) []byte {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

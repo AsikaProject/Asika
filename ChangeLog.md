@@ -1,6 +1,13 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Single repo mode dedicated routing logic:**
+  - `getPlatformForGroup()` now returns `MirrorPlatform` in single mode instead of first configured platform
+  - `ListPRs` handler defaults platform filter to `MirrorPlatform` in single mode
+  - `GetPR` handler queries only the MirrorPlatform API in single mode (instead of iterating all platforms)
+  - `Poller` polls only the MirrorPlatform in single mode (instead of all three platforms)
+  - Register `CommentPR` route in handler test setup (was missing)
+  - Add tests for single mode platform filtering, approve/close/spam/reopen/comment operations, and gitlab-only mirror
 - **WeCom notifier improvements:**
   - Replace manual JSON escaping with `encoding/json` (fixes malformed JSON with special characters)
   - Add configurable HTTP client timeout (10s) instead of unlimited `http.DefaultClient`
