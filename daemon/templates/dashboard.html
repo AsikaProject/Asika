@@ -10,32 +10,74 @@
 {{template "header" .}}
 <div class="container">
 <h1>Dashboard</h1>
+
+<h2 style="margin-top:20px;">DORA Metrics <span style="font-size:13px;color:var(--text-secondary);font-weight:normal;">(last <span id="periodLabel">30</span> days)</span></h2>
+<div class="stats" id="doraStats">
+    <div class="stat-card">
+        <h3>Deployments/Day</h3>
+        <p id="deployFreq">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>Lead Time</h3>
+        <p id="leadTime">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>Failure Rate</h3>
+        <p id="failRate">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>MTTR</h3>
+        <p id="mttr">-</p>
+    </div>
+</div>
+
+<h2 style="margin-top:20px;">Overview</h2>
 <div class="stats">
     <div class="stat-card">
-        <h3>Open PRs</h3>
+        <h3>Total PRs</h3>
+        <p id="totalPRs">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>Open</h3>
         <p id="openPRs">-</p>
     </div>
     <div class="stat-card">
-        <h3>Stale PRs</h3>
-        <p id="stalePRs">-</p>
+        <h3>Merged</h3>
+        <p id="mergedPRs">-</p>
     </div>
     <div class="stat-card">
         <h3>Queue Items</h3>
         <p id="queueItems">-</p>
     </div>
     <div class="stat-card">
-        <h3>Repo Groups</h3>
-        <p id="repoGroups">-</p>
+        <h3>Failed Queue</h3>
+        <p id="failedQueue">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>Sync Failures</h3>
+        <p id="syncFails">-</p>
     </div>
 </div>
-<div class="card" style="margin-top: 20px;">
-    <h2>Recent Activity</h2>
+
+<h2 style="margin-top:20px;">Breakdown</h2>
+<div class="card">
+    <h3>PRs by Repo Group</h3>
+    <div id="byGroup">Loading...</div>
+</div>
+<div class="card">
+    <h3>PRs by Platform</h3>
+    <div id="byPlatform">Loading...</div>
+</div>
+
+<h2 style="margin-top:20px;">Recent Activity</h2>
+<div class="card">
     <div id="activity">Loading...</div>
 </div>
 </div>
 {{template "scripts"}}
 <script>
     let repoGroupsList = [];
+    const periodDays = 30;
 
     async function loadRepoGroups() {
         try {
@@ -57,43 +99,52 @@
         }
     }
 
-    async function loadDashboard() {
+    async function loadDORA() {
         try {
-            await loadRepoGroups();
-            document.getElementById('repoGroups').textContent = repoGroupsList.length;
+            const resp = await apiRequest('/api/v1/stats?period=' + periodDays);
+            if (!resp.ok) return;
+            const s = await resp.json();
 
-            let totalOpen = 0;
-            let totalStale = 0;
+            document.getElementById('periodLabel').textContent = s.period_days || periodDays;
+            document.getElementById('deployFreq').textContent = (s.deployment_frequency || 0).toFixed(2);
+            document.getElementById('leadTime').textContent = formatHours(s.lead_time_hours);
+            document.getElementById('failRate').textContent = ((s.change_failure_rate || 0) * 100).toFixed(1) + '%';
+            document.getElementById('mttr').textContent = formatHours(s.mttr_hours);
 
-            for (const group of repoGroupsList) {
-                try {
-                    const resp = await apiRequest('/api/v1/repos/' + group + '/prs?state=open');
-                    if (resp.ok) {
-                        const body = await resp.json();
-                        const prs = Array.isArray(body) ? body : (body.data || []);
-                        totalOpen += prs.length;
-                        for (const pr of prs) {
-                            if (pr.labels && pr.labels.includes('stale')) totalStale++;
-                        }
-                    }
-                } catch (e) {}
-            }
+            document.getElementById('totalPRs').textContent = s.total_prs || 0;
+            document.getElementById('openPRs').textContent = s.open_prs || 0;
+            document.getElementById('mergedPRs').textContent = s.merged_prs || 0;
+            document.getElementById('queueItems').textContent = s.queue_items || 0;
+            document.getElementById('failedQueue').textContent = s.failed_queue_items || 0;
+            document.getElementById('syncFails').textContent = s.sync_failures || 0;
 
-            document.getElementById('openPRs').textContent = totalOpen;
-            document.getElementById('stalePRs').textContent = totalStale;
+            const byGroup = s.prs_by_repo_group || {};
+            const groupHtml = Object.keys(byGroup).length > 0
+                ? '<table><tr><th>Repo Group</th><th>PRs</th></tr>' +
+                  Object.entries(byGroup).map(([k,v]) => '<tr><td>' + escapeHtml(k) + '</td><td>' + v + '</td></tr>').join('') +
+                  '</table>'
+                : '<p style="color:#666">No data</p>';
+            document.getElementById('byGroup').innerHTML = groupHtml;
 
-            let totalQueue = 0;
-            for (const group of repoGroupsList) {
-                try {
-                    const qResp = await apiRequest('/api/v1/queue/' + group);
-                    if (qResp.ok) {
-                        const items = await qResp.json();
-                        if (Array.isArray(items)) totalQueue += items.length;
-                    }
-                } catch (e) {}
-            }
-            document.getElementById('queueItems').textContent = totalQueue;
+            const byPlat = s.prs_by_platform || {};
+            const platHtml = Object.keys(byPlat).length > 0
+                ? '<table><tr><th>Platform</th><th>PRs</th></tr>' +
+                  Object.entries(byPlat).map(([k,v]) => '<tr><td>' + escapeHtml(k) + '</td><td>' + v + '</td></tr>').join('') +
+                  '</table>'
+                : '<p style="color:#666">No data</p>';
+            document.getElementById('byPlatform').innerHTML = platHtml;
+        } catch (e) {}
+    }
 
+    function formatHours(h) {
+        if (!h || h === 0) return '0h';
+        if (h < 1) return Math.round(h * 60) + 'm';
+        if (h >= 24) return (h / 24).toFixed(1) + 'd';
+        return h.toFixed(1) + 'h';
+    }
+
+    async function loadActivity() {
+        try {
             const logResp = await apiRequest('/api/v1/logs');
             const act = document.getElementById('activity');
             if (logResp.ok) {
@@ -101,7 +152,7 @@
                 if (logs.length === 0) {
                     act.innerHTML = '<p style="color:#666">No recent activity</p>';
                 } else {
-                    act.innerHTML = logs.slice(0, 10).map(l =>
+                    act.innerHTML = logs.slice(0, 15).map(l =>
                         '<div class="activity-item">' +
                         '<span class="activity-time">' + escapeHtml(l.timestamp) + '</span> ' +
                         '<span class="activity-msg">' + escapeHtml(l.message) + '</span>' +
@@ -114,6 +165,11 @@
         } catch (e) {
             document.getElementById('activity').innerHTML = '<p style="color:var(--text-secondary)">No recent activity</p>';
         }
+    }
+
+    async function loadDashboard() {
+        await loadRepoGroups();
+        await Promise.all([loadDORA(), loadActivity()]);
     }
     loadDashboard();
 </script>
