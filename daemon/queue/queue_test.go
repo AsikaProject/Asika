@@ -2,6 +2,7 @@ package queue
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"asika/common/db"
@@ -339,5 +340,320 @@ func TestGetPRFromDB(t *testing.T) {
 	}
 	if found.ID != "test-pr-id" {
 		t.Errorf("found.ID = %q, want test-pr-id", found.ID)
+	}
+}
+
+func TestShouldMerge_CICheckRequired(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:       "main",
+				GitHub:     "owner/repo",
+				CIProvider: "github_actions",
+				MergeQueue: models.MergeQueueConfig{
+					RequiredApprovals: 1,
+					CICheckRequired:   true,
+					CoreContributors:  []string{"user1"},
+				},
+			},
+		},
+	}
+
+	client := &testutil.MockPlatformClient{
+		Approvals: []string{"user1"},
+		CIStatus:  "success",
+	}
+
+	clients := map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: client,
+	}
+
+	c := NewChecker(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-ci-1",
+		RepoGroup: "main",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "CI test PR",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	db.Put(db.BucketPRs, "main#github#1", data)
+
+	item := &models.QueueItem{
+		PRID:     "pr-ci-1",
+		RepoGroup: "main",
+		Status:    "waiting",
+	}
+
+	shouldMerge, err := c.ShouldMerge(item)
+	if err != nil {
+		t.Fatalf("ShouldMerge failed: %v", err)
+	}
+	if !shouldMerge {
+		t.Error("ShouldMerge should return true with passing CI")
+	}
+}
+
+func TestShouldMerge_CIFailing(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:       "main",
+				GitHub:     "owner/repo",
+				CIProvider: "github_actions",
+				MergeQueue: models.MergeQueueConfig{
+					RequiredApprovals: 1,
+					CICheckRequired:   true,
+					CoreContributors:  []string{"user1"},
+				},
+			},
+		},
+	}
+
+	client := &testutil.MockPlatformClient{
+		Approvals: []string{"user1"},
+		CIStatus:  "failure",
+	}
+
+	clients := map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: client,
+	}
+
+	c := NewChecker(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-ci-fail-1",
+		RepoGroup: "main",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Failing CI PR",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	db.Put(db.BucketPRs, "main#github#1", data)
+
+	item := &models.QueueItem{
+		PRID:     "pr-ci-fail-1",
+		RepoGroup: "main",
+		Status:    "waiting",
+	}
+
+	shouldMerge, err := c.ShouldMerge(item)
+	if err != nil {
+		t.Fatalf("ShouldMerge failed: %v", err)
+	}
+	if shouldMerge {
+		t.Error("ShouldMerge should return false when CI is failing")
+	}
+}
+
+func TestShouldMerge_CoreContributorBypass(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name:   "main",
+				GitHub: "owner/repo",
+				MergeQueue: models.MergeQueueConfig{
+					RequiredApprovals: 1,
+					CICheckRequired:   false,
+					CoreContributors:  []string{"core-dev"},
+				},
+			},
+		},
+	}
+
+	client := &testutil.MockPlatformClient{
+		Approvals: []string{"core-dev"},
+		CIStatus:  "success",
+	}
+
+	clients := map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: client,
+	}
+
+	c := NewChecker(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-core-1",
+		RepoGroup: "main",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Core dev PR",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	db.Put(db.BucketPRs, "main#github#1", data)
+
+	item := &models.QueueItem{
+		PRID:     "pr-core-1",
+		RepoGroup: "main",
+		Status:    "waiting",
+	}
+
+	shouldMerge, err := c.ShouldMerge(item)
+	if err != nil {
+		t.Fatalf("ShouldMerge failed: %v", err)
+	}
+	if !shouldMerge {
+		t.Error("ShouldMerge should return true for core contributor")
+	}
+}
+
+func TestShouldMerge_PRNotFound(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewChecker(cfg, clients)
+
+	item := &models.QueueItem{
+		PRID:     "nonexistent-pr",
+		RepoGroup: "main",
+		Status:    "waiting",
+	}
+
+	_, err := c.ShouldMerge(item)
+	if err == nil {
+		t.Error("ShouldMerge should return error for nonexistent PR")
+	}
+}
+
+func TestShouldMerge_GroupNotFound(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{},
+	}
+
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewChecker(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-nogroup-1",
+		RepoGroup: "missing",
+		Platform:  "github",
+		PRNumber:  1,
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	db.Put(db.BucketPRs, "missing#github#1", data)
+
+	item := &models.QueueItem{
+		PRID:     "pr-nogroup-1",
+		RepoGroup: "missing",
+		Status:    "waiting",
+	}
+
+	_, err := c.ShouldMerge(item)
+	if err == nil {
+		t.Error("ShouldMerge should return error for missing repo group")
+	}
+}
+
+func TestGetQueueItems_MultipleGroups(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	m.AddToQueue(&models.PRRecord{ID: "pr-a-1", RepoGroup: "group-a", Platform: "github", PRNumber: 1, State: "open"})
+	m.AddToQueue(&models.PRRecord{ID: "pr-a-2", RepoGroup: "group-a", Platform: "github", PRNumber: 2, State: "open"})
+	m.AddToQueue(&models.PRRecord{ID: "pr-b-1", RepoGroup: "group-b", Platform: "gitlab", PRNumber: 1, State: "open"})
+	m.AddToQueue(&models.PRRecord{ID: "pr-c-1", RepoGroup: "group-c", Platform: "gitea", PRNumber: 1, State: "open"})
+
+	tests := []struct {
+		repoGroup string
+		wantCount int
+	}{
+		{"group-a", 2},
+		{"group-b", 1},
+		{"group-c", 1},
+		{"nonexistent", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.repoGroup, func(t *testing.T) {
+			items, err := m.GetQueueItems(tt.repoGroup)
+			if err != nil {
+				t.Fatalf("GetQueueItems(%q) failed: %v", tt.repoGroup, err)
+			}
+			if len(items) != tt.wantCount {
+				t.Errorf("GetQueueItems(%q) returned %d items, want %d", tt.repoGroup, len(items), tt.wantCount)
+			}
+		})
+	}
+}
+
+func TestAddToQueue_MultiplePRs(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	for i := 1; i <= 5; i++ {
+		pr := &models.PRRecord{
+			ID:        fmt.Sprintf("pr-multi-%d", i),
+			RepoGroup: "main",
+			Platform:  "github",
+			PRNumber:  i,
+			State:     "open",
+		}
+		if err := m.AddToQueue(pr); err != nil {
+			t.Fatalf("AddToQueue(%d) failed: %v", i, err)
+		}
+	}
+
+	items, err := m.GetQueueItems("main")
+	if err != nil {
+		t.Fatalf("GetQueueItems failed: %v", err)
+	}
+	if len(items) != 5 {
+		t.Errorf("expected 5 queue items, got %d", len(items))
+	}
+}
+
+func TestFindPRByID_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	_, err := findPRByID("nonexistent")
+	if err == nil {
+		t.Error("findPRByID should return error for nonexistent PR")
+	}
+}
+
+func TestGetPRFromDB_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	_, err := getPRFromDB("main", "nonexistent")
+	if err == nil {
+		t.Error("getPRFromDB should return error for nonexistent PR")
 	}
 }

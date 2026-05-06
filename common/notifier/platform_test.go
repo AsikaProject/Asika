@@ -220,6 +220,89 @@ func TestWirePlatformNotifiers_NonPlatformNotifier(t *testing.T) {
 	WirePlatformNotifiers(notifiers, clients)
 }
 
+func TestNewGitHubAtNotifier_MissingFields(t *testing.T) {
+	n := NewGitHubAtNotifier(map[string]interface{}{
+		"to": []interface{}{"user1"},
+	})
+	if n.owner != "" {
+		t.Errorf("expected empty owner, got %q", n.owner)
+	}
+	if n.repo != "" {
+		t.Errorf("expected empty repo, got %q", n.repo)
+	}
+}
+
+func TestPlatformNotifier_Send_MultipleUsers(t *testing.T) {
+	mock := testutil.NewMockPlatformClient()
+	mock.PRs["org/repo#1"] = &models.PRRecord{
+		ID:       "1",
+		PRNumber: 1,
+		State:    "open",
+	}
+
+	n := &PlatformNotifier{
+		platform: "github",
+		to:       []string{"user1", "user2", "user3"},
+		owner:    "org",
+		repo:     "repo",
+		client:   mock,
+	}
+
+	err := n.Send(context.Background(), "Test", "Body")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestPlatformNotifier_Send_AllPRsClosed(t *testing.T) {
+	mock := testutil.NewMockPlatformClient()
+	mock.PRs["org/repo#1"] = &models.PRRecord{
+		ID:       "1",
+		PRNumber: 1,
+		State:    "closed",
+	}
+
+	n := &PlatformNotifier{
+		platform: "github",
+		to:       []string{"user1"},
+		owner:    "org",
+		repo:     "repo",
+		client:   mock,
+	}
+
+	err := n.Send(context.Background(), "Test", "Body")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestWirePlatformNotifiers_EmptyLists(t *testing.T) {
+	clients := map[platforms.PlatformType]platforms.PlatformClient{}
+	notifiers := []Notifier{}
+
+	// Should not panic with empty lists
+	WirePlatformNotifiers(notifiers, clients)
+}
+
+func TestWirePlatformNotifiers_MixedTypes(t *testing.T) {
+	clients := map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: testutil.NewMockPlatformClient(),
+	}
+
+	ghNotifier := NewGitHubAtNotifier(map[string]interface{}{
+		"to": []interface{}{"user1"},
+	})
+
+	notifiers := []Notifier{ghNotifier, &mockNotifierType{}}
+
+	// Should not panic with mixed types
+	WirePlatformNotifiers(notifiers, clients)
+
+	if ghNotifier.client == nil {
+		t.Error("GitHub notifier should have client wired")
+	}
+}
+
 // mockNotifierType is a minimal Notifier implementation for testing
 type mockNotifierType struct{}
 
