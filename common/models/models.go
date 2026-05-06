@@ -4,10 +4,11 @@ import "time"
 
 // User represents an admin user
 type User struct {
-    Username     string    `json:"username"`
-    PasswordHash string    `json:"password_hash"` // bcrypt
-    Role         string    `json:"role"`          // "admin" | "operator" | "viewer"
-    CreatedAt    time.Time `json:"created_at"`
+	Username          string    `json:"username"`
+	PasswordHash      string    `json:"password_hash"` // bcrypt
+	Role              string    `json:"role"`          // "admin" | "operator" | "viewer"
+	CreatedAt         time.Time `json:"created_at"`
+	AllowedRepoGroups []string  `json:"allowed_repo_groups"` // empty = all groups (for admin)
 }
 
 // RepoGroup represents a repository group

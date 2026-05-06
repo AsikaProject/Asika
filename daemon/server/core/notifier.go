@@ -84,6 +84,10 @@ func createNotifierFromConfig(nc models.NotifyConfig) notifier.Notifier {
 		if n := notifier.NewDingTalkNotifier(nc.Config); n != nil {
 			return n
 		}
+	case "slack":
+		if n := notifier.NewSlackNotifier(nc.Config); n != nil {
+			return n
+		}
 	}
 	return nil
 }

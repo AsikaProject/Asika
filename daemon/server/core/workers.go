@@ -31,6 +31,7 @@ func StartWorkers(
 	// Merge queue
 	queueMgr = queue.NewManager(cfg, clients)
 	handlers.InitQueueMgr(queueMgr)
+	queueMgr.Recover()
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()

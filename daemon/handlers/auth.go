@@ -99,7 +99,6 @@ func ListUsers(c *gin.Context) {
 		if err := json.Unmarshal(value, &user); err != nil {
 			return err
 		}
-		// Mask password hash
 		user.PasswordHash = "***"
 		users = append(users, user)
 		return nil
@@ -114,9 +113,10 @@ func ListUsers(c *gin.Context) {
 // CreateUser handles POST /api/v1/users (8.1)
 func CreateUser(c *gin.Context) {
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
+		Username          string   `json:"username"`
+		Password          string   `json:"password"`
+		Role              string   `json:"role"`
+		AllowedRepoGroups []string `json:"allowed_repo_groups"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -128,15 +128,15 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-if req.Role == "" {
-        req.Role = "viewer"
-    }
+	if req.Role == "" {
+		req.Role = "viewer"
+	}
 
-    validRoles := map[string]bool{"viewer": true, "operator": true, "admin": true}
-    if !validRoles[req.Role] {
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role: must be viewer, operator, or admin"})
-        return
-    }
+	validRoles := map[string]bool{"viewer": true, "operator": true, "admin": true}
+	if !validRoles[req.Role] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role: must be viewer, operator, or admin"})
+		return
+	}
 
 	// Hash password
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -146,9 +146,10 @@ if req.Role == "" {
 	}
 
 	user := models.User{
-		Username:     req.Username,
-		PasswordHash: string(hash),
-		Role:         req.Role,
+		Username:          req.Username,
+		PasswordHash:      string(hash),
+		Role:              req.Role,
+		AllowedRepoGroups: req.AllowedRepoGroups,
 	}
 
 	data, err := json.Marshal(user)

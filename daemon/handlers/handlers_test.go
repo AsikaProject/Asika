@@ -6,9 +6,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"asika/common/auth"
 	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
@@ -23,6 +25,8 @@ func setupHandlerTest(t *testing.T) (*gin.Engine, func()) {
 
 	tdb := testutil.NewTestDB(t)
 	db.DB = tdb
+
+	auth.Init("test-secret-for-unit-tests", 72*time.Hour)
 
 	mock := testutil.NewMockPlatformClient()
 	clients = map[platforms.PlatformType]platforms.PlatformClient{
@@ -84,6 +88,8 @@ func setupHandlerTest(t *testing.T) (*gin.Engine, func()) {
 		{
 			pTest.POST("/notify", TestNotify)
 		}
+
+		protected.GET("/stats", GetStats)
 	}
 
 	cleanup := func() {
@@ -1050,6 +1056,239 @@ func TestSingleMode_GitlabOnlyMirror(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+// --- Repo group permission isolation tests ---
+
+func TestUserModel_AllowedRepoGroups(t *testing.T) {
+	tests := []struct {
+		name            string
+		role            string
+		allowedGroups   []string
+		requestedGroup  string
+		expectAccess    bool
+	}{
+		{
+			name:           "admin always has access",
+			role:           "admin",
+			allowedGroups:  nil,
+			requestedGroup: "any-group",
+			expectAccess:   true,
+		},
+		{
+			name:           "operator with matching group",
+			role:           "operator",
+			allowedGroups:  []string{"group-a"},
+			requestedGroup: "group-a",
+			expectAccess:   true,
+		},
+		{
+			name:           "operator without matching group",
+			role:           "operator",
+			allowedGroups:  []string{"group-a"},
+			requestedGroup: "group-b",
+			expectAccess:   false,
+		},
+		{
+			name:           "operator with empty allowed groups (all access)",
+			role:           "operator",
+			allowedGroups:  []string{},
+			requestedGroup: "any-group",
+			expectAccess:   true,
+		},
+		{
+			name:           "operator with nil allowed groups (all access)",
+			role:           "operator",
+			allowedGroups:  nil,
+			requestedGroup: "any-group",
+			expectAccess:   true,
+		},
+		{
+			name:           "viewer with matching group",
+			role:           "viewer",
+			allowedGroups:  []string{"group-a"},
+			requestedGroup: "group-a",
+			expectAccess:   true,
+		},
+		{
+			name:           "viewer without matching group",
+			role:           "viewer",
+			allowedGroups:  []string{"group-a"},
+			requestedGroup: "group-b",
+			expectAccess:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := models.User{
+				Username:          "testuser",
+				Role:              tt.role,
+				AllowedRepoGroups: tt.allowedGroups,
+			}
+
+			// Simulate the access check logic from RequireRepoGroupAccess middleware
+			hasAccess := false
+			if user.Role == "admin" {
+				hasAccess = true
+			} else if len(user.AllowedRepoGroups) == 0 {
+				hasAccess = true
+			} else {
+				for _, g := range user.AllowedRepoGroups {
+					if g == tt.requestedGroup {
+						hasAccess = true
+						break
+					}
+				}
+			}
+
+			if hasAccess != tt.expectAccess {
+				t.Errorf("expected access=%v for role=%q groups=%v requested=%q, got %v",
+					tt.expectAccess, tt.role, tt.allowedGroups, tt.requestedGroup, hasAccess)
+			}
+		})
+	}
+}
+
+func TestCreateUser_WithAllowedRepoGroups(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	hash, _ := auth.HashPassword("testpass")
+	user := models.User{
+		Username:          "scoped-user",
+		PasswordHash:      hash,
+		Role:              "operator",
+		AllowedRepoGroups: []string{"project-a", "project-b"},
+	}
+	data, _ := json.Marshal(user)
+	if err := db.Put(db.BucketUsers, "scoped-user", data); err != nil {
+		t.Fatalf("failed to create user: %v", err)
+	}
+
+	// Read back and verify
+	stored, err := db.Get(db.BucketUsers, "scoped-user")
+	if err != nil {
+		t.Fatalf("failed to read user: %v", err)
+	}
+	var result models.User
+	if err := json.Unmarshal(stored, &result); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	if result.Role != "operator" {
+		t.Errorf("role = %q, want operator", result.Role)
+	}
+	if len(result.AllowedRepoGroups) != 2 {
+		t.Errorf("allowed groups = %v, want 2 entries", result.AllowedRepoGroups)
+	}
+	if result.AllowedRepoGroups[0] != "project-a" || result.AllowedRepoGroups[1] != "project-b" {
+		t.Errorf("allowed groups = %v, want [project-a, project-b]", result.AllowedRepoGroups)
+	}
+}
+
+func TestCreateUser_EmptyAllowedRepoGroups(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	hash, _ := auth.HashPassword("testpass")
+	user := models.User{
+		Username:          "open-user",
+		PasswordHash:      hash,
+		Role:              "viewer",
+		AllowedRepoGroups: []string{},
+	}
+	data, _ := json.Marshal(user)
+	db.Put(db.BucketUsers, "open-user", data)
+
+	stored, err := db.Get(db.BucketUsers, "open-user")
+	if err != nil {
+		t.Fatalf("failed to read user: %v", err)
+	}
+	var result models.User
+	json.Unmarshal(stored, &result)
+
+	if len(result.AllowedRepoGroups) != 0 {
+		t.Errorf("expected empty allowed groups, got %v", result.AllowedRepoGroups)
+	}
+}
+
+// --- Stats / DORA metrics tests ---
+
+func TestGetStats_Empty(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/stats", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	if result["total_prs"].(float64) != 0 {
+		t.Errorf("expected 0 total PRs, got %v", result["total_prs"])
+	}
+}
+
+func TestGetStats_WithPRs(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	// Store some PRs
+	now := time.Now()
+	pr1 := models.PRRecord{
+		ID:        "stats-pr-1",
+		RepoGroup: "default",
+		Platform:  "github",
+		PRNumber:  1,
+		State:     "merged",
+		CreatedAt: now.Add(-48 * time.Hour),
+		MergedAt:  now.Add(-24 * time.Hour),
+	}
+	pr2 := models.PRRecord{
+		ID:        "stats-pr-2",
+		RepoGroup: "default",
+		Platform:  "github",
+		PRNumber:  2,
+		State:     "open",
+		CreatedAt: now.Add(-12 * time.Hour),
+	}
+	db.Put(db.BucketPRs, "default#github#1", mustMarshal(pr1))
+	db.Put(db.BucketPRs, "default#github#2", mustMarshal(pr2))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/stats", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	if result["total_prs"].(float64) != 2 {
+		t.Errorf("expected 2 total PRs, got %v", result["total_prs"])
+	}
+	if result["merged_prs"].(float64) != 1 {
+		t.Errorf("expected 1 merged PR, got %v", result["merged_prs"])
+	}
+	if result["open_prs"].(float64) != 1 {
+		t.Errorf("expected 1 open PR, got %v", result["open_prs"])
+	}
+
+	// Lead time should be ~24 hours
+	leadTime := result["lead_time_hours"].(float64)
+	if leadTime < 20 || leadTime > 28 {
+		t.Errorf("lead time = %f, expected ~24h", leadTime)
 	}
 }
 

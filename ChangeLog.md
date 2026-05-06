@@ -1,6 +1,28 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Persistent merge queue (restart recovery):**
+  - Add `Manager.Recover()` that scans `queue_items` bucket on startup and resets stale `merging`/`checking` items back to `waiting`
+  - Before resetting, checks if the PR was already merged on the platform (avoids double-merge after crash)
+  - Call `Recover()` in `StartWorkers()` before starting the periodic queue checker
+  - Add tests for recovery of stale items and already-merged PR cleanup
+- **Slack notifier:**
+  - Add `SlackNotifier` using Slack Incoming Webhook API
+  - Support `webhook_url` (required), `channel`, `username`, `icon_emoji` config keys
+  - Register `"slack"` in `createNotifierFromConfig()` switch
+  - Add tests for creation, config parsing, and send error handling
+- **Repo-group-level permission isolation:**
+  - Add `AllowedRepoGroups []string` to `User` model (empty/nil = all groups, backward compatible)
+  - Add `RequireRepoGroupAccess()` middleware that checks if the requested repo group is in the user's allowed list (admins bypass)
+  - Apply middleware to PR and queue route groups in `setupRoutes()`
+  - Update `CreateUser` handler to accept `allowed_repo_groups` field
+  - Add tests for user model, permission check logic, and user CRUD with repo group scoping
+- **DORA metrics stats API:**
+  - Add `GET /api/v1/stats` endpoint computing DORA metrics from bbolt data
+  - Metrics: deployment frequency (merges/day), lead time (avg hours open→merge), change failure rate, MTTR
+  - Also exposes: total/merged/open/closed/spam PR counts, queue items, sync failures, PRs by repo group/platform, merges by day
+  - Support `?period=N` query param (default 30 days)
+  - Add tests for empty stats and stats with PR data
 - **Single repo mode dedicated routing logic:**
   - `getPlatformForGroup()` now returns `MirrorPlatform` in single mode instead of first configured platform
   - `ListPRs` handler defaults platform filter to `MirrorPlatform` in single mode

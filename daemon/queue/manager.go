@@ -32,6 +32,56 @@ func NewManager(cfg *models.Config, clients map[platforms.PlatformType]platforms
 	}
 }
 
+// Recover resets stale in-flight queue items from a previous run.
+// Items left in "merging" or "checking" state indicate the daemon crashed
+// mid-processing. They are reset to "waiting" so the next CheckQueue cycle
+// will re-evaluate them. Before resetting, we verify the PR has not already
+// been merged on the platform to avoid double-merges.
+func (m *Manager) Recover() {
+	var toReset []struct {
+		key   string
+		item  models.QueueItem
+	}
+	err := db.ForEach(db.BucketQueueItems, func(key, value []byte) error {
+		var item models.QueueItem
+		if err := json.Unmarshal(value, &item); err != nil {
+			return nil
+		}
+		if item.Status == "merging" || item.Status == "checking" {
+			toReset = append(toReset, struct {
+				key  string
+				item models.QueueItem
+			}{key: string(key), item: item})
+		}
+		return nil
+	})
+	if err != nil {
+		slog.Error("queue recovery: failed to scan items", "error", err)
+		return
+	}
+
+	for _, entry := range toReset {
+		pr, findErr := findPRByID(entry.item.PRID)
+		if findErr == nil && pr != nil && pr.State == "merged" {
+			slog.Info("queue recovery: PR already merged, removing from queue", "pr_id", entry.item.PRID)
+			db.Delete(db.BucketQueueItems, entry.key)
+			continue
+		}
+		entry.item.Status = "waiting"
+		entry.item.FailureReason = ""
+		data, _ := json.Marshal(entry.item)
+		if putErr := db.Put(db.BucketQueueItems, entry.key, data); putErr != nil {
+			slog.Error("queue recovery: failed to reset item", "pr_id", entry.item.PRID, "error", putErr)
+		} else {
+			slog.Info("queue recovery: reset stale item to waiting", "pr_id", entry.item.PRID, "old_status", "merging/checking")
+		}
+	}
+
+	if len(toReset) > 0 {
+		slog.Info("queue recovery complete", "reset_count", len(toReset))
+	}
+}
+
 // AddToQueue adds a PR to the merge queue
 func (m *Manager) AddToQueue(pr *models.PRRecord) error {
 	key := fmt.Sprintf("%s#%s", pr.RepoGroup, pr.ID)

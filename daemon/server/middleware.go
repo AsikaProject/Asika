@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"asika/common/auth"
+	"asika/common/db"
+	"asika/common/models"
 )
 
 // Logger is a custom logger middleware
@@ -121,6 +124,62 @@ func RequireRole(role string) gin.HandlerFunc {
 
         c.Next()
     }
+}
+
+// RequireRepoGroupAccess checks if the user has access to the requested repo group.
+// Admins bypass this check. For non-admins, the repo_group URL param must be in
+// the user's AllowedRepoGroups list.
+func RequireRepoGroupAccess() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userRole, _ := c.Get("role")
+		if userRole != nil && userRole.(string) == "admin" {
+			c.Next()
+			return
+		}
+
+		repoGroup := c.Param("repo_group")
+		if repoGroup == "" {
+			c.Next()
+			return
+		}
+
+		username, _ := c.Get("username")
+		if username == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
+			c.Abort()
+			return
+		}
+
+		// Load user from DB to get current AllowedRepoGroups
+		data, err := db.Get(db.BucketUsers, username.(string))
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "code": 403})
+			c.Abort()
+			return
+		}
+		var user models.User
+		if err := json.Unmarshal(data, &user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			c.Abort()
+			return
+		}
+
+		// Empty AllowedRepoGroups means access to all groups (backward compatible)
+		if len(user.AllowedRepoGroups) == 0 {
+			c.Next()
+			return
+		}
+
+		for _, g := range user.AllowedRepoGroups {
+			if g == repoGroup {
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: no access to repo group", "repo_group": repoGroup, "code": 403})
+		c.Abort()
+	}
 }
 
 // RequireAnyRole requires any of the specified roles

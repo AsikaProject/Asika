@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"asika/common/db"
 	"asika/common/models"
@@ -656,4 +657,134 @@ func TestGetPRFromDB_NotFound(t *testing.T) {
 	if err == nil {
 		t.Error("getPRFromDB should return error for nonexistent PR")
 	}
+}
+
+func TestQueueRecovery_ResetsStaleItems(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "main", GitHub: "owner/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	// Add a PR to DB
+	pr := &models.PRRecord{
+		ID:        "recovery-pr-1",
+		RepoGroup: "main",
+		Platform:  "github",
+		PRNumber:  1,
+		State:     "open",
+	}
+	db.Put(db.BucketPRs, "main#github#1", mustMarshalPR(pr))
+
+	// Add queue items in various states
+	waitingItem := models.QueueItem{
+		PRID:      "recovery-pr-1",
+		RepoGroup: "main",
+		Status:    "waiting",
+		AddedAt:   time.Now(),
+	}
+	mergingItem := models.QueueItem{
+		PRID:      "recovery-pr-1",
+		RepoGroup: "main",
+		Status:    "merging",
+		AddedAt:   time.Now(),
+	}
+	checkingItem := models.QueueItem{
+		PRID:      "recovery-pr-1",
+		RepoGroup: "main",
+		Status:    "checking",
+		AddedAt:   time.Now(),
+	}
+
+	m.AddToQueue(pr)
+	// Manually set states to simulate crash
+	key := "main#recovery-pr-1"
+	db.Put(db.BucketQueueItems, key, mustMarshalPR(waitingItem))
+	db.Put(db.BucketQueueItems, key+"-merging", mustMarshalPR(mergingItem))
+	db.Put(db.BucketQueueItems, key+"-checking", mustMarshalPR(checkingItem))
+
+	// Run recovery
+	m.Recover()
+
+	// Verify merging and checking items were reset to waiting
+	var resetCount, waitingCount int
+	db.ForEach(db.BucketQueueItems, func(k, v []byte) error {
+		var item models.QueueItem
+		json.Unmarshal(v, &item)
+		if item.Status == "waiting" {
+			waitingCount++
+		}
+		if item.Status == "waiting" && (string(k) == key+"-merging" || string(k) == key+"-checking") {
+			resetCount++
+		}
+		return nil
+	})
+
+	if resetCount != 2 {
+		t.Errorf("expected 2 reset items, got %d", resetCount)
+	}
+	if waitingCount < 2 {
+		t.Errorf("expected at least 2 waiting items, got %d", waitingCount)
+	}
+}
+
+func TestQueueRecovery_AlreadyMergedPR_Removed(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "main", GitHub: "owner/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	// Add a PR that's already merged
+	pr := &models.PRRecord{
+		ID:        "merged-pr-1",
+		RepoGroup: "main",
+		Platform:  "github",
+		PRNumber:  2,
+		State:     "merged",
+	}
+	db.Put(db.BucketPRs, "main#github#2", mustMarshalPR(pr))
+
+	// Add a merging queue item for this already-merged PR
+	mergingItem := models.QueueItem{
+		PRID:      "merged-pr-1",
+		RepoGroup: "main",
+		Status:    "merging",
+		AddedAt:   time.Now(),
+	}
+	key := "main#merged-pr-1"
+	db.Put(db.BucketQueueItems, key, mustMarshalPR(mergingItem))
+
+	// Run recovery
+	m.Recover()
+
+	// Verify the item was removed (not reset to waiting)
+	var count int
+	db.ForEach(db.BucketQueueItems, func(k, v []byte) error {
+		count++
+		return nil
+	})
+	if count != 0 {
+		t.Errorf("expected 0 queue items (merged PR should be removed), got %d", count)
+	}
+}
+
+func mustMarshalPR(v interface{}) []byte {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

@@ -162,6 +162,7 @@ func (s *Server) setupRoutes() {
 		// PR management (8.2)
 		prs := protected.Group("/repos/:repo_group/prs")
 		prs.Use(RequireAnyRole("viewer", "operator", "admin"))
+		prs.Use(RequireRepoGroupAccess())
 		{
 			prs.GET("", handlers.ListPRs)
 			prs.GET("/:pr_id", handlers.GetPR)
@@ -178,6 +179,7 @@ func (s *Server) setupRoutes() {
 		// Queue management (8.3)
 		queue := protected.Group("/queue/:repo_group")
 		queue.Use(RequireAnyRole("viewer", "operator", "admin"))
+		queue.Use(RequireRepoGroupAccess())
 		{
 			queue.GET("", handlers.GetQueue)
 			queue.POST("/recheck", handlers.RecheckQueue)
@@ -198,6 +200,9 @@ func (s *Server) setupRoutes() {
 			cfgGroup.GET("", handlers.GetConfig)
 			cfgGroup.PUT("", handlers.UpdateConfig)
 		}
+
+		// Stats / DORA metrics
+		protected.GET("/stats", handlers.GetStats)
 
 		// Sync history (8.5)
 		sync := protected.Group("/sync")

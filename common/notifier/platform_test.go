@@ -2,7 +2,9 @@ package notifier
 
 import (
 	"context"
+	"net/http"
 	"testing"
+	"time"
 
 	"asika/common/models"
 	"asika/common/platforms"
@@ -273,6 +275,74 @@ func TestPlatformNotifier_Send_AllPRsClosed(t *testing.T) {
 	err := n.Send(context.Background(), "Test", "Body")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestNewSlackNotifier(t *testing.T) {
+	n := NewSlackNotifier(map[string]interface{}{
+		"webhook_url": "https://hooks.slack.com/services/xxx/yyy/zzz",
+	})
+	if n == nil {
+		t.Fatal("expected non-nil notifier")
+	}
+	if n.Type() != "slack" {
+		t.Errorf("Type() = %q, want slack", n.Type())
+	}
+}
+
+func TestNewSlackNotifier_EmptyConfig(t *testing.T) {
+	n := NewSlackNotifier(map[string]interface{}{})
+	if n != nil {
+		t.Error("expected nil notifier for empty config")
+	}
+}
+
+func TestNewSlackNotifier_CustomOptions(t *testing.T) {
+	n := NewSlackNotifier(map[string]interface{}{
+		"webhook_url": "https://hooks.slack.com/services/xxx",
+		"channel":     "#deployments",
+		"username":    "DeployBot",
+		"icon_emoji":  ":rocket:",
+	})
+	if n == nil {
+		t.Fatal("expected non-nil notifier")
+	}
+	if n.channel != "#deployments" {
+		t.Errorf("channel = %q, want #deployments", n.channel)
+	}
+	if n.username != "DeployBot" {
+		t.Errorf("username = %q, want DeployBot", n.username)
+	}
+	if n.iconEmoji != ":rocket:" {
+		t.Errorf("iconEmoji = %q, want :rocket:", n.iconEmoji)
+	}
+}
+
+func TestNewSlackNotifier_DefaultOptions(t *testing.T) {
+	n := NewSlackNotifier(map[string]interface{}{
+		"webhook_url": "https://hooks.slack.com/services/xxx",
+	})
+	if n == nil {
+		t.Fatal("expected non-nil notifier")
+	}
+	if n.username != "Asika" {
+		t.Errorf("default username = %q, want Asika", n.username)
+	}
+	if n.iconEmoji != ":robot_face:" {
+		t.Errorf("default icon = %q, want :robot_face:", n.iconEmoji)
+	}
+}
+
+func TestSlackNotifier_Send_InvalidURL(t *testing.T) {
+	n := &SlackNotifier{
+		webhookURL: "http://localhost:1/nonexistent",
+		username:   "test",
+		client:     &http.Client{Timeout: 5 * time.Second},
+	}
+	ctx := context.Background()
+	err := n.Send(ctx, "Test", "Body")
+	if err == nil {
+		t.Error("expected error for invalid URL")
 	}
 }
 
