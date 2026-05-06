@@ -9,23 +9,28 @@ import (
 
 // MockPlatformClient is a mock implementation of PlatformClient
 type MockPlatformClient struct {
-	PRs           map[string]*models.PRRecord
-	MergeMethods  []string
-	DefaultMethod string
-	Approvals     []string
-	CIStatus      string
-	DiffFiles     []string
-	AppliedLabels []string
-	Err           error
+	PRs                  map[string]*models.PRRecord
+	MergeMethods         []string
+	DefaultMethod        string
+	Approvals            []string
+	CIStatus             string
+	DiffFiles            []string
+	AppliedLabels        []string
+	Err                  error
+	MaintainerCanModify  bool
+	BranchBase           string
+	BranchHead           string
+	BranchHeadSHA        string
 }
 
 // NewMockPlatformClient creates a new mock client
 func NewMockPlatformClient() *MockPlatformClient {
     return &MockPlatformClient{
-        PRs:       make(map[string]*models.PRRecord),
-        Approvals: make([]string, 0),
-        CIStatus:  "success",
-        DiffFiles: []string{"main.go", "README.md"},
+        PRs:                 make(map[string]*models.PRRecord),
+        Approvals:           make([]string, 0),
+        CIStatus:            "success",
+        DiffFiles:           []string{"main.go", "README.md"},
+        MaintainerCanModify: true,
     }
 }
 
@@ -128,4 +133,28 @@ func (m *MockPlatformClient) GetPRCommits(ctx context.Context, owner, repo strin
 
 func (m *MockPlatformClient) GetDiffFiles(ctx context.Context, owner, repo string, number int) ([]string, error) {
     return m.DiffFiles, m.Err
+}
+
+func (m *MockPlatformClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
+    if m.Err != nil {
+        return nil, m.Err
+    }
+    base := m.BranchBase
+    if base == "" {
+        base = "main"
+    }
+    head := m.BranchHead
+    if head == "" {
+        head = "feature-branch"
+    }
+    sha := m.BranchHeadSHA
+    if sha == "" {
+        sha = "abc123def456"
+    }
+    return &models.PRBranchInfo{
+        BaseBranch:          base,
+        HeadBranch:          head,
+        HeadSHA:             sha,
+        MaintainerCanModify: m.MaintainerCanModify,
+    }, nil
 }

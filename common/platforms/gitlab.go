@@ -477,6 +477,24 @@ func (c *GitLabClient) GetPRCommits(ctx context.Context, owner, repo string, num
 	return shas, nil
 }
 
+// GetPRBranchInfo gets branch metadata for rebase operations
+func (c *GitLabClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
+	project := owner + "/" + repo
+	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MR: %w", err)
+	}
+
+	info := &models.PRBranchInfo{
+		BaseBranch: mr.TargetBranch,
+		HeadBranch: mr.SourceBranch,
+		HeadSHA:    mr.SHA,
+	}
+	// GitLab: AllowMaintainerToPush indicates maintainer_can_modify equivalent
+	info.MaintainerCanModify = mr.AllowMaintainerToPush
+	return info, nil
+}
+
 // GetDiffFiles gets the changed files in a MR via ListMergeRequestDiffs
 func (c *GitLabClient) GetDiffFiles(ctx context.Context, owner, repo string, number int) ([]string, error) {
 	project := owner + "/" + repo

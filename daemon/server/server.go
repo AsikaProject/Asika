@@ -171,6 +171,7 @@ func (s *Server) setupRoutes() {
 			prs.POST("/:pr_id/reopen", handlers.ReopenPR)
 			prs.POST("/:pr_id/spam", handlers.MarkSpam)
 			prs.POST("/:pr_id/comment", handlers.CommentPR)
+			prs.POST("/:pr_id/rebase", handlers.RebaseSinglePR)
 			prs.POST("/batch/approve", handlers.BatchApprovePR)
 			prs.POST("/batch/close", handlers.BatchClosePR)
 			prs.POST("/batch/label", handlers.BatchLabelPR)
@@ -183,6 +184,7 @@ func (s *Server) setupRoutes() {
 		{
 			queue.GET("", handlers.GetQueue)
 			queue.POST("/recheck", handlers.RecheckQueue)
+			queue.POST("/rebase", handlers.RebaseQueue)
 		}
 
 		// Audit logs (8.2)

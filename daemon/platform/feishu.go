@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
+	"asika/common/version"
 	"asika/daemon/queue"
 	"asika/daemon/syncer"
 )
@@ -264,13 +267,25 @@ func (b *FeishuBot) processCommand(senderID, text string) string {
 		}
 		return b.doUnstale(senderID, parts[1], parts[2])
 
+	case strings.HasPrefix(lower, "rebase ") || strings.HasPrefix(lower, "/rebase "):
+		if len(parts) < 3 {
+			return "Usage: rebase <repo_group> <pr_number>"
+		}
+		return b.doRebase(senderID, parts[1], parts[2])
+
+	case lower == "stats" || lower == "/stats":
+		return b.showStatsText()
+
+	case lower == "version" || lower == "/version":
+		return b.showVersionText()
+
 	default:
 		return fmt.Sprintf("Unknown command: %s\nTry 'help' for available commands.", text)
 	}
 }
 
 func (b *FeishuBot) helpText() string {
-	return `Asika Feishu Bot Commands:
+  return `Asika Feishu Bot Commands:
   help          - Show this help
   prs [group]   - List PRs
   pr <group> <num> - Show PR details
@@ -282,7 +297,10 @@ func (b *FeishuBot) helpText() string {
   recheck       - Trigger queue recheck
   config        - Show config summary
   stalecheck [group] - Check for stale PRs
-  unstale <group> <id> - Remove stale label`
+  unstale <group> <id> - Remove stale label
+  rebase <group> <num> - Rebase a PR
+  stats         - Show DORA metrics
+  version       - Show version info`
 }
 
 func (b *FeishuBot) listPRsText(repoGroup string) string {
@@ -720,4 +738,210 @@ func (b *FeishuBot) doUnstale(senderID, repoGroup, prNumberStr string) string {
 		return "Failed to remove stale label."
 	}
 	return "Stale label removed from PR #" + prNumberStr + " in " + repoGroup
+}
+
+func (b *FeishuBot) doRebase(senderID, repoGroup, prNumberStr string) string {
+	cfg := config.Current()
+	if cfg == nil {
+		return "Config not loaded."
+	}
+
+	group := config.GetRepoGroupByName(cfg, repoGroup)
+	if group == nil {
+		return "Repo group not found: " + repoGroup
+	}
+
+	var prNumber int
+	fmt.Sscanf(prNumberStr, "%d", &prNumber)
+	if prNumber == 0 {
+		return "Invalid PR number: " + prNumberStr
+	}
+
+	var found *models.PRRecord
+	db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		var pr models.PRRecord
+		if json.Unmarshal(value, &pr) != nil {
+			return nil
+		}
+		if pr.RepoGroup == repoGroup && pr.PRNumber == prNumber {
+			found = &pr
+		}
+		return nil
+	})
+
+	if found == nil {
+		return fmt.Sprintf("PR #%d not found in %s", prNumber, repoGroup)
+	}
+
+	if found.State != "open" {
+		return fmt.Sprintf("PR #%d is not open (state: %s)", prNumber, found.State)
+	}
+
+	platform := found.Platform
+	if platform == "" {
+		if group.Mode == "single" && group.MirrorPlatform != "" {
+			platform = group.MirrorPlatform
+		} else if group.GitHub != "" {
+			platform = "github"
+		} else if group.GitLab != "" {
+			platform = "gitlab"
+		} else if group.Gitea != "" {
+			platform = "gitea"
+		}
+	}
+
+	client, ok := b.clients[platforms.PlatformType(platform)]
+	if !ok {
+		return "Platform client not available: " + platform
+	}
+
+	owner, repo := config.GetOwnerRepoFromGroup(group, platform)
+	if owner == "" || repo == "" {
+		return "Cannot resolve repo for platform: " + platform
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	branchInfo, err := client.GetPRBranchInfo(ctx, owner, repo, prNumber)
+	if err != nil {
+		return fmt.Sprintf("Failed to get branch info: %v", err)
+	}
+
+	if !branchInfo.MaintainerCanModify {
+		return "Rebase not allowed: PR author has not enabled 'allow edits from maintainers'. Please ask the author to enable it on the PR page."
+	}
+
+	url := fmt.Sprintf("http://localhost%s/api/v1/repos/%s/prs/%d/rebase",
+		cfg.Server.Listen, repoGroup, prNumber)
+	req, _ := http.NewRequest("POST", url, nil)
+	req.Header.Set("Authorization", "Bearer "+cfg.Auth.JWTSecret)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf("Rebase request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(body, &result) != nil {
+		return "Rebase request submitted (async)."
+	}
+
+	if success, ok := result["success"].(bool); ok && success {
+		msg, _ := result["message"].(string)
+		return msg
+	}
+	if errMsg, ok := result["error"].(string); ok {
+		return "Rebase failed: " + errMsg
+	}
+	return "Rebase request submitted."
+}
+
+func (b *FeishuBot) showStatsText() string {
+	url := fmt.Sprintf("http://localhost%s/api/v1/stats?period=30", b.cfg.Server.Listen)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf("Failed to fetch stats: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var result map[string]interface{}
+	if json.Unmarshal(body, &result) != nil {
+		return "Error parsing stats response"
+	}
+
+	var lines []string
+	lines = append(lines, "DORA Metrics")
+	lines = append(lines, "─────────────")
+
+	if v, ok := result["deployment_frequency"]; ok {
+		lines = append(lines, fmt.Sprintf("Deployments/Day: %.2f", toFloat64Feishu(v)))
+	}
+	if v, ok := result["lead_time_hours"]; ok {
+		lines = append(lines, fmt.Sprintf("Lead Time: %s", formatHoursFeishu(toFloat64Feishu(v))))
+	}
+	if v, ok := result["change_failure_rate"]; ok {
+		lines = append(lines, fmt.Sprintf("Failure Rate: %.1f%%", toFloat64Feishu(v)*100))
+	}
+	if v, ok := result["mttr_hours"]; ok {
+		lines = append(lines, fmt.Sprintf("MTTR: %s", formatHoursFeishu(toFloat64Feishu(v))))
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, "Overview")
+	lines = append(lines, "─────────────")
+	if v, ok := result["total_prs"]; ok {
+		lines = append(lines, fmt.Sprintf("Total PRs: %v", v))
+	}
+	if v, ok := result["open_prs"]; ok {
+		lines = append(lines, fmt.Sprintf("Open: %v", v))
+	}
+	if v, ok := result["merged_prs"]; ok {
+		lines = append(lines, fmt.Sprintf("Merged: %v", v))
+	}
+	if v, ok := result["queue_items"]; ok {
+		lines = append(lines, fmt.Sprintf("Queue: %v", v))
+	}
+
+	if byGroup, ok := result["prs_by_repo_group"].(map[string]interface{}); ok && len(byGroup) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, "By Repo Group")
+		lines = append(lines, "─────────────")
+		for k, v := range byGroup {
+			lines = append(lines, fmt.Sprintf("  %s: %v", k, v))
+		}
+	}
+
+	if byPlat, ok := result["prs_by_platform"].(map[string]interface{}); ok && len(byPlat) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, "By Platform")
+		lines = append(lines, "─────────────")
+		for k, v := range byPlat {
+			lines = append(lines, fmt.Sprintf("  %s: %v", k, v))
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func toFloat64Feishu(v interface{}) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case json.Number:
+		f, _ := n.Float64()
+		return f
+	default:
+		return 0
+	}
+}
+
+func formatHoursFeishu(hours float64) string {
+	if hours < 1 {
+		return fmt.Sprintf("%.0f min", hours*60)
+	}
+	if hours < 24 {
+		return fmt.Sprintf("%.1f hours", hours)
+	}
+	days := hours / 24
+	if days < 30 {
+		return fmt.Sprintf("%.1f days", days)
+	}
+	return fmt.Sprintf("%.0f days", days)
+}
+
+func (b *FeishuBot) showVersionText() string {
+	return fmt.Sprintf("Asika\nVersion: %s", version.Version)
 }

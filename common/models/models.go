@@ -25,27 +25,36 @@ type RepoGroup struct {
     MergeQueue     MergeQueueConfig `json:"merge_queue"`
 }
 
+// PRBranchInfo holds branch metadata for rebase operations
+type PRBranchInfo struct {
+	BaseBranch         string `json:"base_branch"`
+	HeadBranch         string `json:"head_branch"`
+	HeadSHA            string `json:"head_sha"`
+	MaintainerCanModify bool  `json:"maintainer_can_modify"`
+}
+
 // PRRecord represents a pull request record
 type PRRecord struct {
-    ID             string    `json:"id"` // UUID
-    RepoGroup      string    `json:"repo_group"`
-    Platform       string    `json:"platform"` // "github"|"gitlab"|"gitea"
-    PRNumber       int       `json:"pr_number"`
-    Title          string    `json:"title"`
-    Author         string    `json:"author"`
-    State          string    `json:"state"` // "open"|"closed"|"merged"|"spam"
-    Labels         []string  `json:"labels"`
-    MergeCommitSHA string    `json:"merge_commit_sha"`
-    SpamFlag       bool      `json:"spam_flag"`
-    CreatedAt      time.Time `json:"created_at"`
-    UpdatedAt      time.Time `json:"updated_at"`
-	DiffFiles      []string  `json:"diff_files"` // changed file list for label rules
-	Events         []PREvent `json:"events"`
-	IsDraft        bool      `json:"is_draft"` // true if PR is a draft (GitHub) or WIP (GitLab)
-	HasConflict    bool      `json:"has_conflict"` // true if PR has merge conflicts
-	IsApproved     bool      `json:"is_approved"` // true if PR has been approved by at least one reviewer
-	HTMLURL        string    `json:"html_url"`    // URL to the PR on the platform
-	MergedAt       time.Time `json:"merged_at"`   // when the PR was merged (zero if not merged)
+	ID                 string       `json:"id"` // UUID
+	RepoGroup          string       `json:"repo_group"`
+	Platform           string       `json:"platform"` // "github"|"gitlab"|"gitea"
+	PRNumber           int          `json:"pr_number"`
+	Title              string       `json:"title"`
+	Author             string       `json:"author"`
+	State              string       `json:"state"` // "open"|"closed"|"merged"|"spam"
+	Labels             []string     `json:"labels"`
+	MergeCommitSHA     string       `json:"merge_commit_sha"`
+	SpamFlag           bool         `json:"spam_flag"`
+	CreatedAt          time.Time    `json:"created_at"`
+	UpdatedAt          time.Time    `json:"updated_at"`
+	DiffFiles          []string     `json:"diff_files"` // changed file list for label rules
+	Events             []PREvent    `json:"events"`
+	IsDraft            bool         `json:"is_draft"` // true if PR is a draft (GitHub) or WIP (GitLab)
+	HasConflict        bool         `json:"has_conflict"` // true if PR has merge conflicts
+	IsApproved         bool         `json:"is_approved"` // true if PR has been approved by at least one reviewer
+	HTMLURL            string       `json:"html_url"`    // URL to the PR on the platform
+	MergedAt           time.Time    `json:"merged_at"`   // when the PR was merged (zero if not merged)
+	BranchInfo         *PRBranchInfo `json:"branch_info,omitempty"` // branch metadata for rebase
 }
 
 // PREvent represents a pull request event
@@ -185,7 +194,8 @@ type EventsConfig struct {
 
 // GitConfig represents git configuration
 type GitConfig struct {
-    WorkDir string `toml:"workdir"`
+    WorkDir      string `toml:"workdir"`
+    RepoClonePath string `toml:"repo_clone_path"` // optional persistent clone path; empty = use temp dir
 }
 
 // TokensConfig represents platform token configuration

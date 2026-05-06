@@ -3,6 +3,7 @@ package gitutil
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-git/go-git/v5"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
+	"github.com/go-git/go-git/v5/plumbing/storer"
 )
 
 // CloneOrOpen clones a repository or opens if it exists
@@ -203,4 +205,188 @@ func CommitChanges(repo *git.Repository, message string) error {
 		},
 	})
 	return err
+}
+
+// Rebase rebases the current branch onto the given target branch.
+// It fetches the latest target branch, checks out the head branch,
+// performs the rebase, then force-pushes the result.
+// workdir is the local clone directory. If empty, a temp dir is used.
+// token is used for fetch/push authentication.
+func Rebase(workdir, remoteURL, token, headBranch, baseBranch string, persistentPath string) error {
+	repo, dir, cleanup, err := prepareRepo(workdir, remoteURL, token, persistentPath)
+	if err != nil {
+		return err
+	}
+	if cleanup {
+		defer CleanupWorkdir(dir)
+	}
+
+	// Fetch latest base branch
+	err = FetchRemote(repo, "origin", token)
+	if err != nil {
+		// Ignore "already up-to-date" errors
+		if !isUpToDate(err) {
+			return fmt.Errorf("failed to fetch: %w", err)
+		}
+	}
+
+	// Checkout head branch
+	w, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	err = w.Checkout(&git.CheckoutOptions{
+		Branch: plumbing.ReferenceName("refs/heads/" + headBranch),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to checkout head branch %s: %w", headBranch, err)
+	}
+
+	// Resolve base branch ref from remote tracking branch
+	baseRef := plumbing.NewRemoteReferenceName("origin", baseBranch)
+
+	// Perform rebase: replay commits from HEAD onto baseRef
+	// go-git doesn't have a built-in Rebase, so we use Reset to the base
+	// and then cherry-pick commits. Simpler approach: merge --ff-only equivalent
+	// by resetting to base and replaying. Actually, the simplest correct approach
+	// with go-git is to use git's rebase via exec, but to stay pure Go we
+	// implement it as: find common ancestor, create temp branch, cherry-pick.
+
+	// Get the base commit
+	baseCommit, err := repo.CommitObject(plumbing.NewHash(baseRef.String()))
+	if err != nil {
+		// Try resolving as remote ref
+		remoteRef, refErr := repo.Reference(baseRef, true)
+		if refErr != nil {
+			return fmt.Errorf("failed to resolve base branch %s: %w", baseBranch, refErr)
+		}
+		baseCommit, err = repo.CommitObject(remoteRef.Hash())
+		if err != nil {
+			return fmt.Errorf("failed to get base commit: %w", err)
+		}
+	}
+
+	// Get current HEAD commit (top of PR branch)
+	headRef, err := repo.Head()
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD: %w", err)
+	}
+	headCommit, err := repo.CommitObject(headRef.Hash())
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD commit: %w", err)
+	}
+
+	// Find commits on HEAD that are not on base (the PR's own commits)
+	prCommits, err := findPRCommits(repo, headCommit, baseCommit)
+	if err != nil {
+		return fmt.Errorf("failed to find PR commits: %w", err)
+	}
+
+	if len(prCommits) == 0 {
+		// Nothing to rebase, already up to date
+		return nil
+	}
+
+	// Reset to base commit
+	err = w.Reset(&git.ResetOptions{
+		Commit: baseCommit.Hash,
+		Mode:   git.HardReset,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to reset to base: %w", err)
+	}
+
+	// Cherry-pick each PR commit onto the rebased base
+	for _, commit := range prCommits {
+		err = cherryPickCommit(repo, commit)
+		if err != nil {
+			return fmt.Errorf("failed to cherry-pick %s during rebase: %w", commit.Hash.String()[:8], err)
+		}
+	}
+
+	// Force-push the rebased branch
+	err = Push(repo, "origin", headBranch, token)
+	if err != nil {
+		return fmt.Errorf("failed to push rebased branch: %w", err)
+	}
+
+	return nil
+}
+
+// prepareRepo clones or opens a repo. Returns repo, workdir, whether to cleanup, and error.
+func prepareRepo(workdir, url, token string, persistentPath string) (*git.Repository, string, bool, error) {
+	if workdir != "" {
+		repo, err := git.PlainOpen(workdir)
+		if err != nil {
+			return nil, "", false, fmt.Errorf("failed to open repo at %s: %w", workdir, err)
+		}
+		return repo, workdir, false, nil
+	}
+
+	dir := persistentPath
+	cleanup := false
+	if dir == "" {
+		var err error
+		dir, err = CreateTempWorkdir("asika-rebase-")
+		if err != nil {
+			return nil, "", false, fmt.Errorf("failed to create temp dir: %w", err)
+		}
+		cleanup = true
+	}
+
+	repo, err := CloneOrOpen(dir, url, token)
+	if err != nil {
+		return nil, dir, cleanup, fmt.Errorf("failed to clone repo: %w", err)
+	}
+	return repo, dir, cleanup, nil
+}
+
+// findPRCommits returns commits reachable from head but not from base, in chronological order.
+func findPRCommits(repo *git.Repository, head, base *object.Commit) ([]*object.Commit, error) {
+	// Build set of base commit hashes
+	baseHashes := make(map[plumbing.Hash]bool)
+	err := object.NewCommitPreorderIter(base, nil, nil).ForEach(func(c *object.Commit) error {
+		baseHashes[c.Hash] = true
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Walk head commits, collect those not in base set
+	var prCommits []*object.Commit
+	err = object.NewCommitPreorderIter(head, nil, nil).ForEach(func(c *object.Commit) error {
+		if c.Hash == base.Hash {
+			return storer.ErrStop
+		}
+		if !baseHashes[c.Hash] {
+			prCommits = append(prCommits, c)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Reverse to get chronological order (oldest first)
+	for i, j := 0, len(prCommits)-1; i < j; i, j = i+1, j-1 {
+		prCommits[i], prCommits[j] = prCommits[j], prCommits[i]
+	}
+
+	return prCommits, nil
+}
+
+// cherryPickCommit cherry-picks a single commit onto the current HEAD.
+func cherryPickCommit(repo *git.Repository, commit *object.Commit) error {
+	return CherryPick(repo, commit.Hash.String())
+}
+
+func isUpToDate(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "already up-to-date") ||
+		strings.Contains(msg, "up to date")
 }

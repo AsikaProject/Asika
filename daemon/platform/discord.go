@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
+	"asika/common/version"
 	"asika/daemon/queue"
 	"asika/daemon/syncer"
 )
@@ -152,6 +155,12 @@ func (b *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.Mess
 		b.handleRecheckQueue(s, m)
 	case "!config":
 		b.handleShowConfig(s, m)
+	case "!rebase":
+		b.handleRebasePR(s, m, parts)
+	case "!stats":
+		b.handleStats(s, m)
+	case "!version":
+		b.handleVersion(s, m)
 	default:
 		if strings.HasPrefix(cmd, "!") {
 			s.ChannelMessageSend(m.ChannelID, "Unknown command. Use !help for available commands.")
@@ -175,8 +184,11 @@ func (b *DiscordBot) handleHelp(s *discordgo.Session, m *discordgo.MessageCreate
 !queue [repo_group] — Show merge queue
 !recheck [repo_group] — Trigger queue recheck
 
-**Config**
-!config — Show current config (masked)`
+ **Config**
+!config — Show current config (masked)
+
+**Info**
+!version — Show version info`
 	s.ChannelMessageSend(m.ChannelID, help)
 }
 
@@ -617,4 +629,219 @@ func (b *DiscordBot) getClientForPlatform(platform string) platforms.PlatformCli
 		return nil
 	}
 	return b.clients[platforms.PlatformType(platform)]
+}
+
+// handleRebasePR handles !rebase command
+func (b *DiscordBot) handleRebasePR(s *discordgo.Session, m *discordgo.MessageCreate, parts []string) {
+	if len(parts) < 3 {
+		s.ChannelMessageSend(m.ChannelID, "Usage: !rebase repo_group pr_number")
+		return
+	}
+
+	repoGroup := parts[1]
+	var prNumber int
+	fmt.Sscanf(parts[2], "%d", &prNumber)
+	if prNumber == 0 {
+		s.ChannelMessageSend(m.ChannelID, "Invalid PR number.")
+		return
+	}
+
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		s.ChannelMessageSend(m.ChannelID, "Repo group not found: "+repoGroup)
+		return
+	}
+
+	var found *models.PRRecord
+	db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		var pr models.PRRecord
+		if json.Unmarshal(value, &pr) != nil {
+			return nil
+		}
+		if pr.RepoGroup == repoGroup && pr.PRNumber == prNumber {
+			found = &pr
+		}
+		return nil
+	})
+
+	if found == nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d not found in %s", prNumber, repoGroup))
+		return
+	}
+
+	if found.State != "open" {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d is not open (state: %s)", prNumber, found.State))
+		return
+	}
+
+	platform := found.Platform
+	if platform == "" {
+		if group.Mode == "single" && group.MirrorPlatform != "" {
+			platform = group.MirrorPlatform
+		} else if group.GitHub != "" {
+			platform = "github"
+		} else if group.GitLab != "" {
+			platform = "gitlab"
+		} else if group.Gitea != "" {
+			platform = "gitea"
+		}
+	}
+
+	client := b.getClientForPlatform(platform)
+	if client == nil {
+		s.ChannelMessageSend(m.ChannelID, "Platform client not available: "+platform)
+		return
+	}
+
+	owner, repo := config.GetOwnerRepoFromGroup(group, platform)
+	if owner == "" || repo == "" {
+		s.ChannelMessageSend(m.ChannelID, "Cannot resolve repo for platform: "+platform)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	branchInfo, err := client.GetPRBranchInfo(ctx, owner, repo, prNumber)
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to get branch info: %v", err))
+		return
+	}
+
+	if !branchInfo.MaintainerCanModify {
+		s.ChannelMessageSend(m.ChannelID, "⚠️ Rebase not allowed: PR author has not enabled 'allow edits from maintainers'. Please ask the author to enable it on the PR page.")
+		return
+	}
+
+	url := fmt.Sprintf("http://localhost%s/api/v1/repos/%s/prs/%d/rebase",
+		b.cfg.Server.Listen, repoGroup, prNumber)
+	req, _ := http.NewRequest("POST", url, nil)
+	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Rebase request failed: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(body, &result) != nil {
+		s.ChannelMessageSend(m.ChannelID, "Rebase completed (async)")
+		return
+	}
+
+	if success, ok := result["success"].(bool); ok && success {
+		msg, _ := result["message"].(string)
+		s.ChannelMessageSend(m.ChannelID, "✅ "+msg)
+	} else if errMsg, ok := result["error"].(string); ok {
+		s.ChannelMessageSend(m.ChannelID, "❌ Rebase failed: "+errMsg)
+	} else {
+		s.ChannelMessageSend(m.ChannelID, "Rebase request submitted.")
+	}
+}
+
+// handleStats handles !stats command
+func (b *DiscordBot) handleStats(s *discordgo.Session, m *discordgo.MessageCreate) {
+	url := fmt.Sprintf("http://localhost%s/api/v1/stats?period=30", b.cfg.Server.Listen)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to fetch stats: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var result map[string]interface{}
+	if json.Unmarshal(body, &result) != nil {
+		s.ChannelMessageSend(m.ChannelID, "Error parsing stats response")
+		return
+	}
+
+	var sb strings.Builder
+	sb.WriteString("**📊 DORA Metrics**\n\n")
+
+	if v, ok := result["deployment_frequency"]; ok {
+		sb.WriteString(fmt.Sprintf("🚀 Deployments/Day: **%.2f**\n", toFloat64(v)))
+	}
+	if v, ok := result["lead_time_hours"]; ok {
+		sb.WriteString(fmt.Sprintf("⏱ Lead Time: **%s**\n", formatHours(toFloat64(v))))
+	}
+	if v, ok := result["change_failure_rate"]; ok {
+		sb.WriteString(fmt.Sprintf("💥 Failure Rate: **%.1f%%**\n", toFloat64(v)*100))
+	}
+	if v, ok := result["mttr_hours"]; ok {
+		sb.WriteString(fmt.Sprintf("🔧 MTTR: **%s**\n", formatHours(toFloat64(v))))
+	}
+
+	sb.WriteString("\n**Overview**\n")
+	if v, ok := result["total_prs"]; ok {
+		sb.WriteString(fmt.Sprintf("📋 Total PRs: **%v**\n", v))
+	}
+	if v, ok := result["open_prs"]; ok {
+		sb.WriteString(fmt.Sprintf("🟢 Open: **%v**\n", v))
+	}
+	if v, ok := result["merged_prs"]; ok {
+		sb.WriteString(fmt.Sprintf("🟣 Merged: **%v**\n", v))
+	}
+	if v, ok := result["queue_items"]; ok {
+		sb.WriteString(fmt.Sprintf("📊 Queue: **%v**\n", v))
+	}
+
+	if byGroup, ok := result["prs_by_repo_group"].(map[string]interface{}); ok && len(byGroup) > 0 {
+		sb.WriteString("\n**By Repo Group**\n")
+		for k, v := range byGroup {
+			sb.WriteString(fmt.Sprintf("  %s: **%v**\n", k, v))
+		}
+	}
+
+	if byPlat, ok := result["prs_by_platform"].(map[string]interface{}); ok && len(byPlat) > 0 {
+		sb.WriteString("\n**By Platform**\n")
+		for k, v := range byPlat {
+			sb.WriteString(fmt.Sprintf("  %s: **%v**\n", k, v))
+		}
+	}
+
+	s.ChannelMessageSend(m.ChannelID, sb.String())
+}
+
+func toFloat64Discord(v interface{}) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case json.Number:
+		f, _ := n.Float64()
+		return f
+	default:
+		return 0
+	}
+}
+
+func formatHoursDiscord(hours float64) string {
+	if hours < 1 {
+		return fmt.Sprintf("%.0f min", hours*60)
+	}
+	if hours < 24 {
+		return fmt.Sprintf("%.1f hours", hours)
+	}
+	days := hours / 24
+	if days < 30 {
+		return fmt.Sprintf("%.1f days", days)
+	}
+	return fmt.Sprintf("%.0f days", days)
+}
+
+// handleVersion handles !version command
+func (b *DiscordBot) handleVersion(s *discordgo.Session, m *discordgo.MessageCreate) {
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**Asika**\nVersion: `%s`", version.Version))
 }

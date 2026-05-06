@@ -28,6 +28,7 @@ polling_interval = "5m"   # only used when mode = "polling"
 # Git work directory for temp bare repos
 [git]
 workdir = "/var/lib/asika/work"
+# repo_clone_path = "/var/lib/asika/repos"  # optional persistent clone path for rebase; empty = use temp dir
 
 # Platform tokens (or use env vars: ASIKA_GITHUB_TOKEN, etc.)
 [tokens]

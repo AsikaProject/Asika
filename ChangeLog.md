@@ -1,6 +1,27 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Auto-rebase:**
+  - Add `Rebase()` function in `common/gitutil/git.go` using go-git (clone, fetch, checkout, cherry-pick onto base, force-push)
+  - Add `GetPRBranchInfo()` to `PlatformClient` interface — returns base branch, head branch, head SHA, and `maintainer_can_modify` flag
+  - Implement `GetPRBranchInfo` for GitHub (`MaintainerCanModify`), GitLab (`AllowMaintainerToPush`), Gitea (defaults to true)
+  - Add `POST /api/v1/repos/:repo_group/prs/:pr_id/rebase` endpoint for single PR rebase
+  - Add `POST /api/v1/queue/:repo_group/rebase` endpoint to rebase all conflicted PRs in a queue
+  - Auto-rebase in queue checker: when `HasConflict` is true, attempts rebase before skipping; checks `maintainer_can_modify` first
+  - Returns clear error when PR author has not enabled "allow edits from maintainers"
+  - Add `git.repo_clone_path` config option for persistent clone directory (defaults to temp dir)
+  - Add CLI commands: `asika rebase <repo_group> <pr_id>`
+  - Add bot commands: `/rebase` (Telegram), `!rebase` (Discord), `/rebase` (Feishu)
+  - Extend `PRRecord` with `BranchInfo *PRBranchInfo` field for branch metadata
+  - Add tests for rebase handler (missing allow-edit, closed PR, empty queue) and mock `GetPRBranchInfo`
+- **DORA metrics CLI & bot commands:**
+  - Add `asika stats` CLI command showing DORA metrics, overview, and breakdowns by repo group/platform
+  - Add `/stats` bot command (Telegram/Discord/Feishu) displaying formatted DORA metrics
+- **DORA metrics WebUI dashboard:**
+  - Rewrite `dashboard.html` with DORA metrics cards (Deployments/Day, Lead Time, Failure Rate, MTTR)
+  - Show overview stats (Total/Open/Merged PRs, Queue Items, Failed Queue, Sync Failures)
+  - Show breakdown tables (PRs by Repo Group, PRs by Platform)
+  - Fetch from `/api/v1/stats` endpoint with 30-day default period
 - **Persistent merge queue (restart recovery):**
   - Add `Manager.Recover()` that scans `queue_items` bucket on startup and resets stale `merging`/`checking` items back to `waiting`
   - Before resetting, checks if the PR was already merged on the platform (avoids double-merge after crash)

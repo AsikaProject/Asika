@@ -375,6 +375,24 @@ func (c *GitHubClient) GetPRCommits(ctx context.Context, owner, repo string, num
 	return shas, nil
 }
 
+// GetPRBranchInfo gets branch metadata for rebase operations
+func (c *GitHubClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
+	pr, _, err := c.client.PullRequests.Get(ctx, owner, repo, number)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR: %w", err)
+	}
+
+	info := &models.PRBranchInfo{
+		BaseBranch: pr.GetBase().GetRef(),
+		HeadBranch: pr.GetHead().GetRef(),
+		HeadSHA:    pr.GetHead().GetSHA(),
+	}
+	if pr.MaintainerCanModify != nil {
+		info.MaintainerCanModify = *pr.MaintainerCanModify
+	}
+	return info, nil
+}
+
 // GetDiffFiles gets the changed files in a PR
 func (c *GitHubClient) GetDiffFiles(ctx context.Context, owner, repo string, number int) ([]string, error) {
 	opts := &github.ListOptions{PerPage: 100}

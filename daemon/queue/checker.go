@@ -9,6 +9,7 @@ import (
 
 	"asika/common/config"
 	"asika/common/db"
+	"asika/common/gitutil"
 	"asika/common/models"
 	"asika/common/platforms"
 )
@@ -55,10 +56,15 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 		return false, fmt.Errorf("repo group not found: %s", pr.RepoGroup)
 	}
 
-	// Check for merge conflicts
+	// Check for merge conflicts - attempt auto-rebase if configured
 	if pr.HasConflict {
-		slog.Info("PR has merge conflicts, skipping", "pr_id", pr.ID, "title", pr.Title)
-		return false, nil
+		slog.Info("PR has merge conflicts, attempting auto-rebase", "pr_id", pr.ID, "title", pr.Title)
+		if c.tryAutoRebase(ctx, pr, group) {
+			pr.HasConflict = false
+		} else {
+			slog.Info("PR has merge conflicts, skipping", "pr_id", pr.ID, "title", pr.Title)
+			return false, nil
+		}
 	}
 
 	// Check approvals with retry for transient errors
@@ -222,4 +228,95 @@ func contains(list []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// tryAutoRebase attempts to rebase a conflicted PR.
+// Returns true if the rebase succeeded and the conflict was resolved.
+func (c *Checker) tryAutoRebase(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) bool {
+	platform := pr.Platform
+	if platform == "" {
+		if group.Mode == "single" && group.MirrorPlatform != "" {
+			platform = group.MirrorPlatform
+		} else if group.GitHub != "" {
+			platform = "github"
+		} else if group.GitLab != "" {
+			platform = "gitlab"
+		} else if group.Gitea != "" {
+			platform = "gitea"
+		}
+	}
+
+	client := c.clients[platforms.PlatformType(platform)]
+	if client == nil {
+		slog.Warn("auto-rebase: no platform client", "platform", platform, "pr_id", pr.ID)
+		return false
+	}
+
+	owner, repo := config.GetOwnerRepoFromGroup(group, platform)
+	if owner == "" || repo == "" {
+		slog.Warn("auto-rebase: cannot resolve repo", "platform", platform, "pr_id", pr.ID)
+		return false
+	}
+
+	branchInfo, err := client.GetPRBranchInfo(ctx, owner, repo, pr.PRNumber)
+	if err != nil {
+		slog.Warn("auto-rebase: failed to get branch info", "error", err, "pr_id", pr.ID)
+		return false
+	}
+
+	if !branchInfo.MaintainerCanModify {
+		slog.Info("auto-rebase: maintainer cannot modify PR, skipping", "pr_id", pr.ID)
+		return false
+	}
+
+	cloneURL := buildCloneURL(group, platform, owner, repo)
+	token := getPlatformToken(c.cfg, platform)
+	clonePath := c.cfg.Git.RepoClonePath
+
+	rebaseErr := gitutil.Rebase("", cloneURL, token, branchInfo.HeadBranch, branchInfo.BaseBranch, clonePath)
+	if rebaseErr != nil {
+		slog.Warn("auto-rebase: rebase failed", "error", rebaseErr, "pr_id", pr.ID)
+		return false
+	}
+
+	slog.Info("auto-rebase: succeeded", "pr_id", pr.ID, "head_branch", branchInfo.HeadBranch, "base_branch", branchInfo.BaseBranch)
+	return true
+}
+
+func buildCloneURL(group *models.RepoGroup, platform, owner, repo string) string {
+	var baseURL string
+	switch platform {
+	case "github":
+		baseURL = "https://github.com"
+	case "gitlab":
+		cfg := config.Current()
+		if cfg != nil && cfg.GitLabBaseURL != "" {
+			baseURL = strings.TrimSuffix(cfg.GitLabBaseURL, "/")
+		} else {
+			baseURL = "https://gitlab.com"
+		}
+	case "gitea":
+		cfg := config.Current()
+		if cfg != nil && cfg.GiteaBaseURL != "" {
+			baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
+		} else {
+			return ""
+		}
+	}
+	return fmt.Sprintf("%s/%s/%s", baseURL, owner, repo)
+}
+
+func getPlatformToken(cfg *models.Config, platform string) string {
+	if cfg == nil {
+		return ""
+	}
+	switch platform {
+	case "github":
+		return cfg.Tokens.GitHub
+	case "gitlab":
+		return cfg.Tokens.GitLab
+	case "gitea":
+		return cfg.Tokens.Gitea
+	}
+	return ""
 }

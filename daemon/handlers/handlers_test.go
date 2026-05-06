@@ -1292,6 +1292,172 @@ func TestGetStats_WithPRs(t *testing.T) {
 	}
 }
 
+func TestRebaseSinglePR_MissingAllowEdit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tdb := testutil.NewTestDB(t)
+	db.DB = tdb
+
+	auth.Init("test-secret-for-unit-tests", 72*time.Hour)
+
+	// Set up config with repo group
+	cfg := &models.Config{
+		Server: models.ServerConfig{Listen: ":8080"},
+		Git:    models.GitConfig{},
+		Tokens: models.TokensConfig{GitHub: "test-token"},
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "default", GitHub: "test/repo", DefaultBranch: "main"},
+		},
+	}
+	config.Store(cfg)
+
+	noEditMock := testutil.NewMockPlatformClient()
+	noEditMock.MaintainerCanModify = false
+	clients = map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: noEditMock,
+	}
+
+	pr := models.PRRecord{
+		ID:          "42",
+		RepoGroup:   "default",
+		Platform:    "github",
+		PRNumber:    42,
+		Title:       "Test PR",
+		Author:      "testuser",
+		State:       "open",
+		HasConflict: true,
+	}
+	db.PutPRWithIndex("default#github#42", mustMarshal(pr), pr.ID, pr.RepoGroup, pr.PRNumber)
+
+	engine := gin.New()
+	api := engine.Group("/api/v1")
+	protected := api.Group("")
+	protected.Use(func(c *gin.Context) {
+		c.Set("username", "admin")
+		c.Set("role", "admin")
+		c.Next()
+	})
+	protected.POST("/repos/:repo_group/prs/:pr_id/rebase", RebaseSinglePR)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/repos/default/prs/42/rebase", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result RebaseResponse
+	json.Unmarshal(w.Body.Bytes(), &result)
+	if result.Success {
+		t.Error("expected rebase to fail")
+	}
+	if !strings.Contains(result.Message, "allow edits from maintainers") {
+		t.Errorf("expected 'allow edits' error, got: %s", result.Message)
+	}
+}
+
+func TestRebaseSinglePR_PRNotOpen(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tdb := testutil.NewTestDB(t)
+	db.DB = tdb
+
+	auth.Init("test-secret-for-unit-tests", 72*time.Hour)
+
+	cfg := &models.Config{
+		Server: models.ServerConfig{Listen: ":8080"},
+		Git:    models.GitConfig{},
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "default", GitHub: "test/repo"},
+		},
+	}
+	config.Store(cfg)
+
+	clients = map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: testutil.NewMockPlatformClient(),
+	}
+
+	pr := models.PRRecord{
+		ID:        "99",
+		RepoGroup: "default",
+		Platform:  "github",
+		PRNumber:  99,
+		State:     "closed",
+	}
+	db.PutPRWithIndex("default#github#99", mustMarshal(pr), pr.ID, pr.RepoGroup, pr.PRNumber)
+
+	engine := gin.New()
+	api := engine.Group("/api/v1")
+	protected := api.Group("")
+	protected.Use(func(c *gin.Context) {
+		c.Set("username", "admin")
+		c.Set("role", "admin")
+		c.Next()
+	})
+	protected.POST("/repos/:repo_group/prs/:pr_id/rebase", RebaseSinglePR)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/repos/default/prs/99/rebase", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result RebaseResponse
+	json.Unmarshal(w.Body.Bytes(), &result)
+	if result.Success {
+		t.Error("expected rebase to fail for closed PR")
+	}
+	if !strings.Contains(result.Message, "not open") {
+		t.Errorf("expected 'not open' error, got: %s", result.Message)
+	}
+}
+
+func TestRebaseQueue_NoConflictedPRs(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tdb := testutil.NewTestDB(t)
+	db.DB = tdb
+
+	auth.Init("test-secret-for-unit-tests", 72*time.Hour)
+
+	cfg := &models.Config{
+		Server: models.ServerConfig{Listen: ":8080"},
+		Git:    models.GitConfig{},
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "default", GitHub: "test/repo"},
+		},
+	}
+	config.Store(cfg)
+
+	clients = map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: testutil.NewMockPlatformClient(),
+	}
+
+	engine := gin.New()
+	api := engine.Group("/api/v1")
+	protected := api.Group("")
+	protected.Use(func(c *gin.Context) {
+		c.Set("username", "admin")
+		c.Set("role", "admin")
+		c.Next()
+	})
+	protected.POST("/queue/:repo_group/rebase", RebaseQueue)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/api/v1/queue/default/rebase", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+	if msg, ok := result["message"].(string); !ok || !strings.Contains(msg, "no conflicted PRs") {
+		t.Errorf("expected 'no conflicted PRs' message, got: %v", result)
+	}
+}
+
 // --- Helper ---
 
 func mustMarshal(v interface{}) []byte {

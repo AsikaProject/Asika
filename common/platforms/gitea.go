@@ -452,6 +452,26 @@ func (c *GiteaClient) GetDiffFiles(ctx context.Context, owner, repo string, numb
 	return parseDiffFiles(string(diff)), nil
 }
 
+// GetPRBranchInfo gets branch metadata for rebase operations
+func (c *GiteaClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
+	pr, _, err := c.client.GetPullRequest(owner, repo, int64(number))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR: %w", err)
+	}
+
+	info := &models.PRBranchInfo{
+		BaseBranch: pr.Base.Name,
+	}
+	if pr.Head != nil {
+		info.HeadBranch = pr.Head.Name
+		info.HeadSHA = pr.Head.Sha
+	}
+	// Gitea/Forgejo: maintainer_can_modify not exposed in SDK, default to true
+	// The bot token has write access so it can push regardless
+	info.MaintainerCanModify = true
+	return info, nil
+}
+
 // parseDiffFiles extracts file names from a raw diff
 func parseDiffFiles(diff string) []string {
 	files := make([]string, 0)
