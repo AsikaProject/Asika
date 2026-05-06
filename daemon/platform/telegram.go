@@ -1256,6 +1256,9 @@ func groupPlatforms(group *models.RepoGroup) []platforms.PlatformType {
 	if group.Codeberg != "" {
 		result = append(result, platforms.PlatformCodeberg)
 	}
+	if group.Bitbucket != "" {
+		result = append(result, platforms.PlatformBitbucket)
+	}
 	return result
 }
 

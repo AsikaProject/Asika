@@ -223,11 +223,12 @@ func GetPR(c *gin.Context) {
 
 	// Multi mode: try all configured platforms
 	platforms := map[string]string{
-		"github":   group.GitHub,
-		"gitlab":   group.GitLab,
-		"gitea":    group.Gitea,
-		"forgejo":  group.Forgejo,
-		"codeberg": group.Codeberg,
+		"github":    group.GitHub,
+		"gitlab":    group.GitLab,
+		"gitea":     group.Gitea,
+		"forgejo":   group.Forgejo,
+		"codeberg":  group.Codeberg,
+		"bitbucket": group.Bitbucket,
 	}
 
 	for plat, repoPath := range platforms {
@@ -1009,6 +1010,9 @@ func getPlatformForGroup(group *models.RepoGroup) string {
 	}
 	if group.Codeberg != "" {
 		return "codeberg"
+	}
+	if group.Bitbucket != "" {
+		return "bitbucket"
 	}
 	return ""
 }

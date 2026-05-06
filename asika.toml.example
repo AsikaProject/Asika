@@ -35,8 +35,9 @@ workdir = "/var/lib/asika/work"
 github   = ""
 gitlab   = ""
 gitea    = ""
-forgejo  = ""
-codeberg = ""
+forgejo   = ""
+codeberg  = ""
+bitbucket = ""
 
 # Merge queue defaults (overridable per repo group)
 [merge_queue]
@@ -158,6 +159,7 @@ gitlab         = "my-org/my-repo"
 gitea          = "my-org/my-repo"
 forgejo        = "my-org/my-repo"   # optional: Forgejo instance
 codeberg       = "my-org/my-repo"   # optional: Codeberg (https://codeberg.org)
+bitbucket      = "my-org/my-repo"   # optional: Bitbucket Cloud (https://bitbucket.org)
 default_branch = "main"
 hookpath       = ""
 ci_provider    = "github_actions"  # "github_actions" | "gitlab_ci" | "gitea_actions" | "none"

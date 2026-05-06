@@ -67,6 +67,13 @@ func checkRepoMergeMethod(cfg *models.Config, clients map[PlatformType]PlatformC
 		}
 	}
 
+	// Check Bitbucket
+	if repo.Bitbucket != "" && clients[PlatformBitbucket] != nil {
+		if err := checkPlatformMergeMethod(ctx, clients[PlatformBitbucket], "bitbucket", repo.Bitbucket, repo.DefaultBranch); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

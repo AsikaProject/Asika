@@ -92,6 +92,9 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 			clients[platforms.PlatformCodeberg] = gc
 		}
 	}
+	if cfg.Tokens.Bitbucket != "" {
+		clients[platforms.PlatformBitbucket] = platforms.NewBitbucketClient(cfg.Tokens.Bitbucket, cfg.Events.WebhookSecret)
+	}
 
 	events.Init()
 

@@ -117,7 +117,7 @@ func validate(cfg *models.Config) error {
 			mode = "multi" // default
 		}
 		if mode == "single" {
-			if rg.GitHub == "" && rg.GitLab == "" && rg.Gitea == "" && rg.Forgejo == "" && rg.Codeberg == "" {
+			if rg.GitHub == "" && rg.GitLab == "" && rg.Gitea == "" && rg.Forgejo == "" && rg.Codeberg == "" && rg.Bitbucket == "" {
 				return fmt.Errorf("single mode repo group %s requires at least one platform repo to be set", rg.Name)
 			}
 			if rg.MirrorPlatform == "" {
@@ -168,8 +168,9 @@ func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 			GitLab:         rg.GitLab,
 			Gitea:          rg.Gitea,
 			Forgejo:        rg.Forgejo,
-			Codeberg:       rg.Codeberg,
-			DefaultBranch:  rg.DefaultBranch,
+		Codeberg:       rg.Codeberg,
+		Bitbucket:      rg.Bitbucket,
+		DefaultBranch:  rg.DefaultBranch,
 			HookPath:       rg.HookPath,
 			CIProvider:     rg.CIProvider,
 			MergeQueue:     rg.MergeQueue,
@@ -187,7 +188,7 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
         if mode == "" {
             mode = "multi"
         }
-         if rg.Name == name {
+          if rg.Name == name {
              return &models.RepoGroup{
                  Name:           rg.Name,
                  Mode:           mode,
@@ -197,6 +198,7 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
                  Gitea:          rg.Gitea,
                  Forgejo:        rg.Forgejo,
                  Codeberg:       rg.Codeberg,
+                 Bitbucket:      rg.Bitbucket,
                  DefaultBranch:  rg.DefaultBranch,
                  HookPath:       rg.HookPath,
                  CIProvider:     rg.CIProvider,
@@ -213,6 +215,7 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
                  Gitea:          rg.Gitea,
                  Forgejo:        rg.Forgejo,
                  Codeberg:       rg.Codeberg,
+                 Bitbucket:      rg.Bitbucket,
                  DefaultBranch:  rg.DefaultBranch,
                  HookPath:       rg.HookPath,
                  CIProvider:     rg.CIProvider,
@@ -241,6 +244,8 @@ func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, rep
         repoPath = group.Forgejo
     case "codeberg":
         repoPath = group.Codeberg
+    case "bitbucket":
+        repoPath = group.Bitbucket
     }
     if repoPath == "" {
         return "", ""

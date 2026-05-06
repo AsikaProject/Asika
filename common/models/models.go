@@ -20,8 +20,9 @@ type RepoGroup struct {
     GitLab         string           `json:"gitlab"`
     Gitea          string           `json:"gitea"`
     Forgejo        string           `json:"forgejo"`
-    Codeberg       string           `json:"codeberg"`
-    DefaultBranch  string           `json:"default_branch"`
+	Codeberg       string           `json:"codeberg"`
+	Bitbucket      string           `json:"bitbucket"`
+	DefaultBranch  string           `json:"default_branch"`
     HookPath       string           `json:"hookpath"`
     CIProvider     string           `json:"ci_provider"`
     MergeQueue     MergeQueueConfig  `json:"merge_queue"`
@@ -39,7 +40,7 @@ type PRBranchInfo struct {
 type PRRecord struct {
 	ID                 string       `json:"id"` // UUID
 	RepoGroup          string       `json:"repo_group"`
-    Platform           string       `json:"platform"` // "github"|"gitlab"|"gitea"|"forgejo"|"codeberg"
+    Platform           string       `json:"platform"` // "github"|"gitlab"|"gitea"|"forgejo"|"codeberg"|"bitbucket"
 	PRNumber           int          `json:"pr_number"`
 	Title              string       `json:"title"`
 	Author             string       `json:"author"`
@@ -203,11 +204,12 @@ type GitConfig struct {
 
 // TokensConfig represents platform token configuration
 type TokensConfig struct {
-    GitHub   string `toml:"github"`
-    GitLab   string `toml:"gitlab"`
-    Gitea    string `toml:"gitea"`
-    Forgejo  string `toml:"forgejo"`
-    Codeberg string `toml:"codeberg"`
+    GitHub    string `toml:"github"`
+    GitLab    string `toml:"gitlab"`
+    Gitea     string `toml:"gitea"`
+    Forgejo   string `toml:"forgejo"`
+    Codeberg  string `toml:"codeberg"`
+    Bitbucket string `toml:"bitbucket"`
 }
 
 // RepoGroupConfig represents repository group configuration (TOML mapping)
@@ -220,6 +222,7 @@ type RepoGroupConfig struct {
 	Gitea          string           `toml:"gitea" json:"gitea"`
 	Forgejo        string           `toml:"forgejo" json:"forgejo"`
 	Codeberg       string           `toml:"codeberg" json:"codeberg"`
+	Bitbucket      string           `toml:"bitbucket" json:"bitbucket"`
 	DefaultBranch  string           `toml:"default_branch" json:"default_branch"`
 	HookPath       string           `toml:"hookpath" json:"hookpath"`
 	CIProvider     string           `toml:"ci_provider" json:"ci_provider"`
@@ -252,8 +255,8 @@ type Config struct {
 	SingleRepo   SingleRepoConfig  `toml:"single_repo" json:"single_repo"`
 	GitLabBaseURL  string          `toml:"gitlab_base_url" json:"gitlab_base_url"`
 	GiteaBaseURL   string          `toml:"gitea_base_url" json:"gitea_base_url"`
-	ForgejoBaseURL string          `toml:"forgejo_base_url" json:"forgejo_base_url"`
-	Telegram       TelegramConfig  `toml:"telegram" json:"telegram"`
+	ForgejoBaseURL  string          `toml:"forgejo_base_url" json:"forgejo_base_url"`
+	Telegram        TelegramConfig  `toml:"telegram" json:"telegram"`
 	Feishu        FeishuConfig     `toml:"feishu" json:"feishu"`
 	Discord       DiscordConfig    `toml:"discord" json:"discord"`
 	Updates       UpdatesConfig    `toml:"updates" json:"updates"`
