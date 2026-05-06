@@ -109,6 +109,7 @@ func (b *TelegramBot) registerCommands() {
 	b.bot.Handle("/stalecheck", b.handleStaleCheck)
 	b.bot.Handle("/unstale", b.handleUnstale)
 	b.bot.Handle("/rebase", b.handleRebasePR)
+	b.bot.Handle("/cherry-pick", b.handleCherryPickPR)
 	b.bot.Handle("/stats", b.handleStats)
 	b.bot.Handle("/version", b.handleVersion)
 
@@ -136,6 +137,7 @@ func (b *TelegramBot) registerBotMenu() {
 		{Text: "stalecheck", Description: "Check for stale PRs"},
 		{Text: "unstale", Description: "Remove stale label"},
 		{Text: "rebase", Description: "Rebase a PR"},
+		{Text: "cherry-pick", Description: "Cherry-pick a PR"},
 		{Text: "stats", Description: "Show DORA metrics"},
 		{Text: "version", Description: "Show version info"},
 	}
@@ -207,6 +209,9 @@ func (b *TelegramBot) handleHelp(c telebot.Context) error {
 
 🔄 <b>Rebase</b>
 /rebase repo_group pr_number — Rebase a PR onto its base branch
+
+🍒 <b>Cherry-pick</b>
+/cherry-pick repo_group pr_number target_branch — Cherry-pick a merged PR
 
 📈 <b>Stats</b>
 /stats — Show DORA metrics
@@ -1384,6 +1389,65 @@ func (b *TelegramBot) handleRebasePR(c telebot.Context) error {
 	}
 
 	return c.Send("Rebase request submitted.")
+}
+
+// handleCherryPickPR handles /cherry-pick command.
+func (b *TelegramBot) handleCherryPickPR(c telebot.Context) error {
+	if !b.requireAdmin(c) {
+		return nil
+	}
+
+	args := strings.Fields(c.Text())
+	if len(args) < 4 {
+		return c.Send("Usage: /cherry-pick repo_group pr_number target_branch")
+	}
+
+	repoGroup := args[1]
+	prNumber, err := strconv.Atoi(args[2])
+	if err != nil {
+		return c.Send("Invalid PR number.")
+	}
+	targetBranch := args[3]
+
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		return c.Send("Repo group not found: " + repoGroup)
+	}
+
+	url := fmt.Sprintf("http://localhost%s/api/v1/repos/%s/prs/%d/cherry-pick",
+		b.cfg.Server.Listen, repoGroup, prNumber)
+	body := fmt.Sprintf(`{"target_branch": "%s"}`, targetBranch)
+	req, err := http.NewRequest("POST", url, strings.NewReader(body))
+	if err != nil {
+		return c.Send(fmt.Sprintf("Error: %v", err))
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return c.Send(fmt.Sprintf("Cherry-pick request failed: %v", err))
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(respBody, &result) != nil {
+		return c.Send("Cherry-pick completed (async)")
+	}
+
+	if success, ok := result["success"].(bool); ok && success {
+		msg, _ := result["message"].(string)
+		return c.Send("🍒 " + msg)
+	}
+	if errMsg, ok := result["error"].(string); ok {
+		return c.Send("❌ Cherry-pick failed: " + errMsg)
+	}
+	if msg, ok := result["message"].(string); ok {
+		return c.Send("ℹ️ " + msg)
+	}
+
+	return c.Send("Cherry-pick request submitted.")
 }
 
 // handleStats handles /stats command.

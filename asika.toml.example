@@ -41,6 +41,7 @@ gitea  = ""
 required_approvals = 1
 ci_check_required  = true
 core_contributors  = ["admin1", "admin2"]
+fast_forward_only  = false  # if true, auto-rebase PR before merge to ensure linear history
 
 # Spam detection
 [spam]

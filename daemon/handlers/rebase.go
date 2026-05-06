@@ -244,3 +244,121 @@ func getPlatformToken(cfg *models.Config, platform string) string {
 	}
 	return ""
 }
+
+// CherryPickRequest represents a cherry-pick operation request
+type CherryPickRequest struct {
+	TargetBranch string `json:"target_branch" binding:"required"`
+}
+
+// CherryPickResponse represents the result of a cherry-pick operation
+type CherryPickResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	PRID    string `json:"pr_id,omitempty"`
+}
+
+// CherryPickSinglePR handles POST /api/v1/repos/:repo_group/prs/:pr_id/cherry-pick
+func CherryPickSinglePR(c *gin.Context) {
+	repoGroup := c.Param("repo_group")
+	prID := c.Param("pr_id")
+
+	var req CherryPickRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "target_branch is required"})
+		return
+	}
+
+	cfg := config.Current()
+	group := config.GetRepoGroupByName(cfg, repoGroup)
+	if group == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "repo group not found"})
+		return
+	}
+
+	result, err := performCherryPick(c.Request.Context(), group, repoGroup, prID, req.TargetBranch, cfg)
+	if err != nil {
+		slog.Error("cherry-pick failed", "error", err, "pr_id", prID, "repo_group", repoGroup)
+		c.JSON(http.StatusInternalServerError, CherryPickResponse{
+			Success: false,
+			Message: err.Error(),
+			PRID:    prID,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, prID, targetBranch string, cfg *models.Config) (*CherryPickResponse, error) {
+	pr, err := findPRForRebase(prID)
+	if err != nil {
+		return nil, fmt.Errorf("PR not found: %s", prID)
+	}
+
+	if pr.State != "merged" {
+		return nil, fmt.Errorf("PR is not merged (state: %s), only merged PRs can be cherry-picked", pr.State)
+	}
+
+	if pr.MergeCommitSHA == "" {
+		return nil, fmt.Errorf("PR has no merge commit SHA, cannot cherry-pick")
+	}
+
+	platform := pr.Platform
+	if platform == "" {
+		platform = getPlatformForGroup(group)
+	}
+	client := getClientForGroup(group, platform)
+	if client == nil {
+		return nil, fmt.Errorf("platform client not available: %s", platform)
+	}
+
+	owner, repo := config.GetOwnerRepoFromGroup(group, platform)
+	if owner == "" || repo == "" {
+		return nil, fmt.Errorf("cannot resolve repo for platform %s", platform)
+	}
+
+	// Fetch fresh PR info to ensure we have the merge commit SHA
+	freshPR, getErr := client.GetPR(ctx, owner, repo, pr.PRNumber)
+	if getErr == nil && freshPR != nil && freshPR.MergeCommitSHA != "" {
+		pr.MergeCommitSHA = freshPR.MergeCommitSHA
+	}
+
+	cloneURL := getCloneURL(group, platform, owner, repo)
+	token := getPlatformToken(cfg, platform)
+	clonePath := cfg.Git.RepoClonePath
+
+	// Clone, checkout target branch, cherry-pick, push
+	cpErr := gitutil.CherryPickRemote("", cloneURL, token, targetBranch, pr.MergeCommitSHA, clonePath)
+	if cpErr != nil {
+		pr.Events = append(pr.Events, models.PREvent{
+			Action: "cherry_pick_failed",
+			Detail: cpErr.Error(),
+		})
+		prData, _ := json.Marshal(pr)
+		prKey := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+		db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		return nil, fmt.Errorf("cherry-pick failed: %w", cpErr)
+	}
+
+	pr.Events = append(pr.Events, models.PREvent{
+		Action: "cherry_picked",
+		Detail: fmt.Sprintf("Cherry-picked %s onto %s", pr.MergeCommitSHA[:8], targetBranch),
+	})
+	prData, _ := json.Marshal(pr)
+	prKey := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+	db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+
+	db.AppendAuditLog("info", "PR cherry-picked successfully", map[string]interface{}{
+		"pr_id":        prID,
+		"repo_group":   repoGroup,
+		"platform":     platform,
+		"merge_commit": pr.MergeCommitSHA,
+		"target_branch": targetBranch,
+	})
+
+	return &CherryPickResponse{
+		Success: true,
+		Message: fmt.Sprintf("Cherry-picked %s onto %s", pr.MergeCommitSHA[:8], targetBranch),
+		PRID:    prID,
+	}, nil
+}

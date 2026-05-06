@@ -279,6 +279,12 @@ func (b *FeishuBot) processCommand(senderID, text string) string {
 	case lower == "version" || lower == "/version":
 		return b.showVersionText()
 
+	case strings.HasPrefix(lower, "cherry-pick ") || strings.HasPrefix(lower, "/cherry-pick "):
+		if len(parts) < 4 {
+			return "Usage: cherry-pick <repo_group> <pr_number> <target_branch>"
+		}
+		return b.doCherryPick(senderID, parts[1], parts[2], parts[3])
+
 	default:
 		return fmt.Sprintf("Unknown command: %s\nTry 'help' for available commands.", text)
 	}
@@ -299,6 +305,7 @@ func (b *FeishuBot) helpText() string {
   stalecheck [group] - Check for stale PRs
   unstale <group> <id> - Remove stale label
   rebase <group> <num> - Rebase a PR
+  cherry-pick <group> <num> <branch> - Cherry-pick a merged PR
   stats         - Show DORA metrics
   version       - Show version info`
 }
@@ -944,4 +951,50 @@ func formatHoursFeishu(hours float64) string {
 
 func (b *FeishuBot) showVersionText() string {
 	return fmt.Sprintf("Asika\nVersion: %s", version.Version)
+}
+
+func (b *FeishuBot) doCherryPick(senderID, repoGroup, prNumberStr, targetBranch string) string {
+	cfg := config.Current()
+	if cfg == nil {
+		return "Config not loaded."
+	}
+
+	group := config.GetRepoGroupByName(cfg, repoGroup)
+	if group == nil {
+		return "Repo group not found: " + repoGroup
+	}
+
+	var prNumber int
+	fmt.Sscanf(prNumberStr, "%d", &prNumber)
+	if prNumber == 0 {
+		return "Invalid PR number: " + prNumberStr
+	}
+
+	url := fmt.Sprintf("http://localhost%s/api/v1/repos/%s/prs/%d/cherry-pick",
+		cfg.Server.Listen, repoGroup, prNumber)
+	body := fmt.Sprintf(`{"target_branch": "%s"}`, targetBranch)
+	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.Auth.JWTSecret)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf("Cherry-pick request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(respBody, &result) != nil {
+		return "Cherry-pick request submitted (async)."
+	}
+
+	if success, ok := result["success"].(bool); ok && success {
+		msg, _ := result["message"].(string)
+		return msg
+	}
+	if errMsg, ok := result["error"].(string); ok {
+		return "Cherry-pick failed: " + errMsg
+	}
+	return "Cherry-pick request submitted."
 }

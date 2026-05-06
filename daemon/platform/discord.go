@@ -157,6 +157,8 @@ func (b *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.Mess
 		b.handleShowConfig(s, m)
 	case "!rebase":
 		b.handleRebasePR(s, m, parts)
+	case "!cherry-pick":
+		b.handleCherryPickPR(s, m, parts)
 	case "!stats":
 		b.handleStats(s, m)
 	case "!version":
@@ -186,6 +188,10 @@ func (b *DiscordBot) handleHelp(s *discordgo.Session, m *discordgo.MessageCreate
 
  **Config**
 !config — Show current config (masked)
+
+**Rebase / Cherry-pick**
+!rebase repo_group pr_number — Rebase a PR onto its base branch
+!cherry-pick repo_group pr_number target_branch — Cherry-pick a merged PR
 
 **Info**
 !version — Show version info`
@@ -844,4 +850,57 @@ func formatHoursDiscord(hours float64) string {
 // handleVersion handles !version command
 func (b *DiscordBot) handleVersion(s *discordgo.Session, m *discordgo.MessageCreate) {
 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**Asika**\nVersion: `%s`", version.Version))
+}
+
+// handleCherryPickPR handles !cherry-pick command
+func (b *DiscordBot) handleCherryPickPR(s *discordgo.Session, m *discordgo.MessageCreate, parts []string) {
+	if len(parts) < 4 {
+		s.ChannelMessageSend(m.ChannelID, "Usage: !cherry-pick repo_group pr_number target_branch")
+		return
+	}
+
+	repoGroup := parts[1]
+	var prNumber int
+	fmt.Sscanf(parts[2], "%d", &prNumber)
+	if prNumber == 0 {
+		s.ChannelMessageSend(m.ChannelID, "Invalid PR number.")
+		return
+	}
+	targetBranch := parts[3]
+
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		s.ChannelMessageSend(m.ChannelID, "Repo group not found: "+repoGroup)
+		return
+	}
+
+	url := fmt.Sprintf("http://localhost%s/api/v1/repos/%s/prs/%d/cherry-pick",
+		b.cfg.Server.Listen, repoGroup, prNumber)
+	body := fmt.Sprintf(`{"target_branch": "%s"}`, targetBranch)
+	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Cherry-pick request failed: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(respBody, &result) != nil {
+		s.ChannelMessageSend(m.ChannelID, "Cherry-pick completed (async)")
+		return
+	}
+
+	if success, ok := result["success"].(bool); ok && success {
+		msg, _ := result["message"].(string)
+		s.ChannelMessageSend(m.ChannelID, "🍒 "+msg)
+	} else if errMsg, ok := result["error"].(string); ok {
+		s.ChannelMessageSend(m.ChannelID, "❌ Cherry-pick failed: "+errMsg)
+	} else {
+		s.ChannelMessageSend(m.ChannelID, "Cherry-pick request submitted.")
+	}
 }

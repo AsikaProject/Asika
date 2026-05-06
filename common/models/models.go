@@ -110,7 +110,8 @@ type MergeQueueConfig struct {
     RequiredApprovals int      `json:"required_approvals" toml:"required_approvals"`
     CICheckRequired   bool     `json:"ci_check_required" toml:"ci_check_required"`
     CoreContributors  []string `json:"core_contributors" toml:"core_contributors"`
-    CIProvider        string   `json:"ci_provider" toml:"ci_provider"` // per-repo-group override
+    CIProvider        string   `json:"ci_provider" toml:"ci_provider"`    // per-repo-group override
+    FastForwardOnly   bool     `json:"fast_forward_only" toml:"fast_forward_only"` // if true, auto-rebase before merge
 }
 
 // LabelRule represents a label rule

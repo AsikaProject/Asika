@@ -10,6 +10,7 @@ import (
 
 	"asika/common/config"
 	"asika/common/db"
+	"asika/common/gitutil"
 	"asika/common/models"
 	"asika/common/platforms"
 )
@@ -242,6 +243,15 @@ func (m *Manager) merge(item *models.QueueItem) error {
 		method = "merge"
 	}
 
+	// Fast-forward only: auto-rebase before merge to ensure linear history
+	if group.MergeQueue.FastForwardOnly {
+		slog.Info("fast-forward only: auto-rebasing before merge", "pr_id", pr.ID, "pr_number", pr.PRNumber)
+		if rebaseErr := m.tryRebaseBeforeMerge(ctx, pr, group); rebaseErr != nil {
+			slog.Error("fast-forward auto-rebase failed", "pr_id", pr.ID, "error", rebaseErr)
+			return fmt.Errorf("fast-forward rebase failed: %w", rebaseErr)
+		}
+	}
+
 	slog.Info("merging PR", "pr_id", pr.ID, "pr_number", pr.PRNumber, "platform", pr.Platform, "method", method)
 	err = client.MergePR(ctx, owner, repo, pr.PRNumber, method)
 	if err != nil {
@@ -321,4 +331,41 @@ func (m *Manager) Stop() {
 // StopChan returns the stop channel for external select loops.
 func (m *Manager) StopChan() <-chan struct{} {
 	return m.stop
+}
+
+// tryRebaseBeforeMerge auto-rebases a PR branch onto its base branch before merge.
+// This ensures the merge will be a fast-forward, producing linear history.
+func (m *Manager) tryRebaseBeforeMerge(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) error {
+	platform := pr.Platform
+	client := m.clients[platforms.PlatformType(platform)]
+	if client == nil {
+		return fmt.Errorf("no client for platform: %s", platform)
+	}
+
+	owner, repo := config.GetOwnerRepoFromGroup(group, platform)
+	if owner == "" || repo == "" {
+		return fmt.Errorf("cannot resolve repo for platform %s", platform)
+	}
+
+	// Fetch branch info from platform API
+	branchInfo, err := client.GetPRBranchInfo(ctx, owner, repo, pr.PRNumber)
+	if err != nil {
+		return fmt.Errorf("failed to get branch info: %w", err)
+	}
+
+	if !branchInfo.MaintainerCanModify {
+		return fmt.Errorf("PR author has not enabled 'allow edits from maintainers'")
+	}
+
+	cloneURL := buildCloneURL(group, platform, owner, repo)
+	token := getPlatformToken(m.cfg, platform)
+	clonePath := m.cfg.Git.RepoClonePath
+
+	rebaseErr := gitutil.Rebase("", cloneURL, token, branchInfo.HeadBranch, branchInfo.BaseBranch, clonePath)
+	if rebaseErr != nil {
+		return fmt.Errorf("rebase failed: %w", rebaseErr)
+	}
+
+	slog.Info("fast-forward auto-rebase succeeded", "pr_id", pr.ID, "head_branch", branchInfo.HeadBranch, "base_branch", branchInfo.BaseBranch)
+	return nil
 }

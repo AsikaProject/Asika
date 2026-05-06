@@ -207,6 +207,72 @@ func CommitChanges(repo *git.Repository, message string) error {
 	return err
 }
 
+// CherryPickRemote clones a repo, checks out the target branch,
+// cherry-picks the given commit SHA, and pushes the result.
+// workdir is the local clone directory. If empty, a temp dir is used.
+func CherryPickRemote(workdir, remoteURL, token, targetBranch, commitSHA string, persistentPath string) error {
+	repo, dir, cleanup, err := prepareRepo(workdir, remoteURL, token, persistentPath)
+	if err != nil {
+		return err
+	}
+	if cleanup {
+		defer CleanupWorkdir(dir)
+	}
+
+	// Fetch latest
+	err = FetchRemote(repo, "origin", token)
+	if err != nil && !isUpToDate(err) {
+		return fmt.Errorf("failed to fetch: %w", err)
+	}
+
+	// Checkout target branch (create from remote if needed)
+	w, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	err = w.Checkout(&git.CheckoutOptions{
+		Branch: plumbing.ReferenceName("refs/heads/" + targetBranch),
+	})
+	if err != nil {
+		// Try creating from remote tracking branch
+		remoteRef := plumbing.NewRemoteReferenceName("origin", targetBranch)
+		err = w.Checkout(&git.CheckoutOptions{
+			Branch: plumbing.ReferenceName("refs/heads/" + targetBranch),
+			Create: true,
+			Hash:   plumbing.ZeroHash,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to checkout target branch %s: %w", targetBranch, err)
+		}
+		// Reset to remote tracking branch
+		remoteHash, refErr := repo.Reference(remoteRef, true)
+		if refErr == nil {
+			err = w.Reset(&git.ResetOptions{
+				Commit: remoteHash.Hash(),
+				Mode:   git.HardReset,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to reset to remote branch: %w", err)
+			}
+		}
+	}
+
+	// Cherry-pick the commit
+	err = CherryPick(repo, commitSHA)
+	if err != nil {
+		return fmt.Errorf("cherry-pick failed: %w", err)
+	}
+
+	// Push the result
+	err = Push(repo, "origin", targetBranch, token)
+	if err != nil {
+		return fmt.Errorf("failed to push cherry-pick: %w", err)
+	}
+
+	return nil
+}
+
 // Rebase rebases the current branch onto the given target branch.
 // It fetches the latest target branch, checks out the head branch,
 // performs the rebase, then force-pushes the result.
