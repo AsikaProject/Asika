@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -216,7 +217,9 @@ func (b *TelegramBot) handleHelp(c telebot.Context) error {
 	return c.Send(help, &telebot.SendOptions{ParseMode: telebot.ModeHTML})
 }
 
-// handleListPRs handles /prs command.
+const prsPerPage = 10
+
+// handleListPRs handles /prs command with pagination.
 func (b *TelegramBot) handleListPRs(c telebot.Context) error {
 	if !b.requireAdmin(c) {
 		return nil
@@ -224,9 +227,18 @@ func (b *TelegramBot) handleListPRs(c telebot.Context) error {
 
 	args := strings.Fields(c.Text())
 	repoGroup := ""
-	if len(args) > 1 {
-		repoGroup = args[1]
-	} else {
+	page := 0
+
+	// Parse args: /prs [repo_group] [page]
+	for i := 1; i < len(args); i++ {
+		if n, err := strconv.Atoi(args[i]); err == nil && n > 0 {
+			page = n - 1
+		} else {
+			repoGroup = args[i]
+		}
+	}
+
+	if repoGroup == "" {
 		groups := config.GetRepoGroups(b.cfg)
 		if len(groups) == 0 {
 			return c.Send("No repo groups configured.")
@@ -234,7 +246,16 @@ func (b *TelegramBot) handleListPRs(c telebot.Context) error {
 		repoGroup = groups[0].Name
 	}
 
-	// Fetch PRs from DB
+	prs := b.fetchPRsForGroup(repoGroup)
+	if len(prs) == 0 {
+		return c.Send(fmt.Sprintf("No PRs found for repo group <b>%s</b>.", html.EscapeString(repoGroup)),
+			&telebot.SendOptions{ParseMode: telebot.ModeHTML})
+	}
+
+	return b.sendPRsPage(c, repoGroup, prs, page)
+}
+
+func (b *TelegramBot) fetchPRsForGroup(repoGroup string) []models.PRRecord {
 	var prs []models.PRRecord
 	db.ForEach(db.BucketPRs, func(key, value []byte) error {
 		var pr models.PRRecord
@@ -246,15 +267,32 @@ func (b *TelegramBot) handleListPRs(c telebot.Context) error {
 		}
 		return nil
 	})
+	// Sort by PR number descending (newest first)
+	sort.Slice(prs, func(i, j int) bool {
+		return prs[i].PRNumber > prs[j].PRNumber
+	})
+	return prs
+}
 
-	if len(prs) == 0 {
-		return c.Send(fmt.Sprintf("No PRs found for repo group <b>%s</b>.", html.EscapeString(repoGroup)),
-			&telebot.SendOptions{ParseMode: telebot.ModeHTML})
+func (b *TelegramBot) sendPRsPage(c telebot.Context, repoGroup string, prs []models.PRRecord, page int) error {
+	totalPages := (len(prs) + prsPerPage - 1) / prsPerPage
+	if page >= totalPages {
+		page = totalPages - 1
+	}
+	if page < 0 {
+		page = 0
 	}
 
+	start := page * prsPerPage
+	end := start + prsPerPage
+	if end > len(prs) {
+		end = len(prs)
+	}
+	pagePRs := prs[start:end]
+
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>PRs in %s</b>\n\n", html.EscapeString(repoGroup)))
-	for _, pr := range prs {
+	sb.WriteString(fmt.Sprintf("<b>PRs in %s</b> (%d/%d)\n\n", html.EscapeString(repoGroup), page+1, totalPages))
+	for _, pr := range pagePRs {
 		statusEmoji := "🔵"
 		switch pr.State {
 		case "merged":
@@ -264,11 +302,93 @@ func (b *TelegramBot) handleListPRs(c telebot.Context) error {
 		case "spam":
 			statusEmoji = "⚠️"
 		}
-		sb.WriteString(fmt.Sprintf("%s <b>#%d</b> %s — by %s (%s/%s)\n",
-			statusEmoji, pr.PRNumber, html.EscapeString(truncate(pr.Title, 40)), html.EscapeString(pr.Author), pr.Platform, pr.State))
+		title := pr.Title
+		if len(title) > 35 {
+			title = title[:32] + "..."
+		}
+		sb.WriteString(fmt.Sprintf("%s <b>#%d</b> %s — <i>%s</i> [%s]\n",
+			statusEmoji, pr.PRNumber, html.EscapeString(title), html.EscapeString(pr.Author), pr.State))
 	}
 
-	return c.Send(sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeHTML})
+	// Build pagination keyboard
+	markup := &telebot.ReplyMarkup{}
+	escapeRG := strings.ReplaceAll(repoGroup, "|", "%7C")
+
+	var btns []telebot.Btn
+	if page > 0 {
+		btns = append(btns, markup.Data(fmt.Sprintf("‹ Page %d", page),
+			"prs_page", fmt.Sprintf("prs_page:%s:%d", escapeRG, page-1)))
+	}
+	btns = append(btns, markup.Data(fmt.Sprintf("📄 %d/%d", page+1, totalPages),
+		"prs_page", fmt.Sprintf("prs_page:%s:%d", escapeRG, page)))
+	if page < totalPages-1 {
+		btns = append(btns, markup.Data(fmt.Sprintf("Page %d ›", page+2),
+			"prs_page", fmt.Sprintf("prs_page:%s:%d", escapeRG, page+1)))
+	}
+	markup.Inline(markup.Row(btns...))
+
+	return c.Send(sb.String(), &telebot.SendOptions{
+		ParseMode:   telebot.ModeHTML,
+		ReplyMarkup: markup,
+	})
+}
+
+func (b *TelegramBot) editPRsPage(c telebot.Context, repoGroup string, prs []models.PRRecord, page int) error {
+	totalPages := (len(prs) + prsPerPage - 1) / prsPerPage
+	if page >= totalPages {
+		page = totalPages - 1
+	}
+	if page < 0 {
+		page = 0
+	}
+
+	start := page * prsPerPage
+	end := start + prsPerPage
+	if end > len(prs) {
+		end = len(prs)
+	}
+	pagePRs := prs[start:end]
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<b>PRs in %s</b> (%d/%d)\n\n", html.EscapeString(repoGroup), page+1, totalPages))
+	for _, pr := range pagePRs {
+		statusEmoji := "🔵"
+		switch pr.State {
+		case "merged":
+			statusEmoji = "🟣"
+		case "closed":
+			statusEmoji = "🔴"
+		case "spam":
+			statusEmoji = "⚠️"
+		}
+		title := pr.Title
+		if len(title) > 35 {
+			title = title[:32] + "..."
+		}
+		sb.WriteString(fmt.Sprintf("%s <b>#%d</b> %s — <i>%s</i> [%s]\n",
+			statusEmoji, pr.PRNumber, html.EscapeString(title), html.EscapeString(pr.Author), pr.State))
+	}
+
+	markup := &telebot.ReplyMarkup{}
+	escapeRG := strings.ReplaceAll(repoGroup, "|", "%7C")
+
+	var btns []telebot.Btn
+	if page > 0 {
+		btns = append(btns, markup.Data(fmt.Sprintf("‹ Page %d", page),
+			"prs_page", fmt.Sprintf("prs_page:%s:%d", escapeRG, page-1)))
+	}
+	btns = append(btns, markup.Data(fmt.Sprintf("📄 %d/%d", page+1, totalPages),
+		"prs_page", fmt.Sprintf("prs_page:%s:%d", escapeRG, page)))
+	if page < totalPages-1 {
+		btns = append(btns, markup.Data(fmt.Sprintf("Page %d ›", page+2),
+			"prs_page", fmt.Sprintf("prs_page:%s:%d", escapeRG, page+1)))
+	}
+	markup.Inline(markup.Row(btns...))
+
+	return c.Edit(sb.String(), &telebot.SendOptions{
+		ParseMode:   telebot.ModeHTML,
+		ReplyMarkup: markup,
+	})
 }
 
 // handleShowPR handles /pr command.
@@ -701,6 +821,20 @@ func (b *TelegramBot) handleCallback(c telebot.Context) error {
 		if idx := strings.Index(data, "|"); idx >= 0 {
 			data = data[idx+1:]
 		}
+	}
+
+	// Handle pagination: prs_page:repoGroup:page
+	if strings.HasPrefix(data, "prs_page:") {
+		parts := strings.SplitN(data, ":", 3)
+		if len(parts) == 3 {
+			rg := strings.ReplaceAll(parts[1], "%7C", "|")
+			page, _ := strconv.Atoi(parts[2])
+			prs := b.fetchPRsForGroup(rg)
+			if len(prs) > 0 {
+				return b.editPRsPage(c, rg, prs, page)
+			}
+		}
+		return c.Respond(&telebot.CallbackResponse{Text: "No PRs found."})
 	}
 
 	parts := strings.SplitN(data, ":", 2)
