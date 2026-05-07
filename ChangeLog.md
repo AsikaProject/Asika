@@ -1,6 +1,36 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Fast-forward only merge:**
+  - Add `fast_forward_only` to `MergeQueueConfig` (default false)
+  - When enabled, auto-rebases PR branch onto base before merge (reuses `gitutil.Rebase()`), ensuring linear history
+  - Add `tryRebaseBeforeMerge()` to queue manager
+  - Checks `maintainer_can_modify` before attempting rebase
+- **Cherry-pick command:**
+  - Add `CherryPickRemote()` in `gitutil` (clone + checkout target branch + cherry-pick + push)
+  - Add `POST /api/v1/repos/:repo_group/prs/:pr_id/cherry-pick` API endpoint (requires `target_branch` in JSON body)
+  - Add `asika cherry-pick <repo_group> <pr_id> <target_branch>` CLI command
+  - Add `/cherry-pick` bot command (Telegram), `!cherry-pick` (Discord), `/cherry-pick` (Feishu)
+  - Only merged PRs with `merge_commit_sha` can be cherry-picked
+- **Forgejo/Codeberg platform support:**
+  - Add `PlatformForgejo` and `PlatformCodeberg` to `PlatformType` enum
+  - Reuse `GiteaClient` for Forgejo/Codeberg (same API, different URL)
+  - Add `Forgejo`/`Codeberg` fields to `TokensConfig`, `RepoGroupConfig`, `RepoGroup`, `Config`
+  - Add `forgejo_base_url` config (falls back to `gitea_base_url` if empty)
+  - Codeberg defaults to `gitea_base_url` or `https://codeberg.org`
+  - Update all platform lists: bootstrap, webhook, syncer, merge checker, groupPlatforms, getPlatformForGroup
+- **Bitbucket Cloud platform support:**
+  - Add `PlatformBitbucket` to `PlatformType` enum
+  - Create `common/platforms/bitbucket.go` implementing full `PlatformClient` via Bitbucket REST API v2
+  - Add `Bitbucket` field to `TokensConfig`, `RepoGroupConfig`, `RepoGroup`, `Config`
+  - Supports: PR list/get/approve/merge/close/comment, branch list/get/delete, CI status (Pipelines), approvals
+  - Labels not supported by Bitbucket (returns error)
+  - Reopen not supported by Bitbucket API
+- **Telegram /prs pagination:**
+  - Split /prs output into pages (10 PRs per page) to avoid Telegram 400 error on long messages
+  - Add inline keyboard with ‹ Page N / N/M / Page N › buttons
+  - Sort PRs by number descending (newest first)
+  - Truncate long titles to 35 chars
 - **Auto-rebase:**
   - Add `Rebase()` function in `common/gitutil/git.go` using go-git (clone, fetch, checkout, cherry-pick onto base, force-push)
   - Add `GetPRBranchInfo()` to `PlatformClient` interface — returns base branch, head branch, head SHA, and `maintainer_can_modify` flag
