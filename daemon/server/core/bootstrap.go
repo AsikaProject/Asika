@@ -81,6 +81,9 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	if cfg.Tokens.Forgejo != "" {
 		forgejoURL := cfg.ForgejoBaseURL
 		if forgejoURL == "" {
+			forgejoURL = cfg.GiteaBaseURL
+		}
+		if forgejoURL == "" {
 			forgejoURL = "https://forgejo.example.com"
 		}
 		if gc := platforms.NewForgejoClient(forgejoURL, cfg.Tokens.Forgejo, cfg.Events.WebhookSecret); gc != nil {
@@ -88,7 +91,11 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 		}
 	}
 	if cfg.Tokens.Codeberg != "" {
-		if gc := platforms.NewCodebergClient(cfg.Tokens.Codeberg, cfg.Events.WebhookSecret); gc != nil {
+		codebergURL := cfg.GiteaBaseURL
+		if codebergURL == "" {
+			codebergURL = "https://codeberg.org"
+		}
+		if gc := platforms.NewForgejoClient(codebergURL, cfg.Tokens.Codeberg, cfg.Events.WebhookSecret); gc != nil {
 			clients[platforms.PlatformCodeberg] = gc
 		}
 	}

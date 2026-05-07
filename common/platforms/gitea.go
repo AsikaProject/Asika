@@ -496,6 +496,7 @@ func NewForgejoClient(baseURL, token string, webhookSecret string) *GiteaClient 
 
 // NewCodebergClient creates a Codeberg client (Codeberg is a hosted Forgejo instance).
 // Uses https://codeberg.org as the default base URL.
+// Note: Codeberg client is created via NewForgejoClient in bootstrap to allow URL override.
 func NewCodebergClient(token string, webhookSecret string) *GiteaClient {
-	return NewGiteaClient("https://codeberg.org", token, webhookSecret)
+	return NewForgejoClient("https://codeberg.org", token, webhookSecret)
 }
