@@ -122,6 +122,15 @@ func verifyWebhookSignature(platform string, client platforms.PlatformClient, bo
 	case "gitea":
 		sig := c.GetHeader("X-Gitea-Signature")
 		return client.VerifyWebhookSignature(body, sig)
+	case "forgejo", "codeberg":
+		sig := c.GetHeader("X-Gitea-Signature")
+		if sig == "" {
+			sig = c.GetHeader("X-Forgejo-Signature")
+		}
+		return client.VerifyWebhookSignature(body, sig)
+	case "bitbucket":
+		sig := c.GetHeader("X-Hub-Signature")
+		return client.VerifyWebhookSignature(body, sig)
 	}
 	return false
 }

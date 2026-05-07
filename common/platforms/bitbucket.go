@@ -2,6 +2,9 @@ package platforms
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -407,9 +410,22 @@ func (c *BitbucketClient) GetApprovals(ctx context.Context, owner, repo string, 
 	return approvers, nil
 }
 
-// VerifyWebhookSignature verifies the webhook signature
+// VerifyWebhookSignature verifies the webhook signature using HMAC-SHA256
+// Bitbucket Cloud sends X-Hub-Signature header: sha256=<hex_hmac>
 func (c *BitbucketClient) VerifyWebhookSignature(body []byte, signature string) bool {
-	return true
+	if c.webhookSecret == "" {
+		return false
+	}
+
+	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
+	mac.Write(body)
+	expectedMAC := hex.EncodeToString(mac.Sum(nil))
+
+	if strings.HasPrefix(signature, "sha256=") {
+		signature = strings.TrimPrefix(signature, "sha256=")
+	}
+
+	return hmac.Equal([]byte(signature), []byte(expectedMAC))
 }
 
 // GetPRCommits gets the commits in a PR
