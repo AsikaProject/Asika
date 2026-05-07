@@ -1,14 +1,22 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **GitHub Enterprise Server support:**
+  - Add `github_base_url` config field (`Config.GitHubBaseURL`)
+  - `NewGitHubClient` accepts optional baseURL; uses `go-github` `WithEnterpriseURLs` for GHE
+  - `GetCloneURL` github branch reads `GitHubBaseURL`, falls back to `https://github.com`
+  - Default base URLs: gitlab → `https://gitlab.com`, gitea → `https://gitea.com`, forgejo/codeberg → `https://codeberg.org`
+  - Warn when platform base URLs are not configured (gitlab/gitea/forgejo)
+  - Update `asika.toml.example` with `github_base_url` documentation
 - **Code deduplication — extract shared helpers to common/ packages:**
   - Create `common/platforms/helpers.go` with `GroupPlatforms(group)` — replaces 2 identical copies in stale.go and telegram.go
   - Create `common/utils/format.go` with `ToFloat64(v)` and `FormatHours(hours)` — replaces 4 copies in telegram/feishu/discord/stats
   - Add `config.GetToken(cfg, platform)` — replaces 4 copies of `getPlatformToken`/`getTokenForPlatform` in rebase.go/checker.go/manager.go/syncer.go, now covers all 6 platforms
-  - Add `config.GetCloneURL(group, platform, owner, repo)` — replaces `getCloneURL` in rebase.go and `buildCloneURL` in checker.go, now covers all 6 platforms
+  - Add `config.GetCloneURL(platform, owner, repo)` — replaces `getCloneURL` in rebase.go and `buildCloneURL` in checker.go, now covers all 6 platforms
   - Add `config.GetPlatformForGroup(group)` — replaces 7 inline platform-resolution blocks in prs.go/rebase.go/telegram.go/feishu.go/discord.go/checker.go, now covers all 6 platforms (previously missing forgejo/codeberg/bitbucket)
   - Delete unused `GetOwnerRepoFromGroup` duplicate in webhook.go (only covered 3 platforms vs config version covering 6)
   - Delete 3 duplicate `parseDuration` copies in helpers.go/spam.go/poller.go, use existing `utils.ParseDuration`
+  - Unify self-update checksum to SHA256: replace all SHA-512 usage in Go code and CI release workflow with SHA-256
 - **Fast-forward only merge:**
   - Add `fast_forward_only` to `MergeQueueConfig` (default false)
   - When enabled, auto-rebases PR branch onto base before merge (reuses `gitutil.Rebase()`), ensuring linear history

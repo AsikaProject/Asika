@@ -3,9 +3,11 @@
 ```mermaid
 graph TB
     subgraph External["External Systems"]
-        GH[GitHub API]
+        GH[GitHub / GHE API]
         GL[GitLab API]
         GT[Gitea API]
+        FJ[Forgejo / Codeberg API]
+        BB[Bitbucket API]
         WH[Webhooks]
     end
 
@@ -28,9 +30,11 @@ graph TB
         end
 
         subgraph Platforms["Platform Clients"]
-            PC_GH[GitHub Client]
+            PC_GH[GitHub / GHE Client]
             PC_GL[GitLab Client]
             PC_GT[Gitea Client]
+            PC_FJ[Forgejo / Codeberg Client]
+            PC_BB[Bitbucket Client]
         end
 
         subgraph Events["Event Bus"]
@@ -52,6 +56,8 @@ graph TB
     GH --> PC_GH
     GL --> PC_GL
     GT --> PC_GT
+    FJ --> PC_FJ
+    BB --> PC_BB
     WH --> MW
 
     CM --> RO
@@ -71,6 +77,8 @@ graph TB
     PC_GH --> SY
     PC_GL --> SY
     PC_GT --> SY
+    PC_FJ --> SY
+    PC_BB --> SY
 
     QC --> SMTP
     QC --> TG
@@ -94,9 +102,9 @@ graph LR
     end
 
     subgraph common["common/"]
-        CONFIG[config/ → Config loading/validation]
+        CONFIG[config/ → Config loading/validation, platform helpers]
         DB[db/ → bbolt wrapper]
-        PLAT[platforms/ → GitHub/GitLab/Gitea clients]
+        PLAT[platforms/ → GitHub/GitLab/Gitea/Forgejo/Bitbucket clients + helpers]
         MODELS[models/ → Data structures]
         EVENTS[events/ → Event bus]
         AUTH[auth/ → JWT, password hash]

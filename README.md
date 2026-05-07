@@ -9,7 +9,7 @@ detects spam, and applies labels — keeping everything clear and under control.
 
 Managing pull requests across multiple platforms is messy.
 
-You switch between GitHub, GitLab, or Gitea, keep dozens of tabs open, and still risk merging too early or missing important changes.
+You switch between GitHub, GitLab, Gitea, Forgejo, Codeberg, or Bitbucket, keep dozens of tabs open, and still risk merging too early or missing important changes.
 
 **Asika fixes this by giving you a single control plane to manage, automate, and safely merge PRs — without leaving your workflow.**
 
@@ -76,6 +76,16 @@ github = "ghp_xxx"
 [[repo_groups]]
 name   = "my-project"
 github = "org/repo"
+```
+
+**GitHub Enterprise Server** — set `github_base_url` to your GHE API URL:
+
+```toml
+[server]
+github_base_url = "https://github.example.com/api/v3"
+
+[tokens]
+github = "ghev_xxx"
 ```
 
 See `asika.toml.example` for the full reference — it covers notifications, spam detection, label rules, and more.
@@ -149,7 +159,7 @@ All commands need a token: `asika --token <token>` or set `ASIKA_TOKEN`.
 
 ```bash
 # PR operations
-asika pr list [group]          # --state open|closed|merged, --platform github|gitlab
+asika pr list [group]          # --state open|closed|merged, --platform github|gitlab|gitea|forgejo|codeberg|bitbucket
 asika pr show [group] [id]     # PR details
 asika pr approve [group] [id]  # Approve PR
 asika pr close [group] [id]    # Close PR
