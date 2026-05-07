@@ -110,7 +110,7 @@ func (b *TelegramBot) registerCommands() {
 	b.bot.Handle("/stalecheck", b.handleStaleCheck)
 	b.bot.Handle("/unstale", b.handleUnstale)
 	b.bot.Handle("/rebase", b.handleRebasePR)
-	b.bot.Handle("/cherry-pick", b.handleCherryPickPR)
+	b.bot.Handle("/cherrypick", b.handleCherryPickPR)
 	b.bot.Handle("/stats", b.handleStats)
 	b.bot.Handle("/version", b.handleVersion)
 
@@ -138,7 +138,7 @@ func (b *TelegramBot) registerBotMenu() {
 		{Text: "stalecheck", Description: "Check for stale PRs"},
 		{Text: "unstale", Description: "Remove stale label"},
 		{Text: "rebase", Description: "Rebase a PR"},
-		{Text: "cherry-pick", Description: "Cherry-pick a PR"},
+		{Text: "cherrypick", Description: "Cherry-pick a PR"},
 		{Text: "stats", Description: "Show DORA metrics"},
 		{Text: "version", Description: "Show version info"},
 	}
@@ -212,7 +212,7 @@ func (b *TelegramBot) handleHelp(c telebot.Context) error {
 /rebase repo_group pr_number — Rebase a PR onto its base branch
 
 🍒 <b>Cherry-pick</b>
-/cherry-pick repo_group pr_number target_branch — Cherry-pick a merged PR
+/cherrypick repo_group pr_number target_branch — Cherry-pick a merged PR
 
 📈 <b>Stats</b>
 /stats — Show DORA metrics
@@ -1372,7 +1372,7 @@ func (b *TelegramBot) handleRebasePR(c telebot.Context) error {
 	return c.Send("Rebase request submitted.")
 }
 
-// handleCherryPickPR handles /cherry-pick command.
+// handleCherryPickPR handles /cherrypick command.
 func (b *TelegramBot) handleCherryPickPR(c telebot.Context) error {
 	if !b.requireAdmin(c) {
 		return nil
@@ -1380,7 +1380,7 @@ func (b *TelegramBot) handleCherryPickPR(c telebot.Context) error {
 
 	args := strings.Fields(c.Text())
 	if len(args) < 4 {
-		return c.Send("Usage: /cherry-pick repo_group pr_number target_branch")
+		return c.Send("Usage: /cherrypick repo_group pr_number target_branch")
 	}
 
 	repoGroup := args[1]

@@ -1,6 +1,58 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **WebUI settings page (config form):**
+  - Add `settings.html` with form-based editing of all hot-reloadable config items
+  - Sections: Merge Queue (approvals, CI, fast forward, core contributors), Spam Detection, Stale PR Management, Label Rules editor, Config History with rollback
+  - Label rules editor with add/remove rows for pattern/label/color/description
+  - Config history table with one-click rollback to any previous version
+  - Add "Settings" nav link in header, link from config page
+- **Configuration versioning and rollback:**
+  - Auto-save config snapshot to bbolt on every `PUT /api/v1/config` update
+  - Add `GET /api/v1/config/history` — returns last 20 config versions with masked tokens
+  - Add `POST /api/v1/config/rollback` — restore config from a versioned snapshot
+  - Auto-prune snapshots beyond 20 entries
+  - Add `config_history` bbolt bucket + `PutConfigSnapshot`/`GetConfigSnapshot`/`ListConfigSnapshots` DB helpers
+- **Database backup and restore API:**
+  - Add `POST /api/v1/admin/backup` — hot online backup of bbolt DB file (via `bbolt.Tx.Copy`)
+  - Add `GET /api/v1/admin/backups` — list backup files with size and timestamp
+  - Add `POST /api/v1/admin/restore` — restore DB from backup (requires server restart)
+  - Add `BackupToFile()` function in `common/db/db.go`
+  - All endpoints require admin role
+- **Outgoing Webhook notifier:**
+  - Add `WebhookNotifier` in `common/notifier/webhook.go` implementing `Notifier` interface
+  - POSTs JSON payload `{title, body, timestamp}` to configurable URL
+  - Optional HMAC-SHA256 signature via `X-Asika-Signature` header
+  - Register `"webhook"` type in both handler and core notifier switches
+- **PR auto-assign reviewers:**
+  - Add `ReviewRule` struct (pattern + reviewers) to `common/models`
+  - Add `ReviewRules []ReviewRule` to `Config` struct
+  - Create `daemon/reviewer/reviewer.go` — matches rules against diff files/title/author, requests reviewers
+  - Add `RequestReview()` to `PlatformClient` interface + implement for all 6 platforms (GitHub, GitLab, Gitea, Forgejo, Codeberg, Bitbucket)
+  - Wire reviewer into consumer `handlePROpened` (runs after labeler)
+  - `review_rules` is hot-reloadable
+- **Enhanced label rules (AND/OR conditions):**
+  - Add `LabelCondition` struct and `Conditions`/`Logic` fields to `LabelRule`
+  - Add `matchCompoundRule()` supporting AND/OR logic for multi-condition rules
+  - Export `MatchRule()` from labeler package for reuse by reviewer
+  - Backward compatible: simple `pattern` rules work unchanged
+- **i18n framework (English/Chinese):**
+  - Create `common/i18n/i18n.go` — lightweight translation framework with locale file loading
+  - Register `{{t "key"}}` template function via Go template `FuncMap`
+  - Add `LocaleMiddleware` — detects locale from `Accept-Language` header or `asika_lang` cookie
+  - Add `POST /api/v1/locale` endpoint to switch language
+  - Add `locales/zh.json` — Chinese translations for ~120 UI strings
+- **PWA (Progressive Web App) support:**
+  - Add `/manifest.json` route — app manifest with name, theme, display mode, icons
+  - Add `/sw.js` route — service worker with cache-first strategy for pages
+  - Add PWA meta tags (`manifest`, `theme-color`, `apple-mobile-web-app-capable`) to all 11 HTML templates
+  - Add service worker registration script to layout
+- **Scheduled reports:**
+  - Create `daemon/reports/reports.go` — periodic DORA report generation and delivery
+  - Config: `[reports]` section with `enabled` and `cron` (hourly/daily/weekly/monthly)
+  - Fetches stats from `/api/v1/stats?period=7`, formats as text report
+  - Sends via all configured notifiers
+  - Add `ScheduleConfig` to models, wire scheduler in bootstrap
 - **Microsoft Teams notifier:**
   - Add `MSTeamsNotifier` via Incoming Webhook (MessageCard format)
   - Config: `type = "msteams"`, `webhook_url` required
