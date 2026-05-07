@@ -65,7 +65,7 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 	}
 
 	sourceURL := s.getRepoURL(pr.Platform, sourceRepo)
-	sourceToken := s.getTokenForPlatform(pr.Platform)
+	sourceToken := config.GetToken(s.cfg,pr.Platform)
 
 	// Clone source repo
 	gitRepo, err := gitutil.CloneOrOpen(workdir, sourceURL, sourceToken)
@@ -117,7 +117,7 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 
 		// Add target remote
 		targetURL := s.getRepoURL(target.name, target.repo)
-		targetToken := s.getTokenForPlatform(target.name)
+		targetToken := config.GetToken(s.cfg,target.name)
 		remoteName := "target-" + target.name
 
 		if err := gitutil.AddRemote(gitRepo, remoteName, targetURL); err != nil {
@@ -200,62 +200,45 @@ func (s *Syncer) recordSync(pr *models.PRRecord, branch, targetPlatform, status,
 	db.Put(db.BucketSyncHistory, record.ID, data)
 }
 
-// getTokenForPlatform returns the configured token for a platform
-func (s *Syncer) getTokenForPlatform(platform string) string {
+
+
+// getRepoURL returns the clone URL (with .git suffix) for a platform repo.
+func (s *Syncer) getRepoURL(platform, repo string) string {
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+
 	switch platforms.PlatformType(platform) {
 	case platforms.PlatformGitHub:
-		return s.cfg.Tokens.GitHub
+		return fmt.Sprintf("https://github.com/%s/%s.git", parts[0], parts[1])
 	case platforms.PlatformGitLab:
-		return s.cfg.Tokens.GitLab
+		base := s.cfg.GitLabBaseURL
+		if base == "" {
+			base = "https://gitlab.com"
+		}
+		base = strings.TrimSuffix(base, "/")
+		return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
 	case platforms.PlatformGitea:
-		return s.cfg.Tokens.Gitea
+		base := s.cfg.GiteaBaseURL
+		if base == "" {
+			base = "https://gitea.example.com"
+		}
+		base = strings.TrimSuffix(base, "/")
+		return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
 	case platforms.PlatformForgejo:
-		return s.cfg.Tokens.Forgejo
+		base := s.cfg.ForgejoBaseURL
+		if base == "" {
+			base = "https://forgejo.example.com"
+		}
+		base = strings.TrimSuffix(base, "/")
+		return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
 	case platforms.PlatformCodeberg:
-		return s.cfg.Tokens.Codeberg
+		return fmt.Sprintf("https://codeberg.org/%s/%s.git", parts[0], parts[1])
 	case platforms.PlatformBitbucket:
-		return s.cfg.Tokens.Bitbucket
+		return fmt.Sprintf("https://bitbucket.org/%s/%s.git", parts[0], parts[1])
 	}
 	return ""
-}
-
-// getRepoURL returns the clone URL for a platform repo
-func (s *Syncer) getRepoURL(platform, repo string) string {
-    parts := strings.SplitN(repo, "/", 2)
-    if len(parts) != 2 {
-        return ""
-    }
-
-    switch platforms.PlatformType(platform) {
-    case platforms.PlatformGitHub:
-        return fmt.Sprintf("https://github.com/%s/%s.git", parts[0], parts[1])
-    case platforms.PlatformGitLab:
-        base := s.cfg.GitLabBaseURL
-        if base == "" {
-            base = "https://gitlab.com"
-        }
-        base = strings.TrimSuffix(base, "/")
-        return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
-    case platforms.PlatformGitea:
-        base := s.cfg.GiteaBaseURL
-        if base == "" {
-            base = "https://gitea.example.com"
-        }
-        base = strings.TrimSuffix(base, "/")
-        return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
-    case platforms.PlatformForgejo:
-        base := s.cfg.ForgejoBaseURL
-        if base == "" {
-            base = "https://forgejo.example.com"
-        }
-        base = strings.TrimSuffix(base, "/")
-        return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
-    case platforms.PlatformCodeberg:
-        return fmt.Sprintf("https://codeberg.org/%s/%s.git", parts[0], parts[1])
-    case platforms.PlatformBitbucket:
-        return fmt.Sprintf("https://bitbucket.org/%s/%s.git", parts[0], parts[1])
-    }
-    return ""
 }
 
 func (s *Syncer) getOrCreateLock(repoGroup string) *sync.Mutex {

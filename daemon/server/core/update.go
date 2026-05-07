@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"asika/common/models"
+	"asika/common/utils"
 	"asika/common/version"
 )
 
@@ -18,7 +19,7 @@ func startUpdateCheck(cfg *models.Config) {
 		return
 	}
 
-	interval := parseDuration(cfg.Updates.Interval, 24*time.Hour)
+	interval := utils.ParseDuration(cfg.Updates.Interval, 24*time.Hour)
 	go func() {
 		ticker := time.NewTicker(interval)
 		for range ticker.C {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -414,27 +413,6 @@ func parseGiteaWebhook(body []byte, repoGroup string) (string, *models.PRRecord,
 	}
 
 	return eventType, pr, nil
-}
-
-// GetOwnerRepoFromGroup is a helper to get owner/repo for a platform
-func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, repo string) {
-	var repoPath string
-	switch platform {
-	case "github":
-		repoPath = group.GitHub
-	case "gitlab":
-		repoPath = group.GitLab
-	case "gitea":
-		repoPath = group.Gitea
-	}
-	if repoPath == "" {
-		return "", ""
-	}
-	idx := strings.LastIndex(repoPath, "/")
-	if idx < 0 {
-		return "", repoPath
-	}
-	return repoPath[:idx], repoPath[idx+1:]
 }
 
 // StartWebhookRetryWorker starts a background worker that retries failed webhooks.

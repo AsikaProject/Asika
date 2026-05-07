@@ -6,6 +6,7 @@ import (
 
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/common/utils"
 	"asika/daemon/consumer"
 	"asika/daemon/handlers"
 	"asika/daemon/polling"
@@ -53,7 +54,7 @@ func StartWorkers(
 		if !cfg.Spam.Enabled {
 			return
 		}
-		window := parseDuration(cfg.Spam.TimeWindow, 10*time.Minute)
+		window := utils.ParseDuration(cfg.Spam.TimeWindow, 10*time.Minute)
 		ticker := time.NewTicker(window / 2)
 		defer ticker.Stop()
 		for {
@@ -98,7 +99,7 @@ func StartWorkers(
 			return
 		}
 
-		interval := parseDuration(cfg.Stale.CheckInterval, 6*time.Hour)
+		interval := utils.ParseDuration(cfg.Stale.CheckInterval, 6*time.Hour)
 		go func() {
 			ticker := time.NewTicker(interval)
 			defer ticker.Stop()

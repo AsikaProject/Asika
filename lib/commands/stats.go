@@ -7,6 +7,8 @@ import (
 	"net/http"
 
 	"github.com/spf13/cobra"
+
+	"asika/common/utils"
 )
 
 var statsCmd = &cobra.Command{
@@ -44,16 +46,16 @@ var statsCmd = &cobra.Command{
 		fmt.Println("═══════════════════════════════════════")
 
 		if v, ok := result["deployment_frequency"]; ok {
-			fmt.Printf("  Deployments/Day:    %.2f\n", toFloat64(v))
+			fmt.Printf("  Deployments/Day:    %.2f\n", utils.ToFloat64(v))
 		}
 		if v, ok := result["lead_time_hours"]; ok {
-			fmt.Printf("  Lead Time:          %s\n", formatHours(toFloat64(v)))
+			fmt.Printf("  Lead Time:          %s\n", formatHours(utils.ToFloat64(v)))
 		}
 		if v, ok := result["change_failure_rate"]; ok {
-			fmt.Printf("  Failure Rate:       %.1f%%\n", toFloat64(v)*100)
+			fmt.Printf("  Failure Rate:       %.1f%%\n", utils.ToFloat64(v)*100)
 		}
 		if v, ok := result["mttr_hours"]; ok {
-			fmt.Printf("  MTTR:               %s\n", formatHours(toFloat64(v)))
+			fmt.Printf("  MTTR:               %s\n", formatHours(utils.ToFloat64(v)))
 		}
 
 		fmt.Println("───────────────────────────────────────")
@@ -109,24 +111,6 @@ var statsCmd = &cobra.Command{
 		}
 		fmt.Println("═══════════════════════════════════════")
 	},
-}
-
-func toFloat64(v interface{}) float64 {
-	switch n := v.(type) {
-	case float64:
-		return n
-	case float32:
-		return float64(n)
-	case int:
-		return float64(n)
-	case int64:
-		return float64(n)
-	case json.Number:
-		f, _ := n.Float64()
-		return f
-	default:
-		return 0
-	}
 }
 
 func formatHours(hours float64) string {

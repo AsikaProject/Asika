@@ -235,15 +235,7 @@ func contains(list []string, item string) bool {
 func (c *Checker) tryAutoRebase(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) bool {
 	platform := pr.Platform
 	if platform == "" {
-		if group.Mode == "single" && group.MirrorPlatform != "" {
-			platform = group.MirrorPlatform
-		} else if group.GitHub != "" {
-			platform = "github"
-		} else if group.GitLab != "" {
-			platform = "gitlab"
-		} else if group.Gitea != "" {
-			platform = "gitea"
-		}
+		platform = config.GetPlatformForGroup(group)
 	}
 
 	client := c.clients[platforms.PlatformType(platform)]
@@ -269,8 +261,8 @@ func (c *Checker) tryAutoRebase(ctx context.Context, pr *models.PRRecord, group 
 		return false
 	}
 
-	cloneURL := buildCloneURL(group, platform, owner, repo)
-	token := getPlatformToken(c.cfg, platform)
+	cloneURL := config.GetCloneURL(group, platform, owner, repo)
+	token := config.GetToken(c.cfg, platform)
 	clonePath := c.cfg.Git.RepoClonePath
 
 	rebaseErr := gitutil.Rebase("", cloneURL, token, branchInfo.HeadBranch, branchInfo.BaseBranch, clonePath)
@@ -283,40 +275,5 @@ func (c *Checker) tryAutoRebase(ctx context.Context, pr *models.PRRecord, group 
 	return true
 }
 
-func buildCloneURL(group *models.RepoGroup, platform, owner, repo string) string {
-	var baseURL string
-	switch platform {
-	case "github":
-		baseURL = "https://github.com"
-	case "gitlab":
-		cfg := config.Current()
-		if cfg != nil && cfg.GitLabBaseURL != "" {
-			baseURL = strings.TrimSuffix(cfg.GitLabBaseURL, "/")
-		} else {
-			baseURL = "https://gitlab.com"
-		}
-	case "gitea":
-		cfg := config.Current()
-		if cfg != nil && cfg.GiteaBaseURL != "" {
-			baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
-		} else {
-			return ""
-		}
-	}
-	return fmt.Sprintf("%s/%s/%s", baseURL, owner, repo)
-}
 
-func getPlatformToken(cfg *models.Config, platform string) string {
-	if cfg == nil {
-		return ""
-	}
-	switch platform {
-	case "github":
-		return cfg.Tokens.GitHub
-	case "gitlab":
-		return cfg.Tokens.GitLab
-	case "gitea":
-		return cfg.Tokens.Gitea
-	}
-	return ""
-}
+

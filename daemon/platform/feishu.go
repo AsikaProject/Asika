@@ -16,6 +16,7 @@ import (
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
+	"asika/common/utils"
 	"asika/common/version"
 	"asika/daemon/queue"
 	"asika/daemon/syncer"
@@ -657,7 +658,7 @@ func (b *FeishuBot) doStaleCheckText(repoGroup string) string {
 	var lines []string
 	lines = append(lines, "Stale PR Check for "+repoGroup+":")
 
-	for _, pt := range groupPlatforms(group) {
+	for _, pt := range platforms.GroupPlatforms(group) {
 		client, ok := b.clients[pt]
 		if !ok {
 			continue
@@ -723,7 +724,7 @@ func (b *FeishuBot) doUnstale(senderID, repoGroup, prNumberStr string) string {
 	fmt.Sscanf(prNumberStr, "%d", &n)
 
 	removed := false
-	for _, pt := range groupPlatforms(group) {
+	for _, pt := range platforms.GroupPlatforms(group) {
 		client, ok := b.clients[pt]
 		if !ok {
 			continue
@@ -786,15 +787,7 @@ func (b *FeishuBot) doRebase(senderID, repoGroup, prNumberStr string) string {
 
 	platform := found.Platform
 	if platform == "" {
-		if group.Mode == "single" && group.MirrorPlatform != "" {
-			platform = group.MirrorPlatform
-		} else if group.GitHub != "" {
-			platform = "github"
-		} else if group.GitLab != "" {
-			platform = "gitlab"
-		} else if group.Gitea != "" {
-			platform = "gitea"
-		}
+		platform = config.GetPlatformForGroup(group)
 	}
 
 	client, ok := b.clients[platforms.PlatformType(platform)]
@@ -868,16 +861,16 @@ func (b *FeishuBot) showStatsText() string {
 	lines = append(lines, "─────────────")
 
 	if v, ok := result["deployment_frequency"]; ok {
-		lines = append(lines, fmt.Sprintf("Deployments/Day: %.2f", toFloat64Feishu(v)))
+		lines = append(lines, fmt.Sprintf("Deployments/Day: %.2f", utils.ToFloat64(v)))
 	}
 	if v, ok := result["lead_time_hours"]; ok {
-		lines = append(lines, fmt.Sprintf("Lead Time: %s", formatHoursFeishu(toFloat64Feishu(v))))
+		lines = append(lines, fmt.Sprintf("Lead Time: %s", utils.FormatHours(utils.ToFloat64(v))))
 	}
 	if v, ok := result["change_failure_rate"]; ok {
-		lines = append(lines, fmt.Sprintf("Failure Rate: %.1f%%", toFloat64Feishu(v)*100))
+		lines = append(lines, fmt.Sprintf("Failure Rate: %.1f%%", utils.ToFloat64(v)*100))
 	}
 	if v, ok := result["mttr_hours"]; ok {
-		lines = append(lines, fmt.Sprintf("MTTR: %s", formatHoursFeishu(toFloat64Feishu(v))))
+		lines = append(lines, fmt.Sprintf("MTTR: %s", utils.FormatHours(utils.ToFloat64(v))))
 	}
 
 	lines = append(lines, "")
@@ -917,37 +910,7 @@ func (b *FeishuBot) showStatsText() string {
 	return strings.Join(lines, "\n")
 }
 
-func toFloat64Feishu(v interface{}) float64 {
-	switch n := v.(type) {
-	case float64:
-		return n
-	case float32:
-		return float64(n)
-	case int:
-		return float64(n)
-	case int64:
-		return float64(n)
-	case json.Number:
-		f, _ := n.Float64()
-		return f
-	default:
-		return 0
-	}
-}
 
-func formatHoursFeishu(hours float64) string {
-	if hours < 1 {
-		return fmt.Sprintf("%.0f min", hours*60)
-	}
-	if hours < 24 {
-		return fmt.Sprintf("%.1f hours", hours)
-	}
-	days := hours / 24
-	if days < 30 {
-		return fmt.Sprintf("%.1f days", days)
-	}
-	return fmt.Sprintf("%.0f days", days)
-}
 
 func (b *FeishuBot) showVersionText() string {
 	return fmt.Sprintf("Asika\nVersion: %s", version.Version)

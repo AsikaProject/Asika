@@ -40,7 +40,7 @@ func (m *Manager) CheckRepoGroup(group *models.RepoGroup) {
 	cfg := m.cfg.Stale
 	slog.Info("stale: checking repo group", "group", group.Name)
 
-	platformsForGroup := groupPlatforms(group)
+	platformsForGroup := platforms.GroupPlatforms(group)
 	for _, pt := range platformsForGroup {
 		client, ok := m.clients[pt]
 		if !ok {
@@ -71,7 +71,7 @@ func (m *Manager) CheckRepoGroupDryRun(group *models.RepoGroup) []StaleAction {
 	cfg := m.cfg.Stale
 	var actions []StaleAction
 
-	platformsForGroup := groupPlatforms(group)
+	platformsForGroup := platforms.GroupPlatforms(group)
 	for _, pt := range platformsForGroup {
 		client, ok := m.clients[pt]
 		if !ok {
@@ -207,7 +207,7 @@ func (m *Manager) HandleActivity(pr *models.PRRecord, repoGroup string) {
 }
 
 func (m *Manager) removeStaleLabel(pr *models.PRRecord, group *models.RepoGroup, label string) {
-	platformsForGroup := groupPlatforms(group)
+	platformsForGroup := platforms.GroupPlatforms(group)
 	for _, pt := range platformsForGroup {
 		client, ok := m.clients[pt]
 		if !ok {
@@ -348,28 +348,7 @@ func (m *Manager) sendNotification(group, title, body string) {
 	}
 }
 
-func groupPlatforms(group *models.RepoGroup) []platforms.PlatformType {
-	var result []platforms.PlatformType
-	if group.GitHub != "" {
-		result = append(result, platforms.PlatformGitHub)
-	}
-	if group.GitLab != "" {
-		result = append(result, platforms.PlatformGitLab)
-	}
-	if group.Gitea != "" {
-		result = append(result, platforms.PlatformGitea)
-	}
-	if group.Forgejo != "" {
-		result = append(result, platforms.PlatformForgejo)
-	}
-	if group.Codeberg != "" {
-		result = append(result, platforms.PlatformCodeberg)
-	}
-	if group.Bitbucket != "" {
-		result = append(result, platforms.PlatformBitbucket)
-	}
-	return result
-}
+
 
 func hasLabel(labels []string, target string) bool {
 	for _, l := range labels {

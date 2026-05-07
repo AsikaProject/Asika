@@ -6,6 +6,7 @@ import (
 
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/common/utils"
 	"asika/testutil"
 )
 
@@ -98,9 +99,9 @@ func TestParseDuration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got := parseDuration(tt.input, tt.defaultD)
+			got := utils.ParseDuration(tt.input, tt.defaultD)
 			if got != tt.want {
-				t.Errorf("parseDuration(%q, %v) = %v, want %v", tt.input, tt.defaultD, got, tt.want)
+				t.Errorf("ParseDuration(%q, %v) = %v, want %v", tt.input, tt.defaultD, got, tt.want)
 			}
 		})
 	}

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"log/slog"
@@ -118,7 +117,7 @@ func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID
 
 	platform := pr.Platform
 	if platform == "" {
-		platform = getPlatformForGroup(group)
+		platform = config.GetPlatformForGroup(group)
 	}
 	client := getClientForGroup(group, platform)
 	if client == nil {
@@ -144,10 +143,10 @@ func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID
 	prData, _ := json.Marshal(pr)
 	db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 
-	cloneURL := getCloneURL(group, platform, owner, repo)
+	cloneURL := config.GetCloneURL(group, platform, owner, repo)
 	clonePath := cfg.Git.RepoClonePath
 
-	rebaseErr := gitutil.Rebase("", cloneURL, getPlatformToken(cfg, platform), branchInfo.HeadBranch, branchInfo.BaseBranch, clonePath)
+	rebaseErr := gitutil.Rebase("", cloneURL, config.GetToken(cfg, platform), branchInfo.HeadBranch, branchInfo.BaseBranch, clonePath)
 	if rebaseErr != nil {
 		pr.Events = append(pr.Events, models.PREvent{
 			Action: "rebase_failed",
@@ -207,43 +206,7 @@ func findPRForRebase(prID string) (*models.PRRecord, error) {
 	return found, nil
 }
 
-func getCloneURL(group *models.RepoGroup, platform, owner, repo string) string {
-	var baseURL string
-	switch platform {
-	case "github":
-		baseURL = "https://github.com"
-	case "gitlab":
-		cfg := config.Current()
-		if cfg != nil && cfg.GitLabBaseURL != "" {
-			baseURL = strings.TrimSuffix(cfg.GitLabBaseURL, "/")
-		} else {
-			baseURL = "https://gitlab.com"
-		}
-	case "gitea":
-		cfg := config.Current()
-		if cfg != nil && cfg.GiteaBaseURL != "" {
-			baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
-		} else {
-			return ""
-		}
-	}
-	return fmt.Sprintf("%s/%s/%s", baseURL, owner, repo)
-}
 
-func getPlatformToken(cfg *models.Config, platform string) string {
-	if cfg == nil {
-		return ""
-	}
-	switch platform {
-	case "github":
-		return cfg.Tokens.GitHub
-	case "gitlab":
-		return cfg.Tokens.GitLab
-	case "gitea":
-		return cfg.Tokens.Gitea
-	}
-	return ""
-}
 
 // CherryPickRequest represents a cherry-pick operation request
 type CherryPickRequest struct {
@@ -305,7 +268,7 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 
 	platform := pr.Platform
 	if platform == "" {
-		platform = getPlatformForGroup(group)
+		platform = config.GetPlatformForGroup(group)
 	}
 	client := getClientForGroup(group, platform)
 	if client == nil {
@@ -323,8 +286,8 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 		pr.MergeCommitSHA = freshPR.MergeCommitSHA
 	}
 
-	cloneURL := getCloneURL(group, platform, owner, repo)
-	token := getPlatformToken(cfg, platform)
+	cloneURL := config.GetCloneURL(group, platform, owner, repo)
+	token := config.GetToken(cfg, platform)
 	clonePath := cfg.Git.RepoClonePath
 
 	// Clone, checkout target branch, cherry-pick, push

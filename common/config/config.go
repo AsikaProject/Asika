@@ -257,6 +257,102 @@ func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, rep
     return repoPath[:idx], repoPath[idx+1:]
 }
 
+// GetPlatformForGroup determines the platform for a repo group.
+// In single mode, it returns the MirrorPlatform (the authoritative source).
+// In multi mode, it returns the first configured platform in priority order
+// (github > gitlab > gitea > forgejo > codeberg > bitbucket).
+func GetPlatformForGroup(group *models.RepoGroup) string {
+	if group.Mode == "single" && group.MirrorPlatform != "" {
+		return group.MirrorPlatform
+	}
+	if group.GitHub != "" {
+		return "github"
+	}
+	if group.GitLab != "" {
+		return "gitlab"
+	}
+	if group.Gitea != "" {
+		return "gitea"
+	}
+	if group.Forgejo != "" {
+		return "forgejo"
+	}
+	if group.Codeberg != "" {
+		return "codeberg"
+	}
+	if group.Bitbucket != "" {
+		return "bitbucket"
+	}
+	return ""
+}
+
+// GetCloneURL builds the HTTPS clone URL for a platform repository.
+func GetCloneURL(group *models.RepoGroup, platform, owner, repo string) string {
+	var baseURL string
+	switch platform {
+	case "github":
+		baseURL = "https://github.com"
+	case "gitlab":
+		cfg := Current()
+		if cfg != nil && cfg.GitLabBaseURL != "" {
+			baseURL = strings.TrimSuffix(cfg.GitLabBaseURL, "/")
+		} else {
+			baseURL = "https://gitlab.com"
+		}
+	case "gitea":
+		cfg := Current()
+		if cfg != nil && cfg.GiteaBaseURL != "" {
+			baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
+		} else {
+			return ""
+		}
+	case "forgejo":
+		cfg := Current()
+		if cfg != nil && cfg.ForgejoBaseURL != "" {
+			baseURL = strings.TrimSuffix(cfg.ForgejoBaseURL, "/")
+		} else {
+			cfg := Current()
+			if cfg != nil && cfg.GiteaBaseURL != "" {
+				baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
+			} else {
+				baseURL = "https://forgejo.example.com"
+			}
+		}
+	case "codeberg":
+		cfg := Current()
+		if cfg != nil && cfg.GiteaBaseURL != "" {
+			baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
+		} else {
+			baseURL = "https://codeberg.org"
+		}
+	case "bitbucket":
+		baseURL = "https://bitbucket.org"
+	}
+	return fmt.Sprintf("%s/%s/%s", baseURL, owner, repo)
+}
+
+// GetToken returns the API token for a given platform.
+func GetToken(cfg *models.Config, platform string) string {
+	if cfg == nil {
+		return ""
+	}
+	switch platform {
+	case "github":
+		return cfg.Tokens.GitHub
+	case "gitlab":
+		return cfg.Tokens.GitLab
+	case "gitea":
+		return cfg.Tokens.Gitea
+	case "forgejo":
+		return cfg.Tokens.Forgejo
+	case "codeberg":
+		return cfg.Tokens.Codeberg
+	case "bitbucket":
+		return cfg.Tokens.Bitbucket
+	}
+	return ""
+}
+
 // GenerateTokenExpiry parses the token expiry duration
 func GenerateTokenExpiry(expiry string) time.Duration {
     d, err := time.ParseDuration(expiry)

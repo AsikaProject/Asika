@@ -20,6 +20,7 @@ import (
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
+	"asika/common/utils"
 	"asika/common/version"
 	"asika/daemon/queue"
 	"asika/daemon/syncer"
@@ -1192,7 +1193,7 @@ func (b *TelegramBot) handleUnstale(c telebot.Context) error {
 	}
 
 	removed := false
-	for _, pt := range groupPlatforms(group) {
+	for _, pt := range platforms.GroupPlatforms(group) {
 		client, ok := b.clients[pt]
 		if !ok {
 			continue
@@ -1219,7 +1220,7 @@ func (b *TelegramBot) handleUnstale(c telebot.Context) error {
 
 func (b *TelegramBot) fetchOpenPRs(group *models.RepoGroup) ([]*models.PRRecord, error) {
 	var prs []*models.PRRecord
-	for _, pt := range groupPlatforms(group) {
+	for _, pt := range platforms.GroupPlatforms(group) {
 		client, ok := b.clients[pt]
 		if !ok {
 			continue
@@ -1239,28 +1240,7 @@ func (b *TelegramBot) fetchOpenPRs(group *models.RepoGroup) ([]*models.PRRecord,
 	return prs, nil
 }
 
-func groupPlatforms(group *models.RepoGroup) []platforms.PlatformType {
-	var result []platforms.PlatformType
-	if group.GitHub != "" {
-		result = append(result, platforms.PlatformGitHub)
-	}
-	if group.GitLab != "" {
-		result = append(result, platforms.PlatformGitLab)
-	}
-	if group.Gitea != "" {
-		result = append(result, platforms.PlatformGitea)
-	}
-	if group.Forgejo != "" {
-		result = append(result, platforms.PlatformForgejo)
-	}
-	if group.Codeberg != "" {
-		result = append(result, platforms.PlatformCodeberg)
-	}
-	if group.Bitbucket != "" {
-		result = append(result, platforms.PlatformBitbucket)
-	}
-	return result
-}
+
 
 func inactivityDays(lastActive time.Time) int {
 	dur := time.Since(lastActive)
@@ -1331,15 +1311,7 @@ func (b *TelegramBot) handleRebasePR(c telebot.Context) error {
 
 	platform := found.Platform
 	if platform == "" {
-		if group.Mode == "single" && group.MirrorPlatform != "" {
-			platform = group.MirrorPlatform
-		} else if group.GitHub != "" {
-			platform = "github"
-		} else if group.GitLab != "" {
-			platform = "gitlab"
-		} else if group.Gitea != "" {
-			platform = "gitea"
-		}
+		platform = config.GetPlatformForGroup(group)
 	}
 
 	client, ok := b.clients[platforms.PlatformType(platform)]
@@ -1485,16 +1457,16 @@ func (b *TelegramBot) handleStats(c telebot.Context) error {
 	sb.WriteString("<b>📊 DORA Metrics</b>\n\n")
 
 	if v, ok := result["deployment_frequency"]; ok {
-		sb.WriteString(fmt.Sprintf("🚀 Deployments/Day: <b>%.2f</b>\n", toFloat64(v)))
+		sb.WriteString(fmt.Sprintf("🚀 Deployments/Day: <b>%.2f</b>\n", utils.ToFloat64(v)))
 	}
 	if v, ok := result["lead_time_hours"]; ok {
-		sb.WriteString(fmt.Sprintf("⏱ Lead Time: <b>%s</b>\n", formatHours(toFloat64(v))))
+		sb.WriteString(fmt.Sprintf("⏱ Lead Time: <b>%s</b>\n", utils.FormatHours(utils.ToFloat64(v))))
 	}
 	if v, ok := result["change_failure_rate"]; ok {
-		sb.WriteString(fmt.Sprintf("💥 Failure Rate: <b>%.1f%%</b>\n", toFloat64(v)*100))
+		sb.WriteString(fmt.Sprintf("💥 Failure Rate: <b>%.1f%%</b>\n", utils.ToFloat64(v)*100))
 	}
 	if v, ok := result["mttr_hours"]; ok {
-		sb.WriteString(fmt.Sprintf("🔧 MTTR: <b>%s</b>\n", formatHours(toFloat64(v))))
+		sb.WriteString(fmt.Sprintf("🔧 MTTR: <b>%s</b>\n", utils.FormatHours(utils.ToFloat64(v))))
 	}
 
 	sb.WriteString("\n<b>Overview</b>\n")
@@ -1526,38 +1498,6 @@ func (b *TelegramBot) handleStats(c telebot.Context) error {
 	}
 
 	return c.Send(sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeHTML})
-}
-
-func toFloat64(v interface{}) float64 {
-	switch n := v.(type) {
-	case float64:
-		return n
-	case float32:
-		return float64(n)
-	case int:
-		return float64(n)
-	case int64:
-		return float64(n)
-	case json.Number:
-		f, _ := n.Float64()
-		return f
-	default:
-		return 0
-	}
-}
-
-func formatHours(hours float64) string {
-	if hours < 1 {
-		return fmt.Sprintf("%.0f min", hours*60)
-	}
-	if hours < 24 {
-		return fmt.Sprintf("%.1f hours", hours)
-	}
-	days := hours / 24
-	if days < 30 {
-		return fmt.Sprintf("%.1f days", days)
-	}
-	return fmt.Sprintf("%.0f days", days)
 }
 
 // handleVersion handles /version command.

@@ -86,9 +86,9 @@ func TestGetTokenForPlatform(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.platform, func(t *testing.T) {
-			got := s.getTokenForPlatform(tt.platform)
+			got := config.GetToken(s.cfg, tt.platform)
 			if got != tt.want {
-				t.Errorf("getTokenForPlatform(%q) = %q, want %q", tt.platform, got, tt.want)
+				t.Errorf("GetToken(%q) = %q, want %q", tt.platform, got, tt.want)
 			}
 		})
 	}

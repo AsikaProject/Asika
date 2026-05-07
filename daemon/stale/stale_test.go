@@ -72,7 +72,7 @@ func TestGroupPlatforms(t *testing.T) {
 		Gitea:  "user/repo",
 	}
 
-	platforms := groupPlatforms(group)
+	platforms := platforms.GroupPlatforms(group)
 	if len(platforms) != 3 {
 		t.Errorf("groupPlatforms returned %d platforms, want 3", len(platforms))
 	}
@@ -100,7 +100,7 @@ func TestGroupPlatforms_Partial(t *testing.T) {
 		GitHub: "owner/repo",
 	}
 
-	platforms := groupPlatforms(group)
+	platforms := platforms.GroupPlatforms(group)
 	if len(platforms) != 1 {
 		t.Errorf("groupPlatforms returned %d platforms, want 1", len(platforms))
 	}

@@ -357,8 +357,8 @@ func (m *Manager) tryRebaseBeforeMerge(ctx context.Context, pr *models.PRRecord,
 		return fmt.Errorf("PR author has not enabled 'allow edits from maintainers'")
 	}
 
-	cloneURL := buildCloneURL(group, platform, owner, repo)
-	token := getPlatformToken(m.cfg, platform)
+	cloneURL := config.GetCloneURL(group, platform, owner, repo)
+	token := config.GetToken(m.cfg, platform)
 	clonePath := m.cfg.Git.RepoClonePath
 
 	rebaseErr := gitutil.Rebase("", cloneURL, token, branchInfo.HeadBranch, branchInfo.BaseBranch, clonePath)

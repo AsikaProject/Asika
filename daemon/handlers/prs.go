@@ -273,7 +273,7 @@ func ApprovePR(c *gin.Context) {
 	}
 
 	// Try to get platform from DB first, fallback to repo group config
-	platform := getPlatformForGroup(group)
+	platform := config.GetPlatformForGroup(group)
 	prNumber, err := strconv.Atoi(prID)
 	if err != nil || prNumber == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid pr_id, must be a number"})
@@ -425,7 +425,7 @@ func ClosePR(c *gin.Context) {
 		return
 	}
 
-	platform := getPlatformForGroup(group)
+	platform := config.GetPlatformForGroup(group)
 	prNumber, err := strconv.Atoi(prID)
 	if err != nil || prNumber == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid pr_id, must be a number"})
@@ -497,7 +497,7 @@ func ReopenPR(c *gin.Context) {
 		return
 	}
 
-	platform := getPlatformForGroup(group)
+	platform := config.GetPlatformForGroup(group)
 	prNumber, err := strconv.Atoi(prID)
 	if err != nil || prNumber == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid pr_id, must be a number"})
@@ -569,7 +569,7 @@ func MarkSpam(c *gin.Context) {
 		return
 	}
 
-	platform := getPlatformForGroup(group)
+	platform := config.GetPlatformForGroup(group)
 	prNumber, err := strconv.Atoi(prID)
 	if err != nil || prNumber == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid pr_id, must be a number"})
@@ -660,7 +660,7 @@ func CommentPR(c *gin.Context) {
 		return
 	}
 
-	platform := getPlatformForGroup(group)
+	platform := config.GetPlatformForGroup(group)
 	prNumber, err := strconv.Atoi(prID)
 
 	key := repoGroup + "#" + prID
@@ -738,7 +738,7 @@ func BatchApprovePR(c *gin.Context) {
 		return
 	}
 
-	platform := getPlatformForGroup(group)
+	platform := config.GetPlatformForGroup(group)
 	if platform == "" {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "cannot determine platform"})
 		return
@@ -801,7 +801,7 @@ func BatchClosePR(c *gin.Context) {
 		return
 	}
 
-	platform := getPlatformForGroup(group)
+	platform := config.GetPlatformForGroup(group)
 	if platform == "" {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "cannot determine platform"})
 		return
@@ -866,7 +866,7 @@ func BatchLabelPR(c *gin.Context) {
 		return
 	}
 
-	platform := getPlatformForGroup(group)
+	platform := config.GetPlatformForGroup(group)
 	if platform == "" {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "cannot determine platform"})
 		return
@@ -989,30 +989,4 @@ func getClientForGroup(group *models.RepoGroup, platform string) platforms.Platf
 	return clients[platforms.PlatformType(platform)]
 }
 
-// getPlatformForGroup determines the platform for a repo group.
-// In single mode, it returns the MirrorPlatform (the authoritative source).
-// In multi mode, it returns the first configured platform (github > gitlab > gitea > forgejo > codeberg).
-func getPlatformForGroup(group *models.RepoGroup) string {
-	if group.Mode == "single" && group.MirrorPlatform != "" {
-		return group.MirrorPlatform
-	}
-	if group.GitHub != "" {
-		return "github"
-	}
-	if group.GitLab != "" {
-		return "gitlab"
-	}
-	if group.Gitea != "" {
-		return "gitea"
-	}
-	if group.Forgejo != "" {
-		return "forgejo"
-	}
-	if group.Codeberg != "" {
-		return "codeberg"
-	}
-	if group.Bitbucket != "" {
-		return "bitbucket"
-	}
-	return ""
-}
+

@@ -15,6 +15,7 @@ import (
 	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/common/utils"
 )
 
 // Poller polls platforms for PR changes
@@ -35,7 +36,7 @@ func NewPoller(cfg *models.Config, clients map[platforms.PlatformType]platforms.
 
 // Start starts the polling loop
 func (p *Poller) Start() {
-	interval := parseDuration(p.cfg.Events.PollingInterval, 30*time.Second)
+	interval := utils.ParseDuration(p.cfg.Events.PollingInterval, 30*time.Second)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -235,10 +236,4 @@ func (p *Poller) pollPlatform(client platforms.PlatformClient, repoGroup, platfo
 	return
 }
 
-func parseDuration(s string, defaultVal time.Duration) time.Duration {
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return defaultVal
-	}
-	return d
-}
+

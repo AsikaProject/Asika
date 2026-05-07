@@ -18,6 +18,7 @@ import (
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
+	"asika/common/utils"
 	"asika/common/version"
 	"asika/daemon/queue"
 	"asika/daemon/syncer"
@@ -682,15 +683,7 @@ func (b *DiscordBot) handleRebasePR(s *discordgo.Session, m *discordgo.MessageCr
 
 	platform := found.Platform
 	if platform == "" {
-		if group.Mode == "single" && group.MirrorPlatform != "" {
-			platform = group.MirrorPlatform
-		} else if group.GitHub != "" {
-			platform = "github"
-		} else if group.GitLab != "" {
-			platform = "gitlab"
-		} else if group.Gitea != "" {
-			platform = "gitea"
-		}
+		platform = config.GetPlatformForGroup(group)
 	}
 
 	client := b.getClientForPlatform(platform)
@@ -772,16 +765,16 @@ func (b *DiscordBot) handleStats(s *discordgo.Session, m *discordgo.MessageCreat
 	sb.WriteString("**📊 DORA Metrics**\n\n")
 
 	if v, ok := result["deployment_frequency"]; ok {
-		sb.WriteString(fmt.Sprintf("🚀 Deployments/Day: **%.2f**\n", toFloat64(v)))
+		sb.WriteString(fmt.Sprintf("🚀 Deployments/Day: **%.2f**\n", utils.ToFloat64(v)))
 	}
 	if v, ok := result["lead_time_hours"]; ok {
-		sb.WriteString(fmt.Sprintf("⏱ Lead Time: **%s**\n", formatHours(toFloat64(v))))
+		sb.WriteString(fmt.Sprintf("⏱ Lead Time: **%s**\n", utils.FormatHours(utils.ToFloat64(v))))
 	}
 	if v, ok := result["change_failure_rate"]; ok {
-		sb.WriteString(fmt.Sprintf("💥 Failure Rate: **%.1f%%**\n", toFloat64(v)*100))
+		sb.WriteString(fmt.Sprintf("💥 Failure Rate: **%.1f%%**\n", utils.ToFloat64(v)*100))
 	}
 	if v, ok := result["mttr_hours"]; ok {
-		sb.WriteString(fmt.Sprintf("🔧 MTTR: **%s**\n", formatHours(toFloat64(v))))
+		sb.WriteString(fmt.Sprintf("🔧 MTTR: **%s**\n", utils.FormatHours(utils.ToFloat64(v))))
 	}
 
 	sb.WriteString("\n**Overview**\n")
@@ -813,38 +806,6 @@ func (b *DiscordBot) handleStats(s *discordgo.Session, m *discordgo.MessageCreat
 	}
 
 	s.ChannelMessageSend(m.ChannelID, sb.String())
-}
-
-func toFloat64Discord(v interface{}) float64 {
-	switch n := v.(type) {
-	case float64:
-		return n
-	case float32:
-		return float64(n)
-	case int:
-		return float64(n)
-	case int64:
-		return float64(n)
-	case json.Number:
-		f, _ := n.Float64()
-		return f
-	default:
-		return 0
-	}
-}
-
-func formatHoursDiscord(hours float64) string {
-	if hours < 1 {
-		return fmt.Sprintf("%.0f min", hours*60)
-	}
-	if hours < 24 {
-		return fmt.Sprintf("%.1f hours", hours)
-	}
-	days := hours / 24
-	if days < 30 {
-		return fmt.Sprintf("%.1f days", days)
-	}
-	return fmt.Sprintf("%.0f days", days)
 }
 
 // handleVersion handles !version command

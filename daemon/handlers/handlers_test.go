@@ -731,9 +731,9 @@ func TestGetPlatformForGroup_SingleMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getPlatformForGroup(tt.group)
+			got := config.GetPlatformForGroup(tt.group)
 			if got != tt.wantPlatform {
-				t.Errorf("getPlatformForGroup() = %q, want %q", got, tt.wantPlatform)
+				t.Errorf("GetPlatformForGroup() = %q, want %q", got, tt.wantPlatform)
 			}
 		})
 	}
@@ -1044,7 +1044,7 @@ func TestSingleMode_GitlabOnlyMirror(t *testing.T) {
 	if group == nil {
 		t.Fatal("group not found")
 	}
-	plat := getPlatformForGroup(group)
+	plat := config.GetPlatformForGroup(group)
 	if plat != "gitlab" {
 		t.Errorf("expected gitlab, got %q", plat)
 	}

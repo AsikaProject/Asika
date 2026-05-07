@@ -12,8 +12,9 @@ import (
 	"asika/common/db"
 	"asika/common/events"
 	"asika/common/models"
-	"asika/common/platforms"
 	"asika/common/notifier"
+	"asika/common/platforms"
+	"asika/common/utils"
 )
 
 // SpamDetector detects and handles spam PRs
@@ -52,7 +53,7 @@ func (d *SpamDetector) Scan() {
 		return
 	}
 
-	window := parseDuration(d.cfg.Spam.TimeWindow, 10*time.Minute)
+	window := utils.ParseDuration(d.cfg.Spam.TimeWindow, 10*time.Minute)
 	cutoff := time.Now().Add(-window)
 	prs := d.getPRsAfter(cutoff)
 	spamPRs := d.detectSpam(prs)
@@ -205,11 +206,3 @@ func (d *SpamDetector) StopChan() <-chan struct{} {
 	return d.stop
 }
 
-// parseDuration parses a duration string with fallback
-func parseDuration(s string, defaultDur time.Duration) time.Duration {
-	d, err := time.ParseDuration(s)
-	if err != nil {
-		return defaultDur
-	}
-	return d
-}
