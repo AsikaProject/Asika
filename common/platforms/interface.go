@@ -57,4 +57,7 @@ type PlatformClient interface {
 
     // PR branch info for rebase
     GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error)
+
+    // Reviewer assignment
+    RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error
 }

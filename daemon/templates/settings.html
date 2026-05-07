@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{template "pwa"}}
+    {{template "styles"}}
+    <title>Settings - Asika</title>
+</head>
+<body>
+{{template "header" .}}
+<div class="container">
+<h1>Settings</h1>
+<div id="errorMsg" class="error" style="display:none;"></div>
+<div id="successMsg" class="success" style="display:none;"></div>
+
+<!-- Merge Queue Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <h2>Merge Queue</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Required Approvals</label>
+            <input id="mqRequiredApprovals" type="number" min="0" value="1" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">CI Check Required</label>
+            <select id="mqCICheck" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+            </select>
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Fast Forward Only</label>
+            <select id="mqFastForward" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <option value="false">No (allow merge commits)</option>
+                <option value="true">Yes (auto-rebase first)</option>
+            </select>
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">CI Provider</label>
+            <input id="mqCIProvider" type="text" placeholder="github-actions" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+    </div>
+    <div style="margin-top:12px;">
+        <label style="display:block; font-weight:600; margin-bottom:4px;">Core Contributors (one per line)</label>
+        <textarea id="mqCoreContributors" rows="4" placeholder="username1&#10;username2" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
+    </div>
+</div>
+
+<!-- Spam Detection Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <h2>Spam Detection</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Enabled</label>
+            <select id="spamEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <option value="false">Disabled</option>
+                <option value="true">Enabled</option>
+            </select>
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Time Window</label>
+            <input id="spamTimeWindow" type="text" value="1h" placeholder="1h, 30m, etc." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Threshold</label>
+            <input id="spamThreshold" type="number" min="1" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Trigger on Author</label>
+            <select id="spamAuthor" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+            </select>
+        </div>
+    </div>
+    <div style="margin-top:12px;">
+        <label style="display:block; font-weight:600; margin-bottom:4px;">Title Keywords (one per line)</label>
+        <textarea id="spamKeywords" rows="3" placeholder="spam&#10;test-spam" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
+    </div>
+</div>
+
+<!-- Stale PR Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <h2>Stale PR Management</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Enabled</label>
+            <select id="staleEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <option value="false">Disabled</option>
+                <option value="true">Enabled</option>
+            </select>
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Check Interval</label>
+            <input id="staleInterval" type="text" value="6h" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Days Until Stale</label>
+            <input id="staleDaysStale" type="number" min="1" value="21" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Days Until Close (0 = never)</label>
+            <input id="staleDaysClose" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Stale Label</label>
+            <input id="staleLabel" type="text" value="stale" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Notify on Stale</label>
+            <select id="staleNotify" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+            </select>
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Skip Draft PRs</label>
+            <select id="staleSkipDraft" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+            </select>
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">Remove on Activity</label>
+            <select id="staleRemoveActivity" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+            </select>
+        </div>
+    </div>
+    <div style="margin-top:12px;">
+        <label style="display:block; font-weight:600; margin-bottom:4px;">Exempt Labels (one per line)</label>
+        <textarea id="staleExemptLabels" rows="2" placeholder="long-term&#10;pinned" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
+    </div>
+</div>
+
+<!-- Label Rules -->
+<div class="card" style="margin-bottom:20px;">
+    <h2>Label Rules</h2>
+    <p style="color:#666; font-size:13px; margin-bottom:12px;">Auto-apply labels based on file paths, PR title, or author. Scopes: <code>file:</code> (default), <code>title:</code>, <code>author:</code></p>
+    <table id="labelRulesTable" style="width:100%; margin-bottom:12px;">
+        <thead>
+            <tr>
+                <th>Pattern</th>
+                <th>Label</th>
+                <th>Color</th>
+                <th>Description</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody id="labelRulesBody">
+        </tbody>
+    </table>
+    <button class="btn btn-secondary btn-sm" onclick="addLabelRule()">+ Add Rule</button>
+</div>
+
+<!-- Config History -->
+<div class="card" style="margin-bottom:20px;">
+    <h2>Configuration History</h2>
+    <div id="configHistoryLoading" style="color:#999;">Loading...</div>
+    <table id="configHistoryTable" style="width:100%; display:none;">
+        <thead>
+            <tr>
+                <th>Version</th>
+                <th>Timestamp</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="configHistoryBody">
+        </tbody>
+    </table>
+    <div id="configHistoryEmpty" style="color:#999; display:none;">No history available</div>
+</div>
+
+<div style="margin-top:20px;">
+    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+    <button class="btn btn-secondary" onclick="loadSettings()" style="margin-left:10px;">Refresh</button>
+    <span id="saveStatus" style="margin-left:15px; font-size:13px;"></span>
+</div>
+</div>
+{{template "scripts"}}
+<script>
+    let currentConfig = {};
+
+    function loadSettings() {
+        apiRequest('/api/v1/config')
+            .then(r => r.json())
+            .then(c => {
+                currentConfig = c;
+                // Merge Queue
+                const mq = c.merge_queue || {};
+                document.getElementById('mqRequiredApprovals').value = mq.required_approvals || 1;
+                document.getElementById('mqCICheck').value = (mq.ci_check_required !== false) ? 'true' : 'false';
+                document.getElementById('mqFastForward').value = mq.fast_forward_only ? 'true' : 'false';
+                document.getElementById('mqCIProvider').value = mq.ci_provider || '';
+                document.getElementById('mqCoreContributors').value = (mq.core_contributors || []).join('\n');
+
+                // Spam
+                const spam = c.spam || {};
+                document.getElementById('spamEnabled').value = spam.enabled ? 'true' : 'false';
+                document.getElementById('spamTimeWindow').value = spam.time_window || '1h';
+                document.getElementById('spamThreshold').value = spam.threshold || 5;
+                document.getElementById('spamAuthor').value = spam.trigger_on_author ? 'true' : 'false';
+                document.getElementById('spamKeywords').value = (spam.trigger_on_title_kw || []).join('\n');
+
+                // Stale
+                const stale = c.stale || {};
+                document.getElementById('staleEnabled').value = stale.enabled ? 'true' : 'false';
+                document.getElementById('staleInterval').value = stale.check_interval || '6h';
+                document.getElementById('staleDaysStale').value = stale.days_until_stale || 21;
+                document.getElementById('staleDaysClose').value = stale.days_until_close || 0;
+                document.getElementById('staleLabel').value = stale.stale_label || 'stale';
+                document.getElementById('staleNotify').value = stale.notify_on_stale !== false ? 'true' : 'false';
+                document.getElementById('staleSkipDraft').value = stale.skip_draft_prs !== false ? 'true' : 'false';
+                document.getElementById('staleRemoveActivity').value = stale.remove_stale_on_activity !== false ? 'true' : 'false';
+                document.getElementById('staleExemptLabels').value = (stale.exempt_labels || ['long-term']).join('\n');
+
+                // Label Rules
+                renderLabelRules(c.label_rules || []);
+            })
+            .catch(e => showError('Failed to load config: ' + e.message));
+
+        loadConfigHistory();
+    }
+
+    function loadConfigHistory() {
+        apiRequest('/api/v1/config/history')
+            .then(r => r.json())
+            .then(entries => {
+                document.getElementById('configHistoryLoading').style.display = 'none';
+                const tbody = document.getElementById('configHistoryBody');
+                tbody.innerHTML = '';
+                if (entries.length === 0) {
+                    document.getElementById('configHistoryEmpty').style.display = 'block';
+                    document.getElementById('configHistoryTable').style.display = 'none';
+                    return;
+                }
+                document.getElementById('configHistoryEmpty').style.display = 'none';
+                document.getElementById('configHistoryTable').style.display = 'table';
+                entries.forEach(e => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td>#' + e.version + '</td>'
+                        + '<td>' + (e.timestamp || '-') + '</td>'
+                        + '<td><button class="btn btn-sm btn-secondary" onclick="rollbackConfig(' + e.version + ')">Rollback</button></td>';
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(() => {
+                document.getElementById('configHistoryLoading').textContent = 'Failed to load history';
+            });
+    }
+
+    function renderLabelRules(rules) {
+        const tbody = document.getElementById('labelRulesBody');
+        tbody.innerHTML = '';
+        rules.forEach((r, i) => addLabelRuleRow(r.pattern || '', r.label || '', r.color || '', r.description || ''));
+    }
+
+    function addLabelRule() { addLabelRuleRow('', '', '', ''); }
+
+    function addLabelRuleRow(pattern, label, color, description) {
+        const tbody = document.getElementById('labelRulesBody');
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td><input type="text" value="' + escapeHtml(pattern) + '" placeholder="**/*.go" class="lr-pattern" style="width:100%;padding:4px;border:1px solid #ddd;border-radius:3px;"></td>'
+            + '<td><input type="text" value="' + escapeHtml(label) + '" placeholder="go" class="lr-label" style="width:100%;padding:4px;border:1px solid #ddd;border-radius:3px;"></td>'
+            + '<td><input type="text" value="' + escapeHtml(color) + '" placeholder="00ADD8" class="lr-color" style="width:100%;padding:4px;border:1px solid #ddd;border-radius:3px;"></td>'
+            + '<td><input type="text" value="' + escapeHtml(description) + '" placeholder="Go source files" class="lr-desc" style="width:100%;padding:4px;border:1px solid #ddd;border-radius:3px;"></td>'
+            + '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+        tbody.appendChild(tr);
+    }
+
+    function collectLabelRules() {
+        const rows = document.querySelectorAll('#labelRulesBody tr');
+        const rules = [];
+        rows.forEach(row => {
+            const pattern = row.querySelector('.lr-pattern').value.trim();
+            const label = row.querySelector('.lr-label').value.trim();
+            if (pattern && label) {
+                rules.push({
+                    pattern: pattern,
+                    label: label,
+                    color: row.querySelector('.lr-color').value.trim(),
+                    description: row.querySelector('.lr-desc').value.trim(),
+                });
+            }
+        });
+        return rules;
+    }
+
+    function collectTOML() {
+        const lines = [];
+
+        // Merge Queue
+        lines.push('[merge_queue]');
+        lines.push('required_approvals = ' + parseInt(document.getElementById('mqRequiredApprovals').value || 1));
+        lines.push('ci_check_required = ' + (document.getElementById('mqCICheck').value === 'true' ? 'true' : 'false'));
+        lines.push('fast_forward_only = ' + (document.getElementById('mqFastForward').value === 'true' ? 'true' : 'false'));
+        const ciProvider = document.getElementById('mqCIProvider').value.trim();
+        if (ciProvider) lines.push('ci_provider = "' + ciProvider + '"');
+        const ccLines = document.getElementById('mqCoreContributors').value.split('\n').map(s => s.trim()).filter(Boolean);
+        if (ccLines.length > 0) lines.push('core_contributors = ["' + ccLines.join('", "') + '"]');
+        lines.push('');
+
+        // Spam
+        lines.push('[spam]');
+        lines.push('enabled = ' + (document.getElementById('spamEnabled').value === 'true' ? 'true' : 'false'));
+        lines.push('time_window = "' + document.getElementById('spamTimeWindow').value.trim() + '"');
+        lines.push('threshold = ' + parseInt(document.getElementById('spamThreshold').value || 5));
+        lines.push('trigger_on_author = ' + (document.getElementById('spamAuthor').value === 'true' ? 'true' : 'false'));
+        const kwLines = document.getElementById('spamKeywords').value.split('\n').map(s => s.trim()).filter(Boolean);
+        if (kwLines.length > 0) lines.push('trigger_on_title_kw = ["' + kwLines.join('", "') + '"]');
+        lines.push('');
+
+        // Stale
+        lines.push('[stale]');
+        lines.push('enabled = ' + (document.getElementById('staleEnabled').value === 'true' ? 'true' : 'false'));
+        lines.push('check_interval = "' + document.getElementById('staleInterval').value.trim() + '"');
+        lines.push('days_until_stale = ' + parseInt(document.getElementById('staleDaysStale').value || 21));
+        lines.push('days_until_close = ' + parseInt(document.getElementById('staleDaysClose').value || 0));
+        lines.push('stale_label = "' + document.getElementById('staleLabel').value.trim() + '"');
+        lines.push('notify_on_stale = ' + (document.getElementById('staleNotify').value === 'true' ? 'true' : 'false'));
+        lines.push('skip_draft_prs = ' + (document.getElementById('staleSkipDraft').value === 'true' ? 'true' : 'false'));
+        lines.push('remove_stale_on_activity = ' + (document.getElementById('staleRemoveActivity').value === 'true' ? 'true' : 'false'));
+        const exemptLines = document.getElementById('staleExemptLabels').value.split('\n').map(s => s.trim()).filter(Boolean);
+        if (exemptLines.length > 0) lines.push('exempt_labels = ["' + exemptLines.join('", "') + '"]');
+        lines.push('');
+
+        // Label Rules
+        const rules = collectLabelRules();
+        rules.forEach(r => {
+            lines.push('[[label_rules]]');
+            lines.push('pattern = "' + r.pattern + '"');
+            lines.push('label = "' + r.label + '"');
+            if (r.color) lines.push('color = "' + r.color + '"');
+            if (r.description) lines.push('description = "' + r.description + '"');
+            lines.push('');
+        });
+
+        return lines.join('\n');
+    }
+
+    function saveSettings() {
+        const toml = collectTOML();
+        document.getElementById('saveStatus').textContent = 'Saving...';
+        apiRequest('/api/v1/config', {
+            method: 'PUT',
+            body: JSON.stringify({toml: toml})
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) {
+                showError(d.error);
+                document.getElementById('saveStatus').textContent = '';
+            } else {
+                showSuccess('Settings saved successfully');
+                document.getElementById('saveStatus').textContent = 'Saved ✓';
+                setTimeout(() => { document.getElementById('saveStatus').textContent = ''; }, 3000);
+                loadSettings();
+            }
+        })
+        .catch(e => {
+            showError('Save failed: ' + e.message);
+            document.getElementById('saveStatus').textContent = '';
+        });
+    }
+
+    function rollbackConfig(version) {
+        if (!confirm('Rollback to config version #' + version + '? Current settings will be saved as a new version first.')) return;
+        apiRequest('/api/v1/config/rollback', {
+            method: 'POST',
+            body: JSON.stringify({version: version})
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.error) { showError(d.error); }
+            else { showSuccess('Rolled back to version #' + version); loadSettings(); }
+        })
+        .catch(e => showError('Rollback failed: ' + e.message));
+    }
+
+    function showError(m) { const e = document.getElementById('errorMsg'); e.textContent = m; e.style.display = 'block'; setTimeout(() => e.style.display = 'none', 5000); }
+    function showSuccess(m) { const e = document.getElementById('successMsg'); e.textContent = m; e.style.display = 'block'; setTimeout(() => e.style.display = 'none', 5000); }
+
+    loadSettings();
+</script>
+{{template "client_auth"}}
+{{template "pwa_sw"}}
+</body>
+</html>

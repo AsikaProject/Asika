@@ -514,3 +514,12 @@ func (c *GitLabClient) GetDiffFiles(ctx context.Context, owner, repo string, num
 	}
 	return result, nil
 }
+
+// RequestReview requests reviewers for a PR on GitLab using a discussion note.
+func (c *GitLabClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
+	note := fmt.Sprintf("🔍 Review requested from: %s", strings.Join(reviewers, ", "))
+	_, _, err := c.client.Notes.CreateMergeRequestNote(owner+"/"+repo, int64(number), &gitlab.CreateMergeRequestNoteOptions{
+		Body: &note,
+	})
+	return err
+}

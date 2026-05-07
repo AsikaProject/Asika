@@ -15,11 +15,16 @@ import (
 
 	"asika/common/config"
 	"asika/common/db"
+	"asika/common/i18n"
 	"asika/common/models"
 	"asika/common/platforms"
 	"asika/daemon/handlers"
 	"asika/daemon/templates"
 )
+
+func tFunc(key string, args ...interface{}) string {
+	return i18n.T(key, args...)
+}
 
 // Server represents the HTTP server
 type Server struct {
@@ -37,8 +42,8 @@ func NewServer(cfg *models.Config, clients map[platforms.PlatformType]platforms.
 
 	engine := gin.New()
 
-	// Load HTML templates from embedded FS
-	t, err := template.ParseFS(templates.FS, "*.html")
+	// Load HTML templates from embedded FS with i18n function
+	t, err := template.New("").Funcs(template.FuncMap{"t": tFunc}).ParseFS(templates.FS, "*.html")
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse templates: %v", err))
 	}
@@ -97,6 +102,7 @@ func initCheckMiddleware() gin.HandlerFunc {
 // setupMiddleware configures middleware
 func (s *Server) setupMiddleware() {
 	s.engine.Use(initCheckMiddleware())
+	s.engine.Use(LocaleMiddleware())
 	s.engine.Use(Logger())
 	s.engine.Use(gin.Recovery())
 	s.engine.Use(metricsMiddleware())
@@ -137,6 +143,9 @@ func (s *Server) setupRoutes() {
 		auth.POST("/login", handlers.Login)
 		auth.POST("/logout", handlers.Logout)
 	}
+
+	// i18n locale switcher (no auth required, cookie-based)
+	api.POST("/locale", handlers.SetLocale)
 
 	// Wizard routes (10. WebUI Wizard)
 	wizard := api.Group("/wizard")
@@ -202,6 +211,8 @@ func (s *Server) setupRoutes() {
 		{
 			cfgGroup.GET("", handlers.GetConfig)
 			cfgGroup.PUT("", handlers.UpdateConfig)
+			cfgGroup.GET("/history", handlers.GetConfigHistory)
+			cfgGroup.POST("/rollback", handlers.RollbackConfig)
 		}
 
 		// Stats / DORA metrics
@@ -220,6 +231,15 @@ func (s *Server) setupRoutes() {
 		test.Use(RequireRole("admin"))
 		{
 			test.POST("/notify", handlers.TestNotify)
+		}
+
+		// Admin operations (backup/restore)
+		admin := protected.Group("/admin")
+		admin.Use(RequireRole("admin"))
+		{
+			admin.POST("/backup", handlers.CreateBackup)
+			admin.GET("/backups", handlers.ListBackups)
+			admin.POST("/restore", handlers.RestoreBackup)
 		}
 
 		// Self-update (admin only)
@@ -309,7 +329,19 @@ func (s *Server) setupRoutes() {
 				"username": user,
 			})
 		})
+
+		ssr.GET("/settings", func(c *gin.Context) {
+			user := c.GetString("username")
+			c.HTML(http.StatusOK, "settings.html", gin.H{
+				"title":    "Settings - Asika",
+				"username": user,
+			})
+		})
 	}
+
+	// PWA assets (no auth)
+	s.engine.GET("/manifest.json", manifestHandler)
+	s.engine.GET("/sw.js", serviceWorkerHandler)
 
 	// Webhook routes (no auth)
 	s.engine.POST("/webhook/:repo_group/:platform", handlers.WebhookHandler)
@@ -359,6 +391,81 @@ func (s *Server) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return s.httpSrv.Shutdown(ctx)
+}
+
+func manifestHandler(c *gin.Context) {
+	c.Header("Content-Type", "application/json")
+	c.JSON(http.StatusOK, gin.H{
+		"name":             "Asika",
+		"short_name":       "Asika",
+		"description":      "Asika PR Manager — Git collaboration control center",
+		"start_url":        "/dashboard",
+		"display":          "standalone",
+		"background_color": "#f5f5f5",
+		"theme_color":      "#0066cc",
+		"orientation":      "any",
+		"icons": []gin.H{
+			{
+				"src":   "/static/icon-192.png",
+				"sizes": "192x192",
+				"type":  "image/png",
+			},
+			{
+				"src":   "/static/icon-512.png",
+				"sizes": "512x512",
+				"type":  "image/png",
+			},
+		},
+	})
+}
+
+func serviceWorkerHandler(c *gin.Context) {
+	c.Header("Content-Type", "application/javascript")
+	c.Header("Cache-Control", "no-cache")
+	const sw = `
+const CACHE_NAME = 'asika-v1';
+const urlsToCache = [
+  '/',
+  '/login',
+  '/dashboard'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', event => {
+  // Only cache GET requests to same-origin pages
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) return;
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      const fetchPromise = fetch(event.request).then(response => {
+        if (response && response.status === 200 && response.type === 'basic') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => cached);
+      return cached || fetchPromise;
+    })
+  );
+});
+`
+	c.String(http.StatusOK, sw)
 }
 
 func healthHandler(c *gin.Context) {

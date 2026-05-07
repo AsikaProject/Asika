@@ -93,6 +93,10 @@ func createNotifierFromNotifyConfig(nc models.NotifyConfig) notifier.Notifier {
 		if n := notifier.NewSlackBotNotifier(nc.Config); n != nil {
 			return n
 		}
+	case "webhook":
+		if n := notifier.NewWebhookNotifier(nc.Config); n != nil {
+			return n
+		}
 	}
 	return nil
 }

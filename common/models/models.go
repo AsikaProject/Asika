@@ -117,12 +117,28 @@ type MergeQueueConfig struct {
     FastForwardOnly   bool     `json:"fast_forward_only" toml:"fast_forward_only"` // if true, auto-rebase before merge
 }
 
-// LabelRule represents a label rule
+// LabelCondition represents a single condition within a compound rule.
+type LabelCondition struct {
+	Pattern string `json:"pattern" toml:"pattern"`
+}
+
+// LabelRule represents a label rule.
+// For simple rules, use Pattern + Label.
+// For compound rules, use Conditions + Logic + Label.
 type LabelRule struct {
-    Pattern     string `json:"pattern" toml:"pattern"`
-    Label       string `json:"label" toml:"label"`
-    Color       string `json:"color" toml:"color"`
-    Description string `json:"description" toml:"description"`
+	Pattern     string           `json:"pattern,omitempty" toml:"pattern"`
+	Label       string           `json:"label" toml:"label"`
+	Color       string           `json:"color,omitempty" toml:"color"`
+	Description string           `json:"description,omitempty" toml:"description"`
+	Conditions  []LabelCondition `json:"conditions,omitempty" toml:"conditions"`
+	Logic       string           `json:"logic,omitempty" toml:"logic"` // "and" or "or", default "and"
+}
+
+// ReviewRule represents an automatic reviewer assignment rule.
+// Pattern matches against file paths (default), title (title:), or author (author:).
+type ReviewRule struct {
+	Pattern    string   `json:"pattern" toml:"pattern"`
+	Reviewers  []string `json:"reviewers" toml:"reviewers"`
 }
 
 // SpamConfig represents spam detection configuration
@@ -248,6 +264,7 @@ type Config struct {
 	Git         GitConfig         `toml:"git" json:"git"`
 	Tokens      TokensConfig      `toml:"tokens" json:"tokens"`
 	LabelRules  []LabelRule       `toml:"label_rules" json:"label_rules"`
+	ReviewRules []ReviewRule      `toml:"review_rules" json:"review_rules"`
 	Spam        SpamConfig        `toml:"spam" json:"spam"`
 	MergeQueue  MergeQueueConfig  `toml:"merge_queue" json:"merge_queue"`
 	HookPath    string            `toml:"hookpath" json:"hookpath"`
@@ -263,6 +280,13 @@ type Config struct {
 	Slack         SlackConfig      `toml:"slack" json:"slack"`
 	Updates       UpdatesConfig    `toml:"updates" json:"updates"`
 	Stale         StaleConfig      `toml:"stale" json:"stale"`
+	Reports       ScheduleConfig   `toml:"reports" json:"reports"`
+}
+
+// ScheduleConfig defines scheduled report configuration.
+type ScheduleConfig struct {
+	Enabled  bool   `toml:"enabled" json:"enabled"`
+	Cron     string `toml:"cron" json:"cron"`
 }
 
 // TelegramConfig represents Telegram bot configuration

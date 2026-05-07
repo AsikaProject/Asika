@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/gin-gonic/gin"
@@ -71,6 +72,11 @@ func UpdateConfig(c *gin.Context) {
 		return
 	}
 
+	// Save snapshot before applying changes
+	if err := config.SaveConfigSnapshot(); err != nil {
+		slog.Warn("failed to save config snapshot", "error", err)
+	}
+
 	// Merge: parse existing, apply patch, re-marshal
 	var existing map[string]interface{}
 	if err := toml.Unmarshal(data, &existing); err != nil {
@@ -95,6 +101,9 @@ func UpdateConfig(c *gin.Context) {
 				existingMQ["core_contributors"] = cc
 			}
 		}
+	}
+	if reviewRules, ok := patch["review_rules"]; ok {
+		existing["review_rules"] = reviewRules
 	}
 	if hookpath, ok := patch["hookpath"]; ok {
 		hp, ok := hookpath.(string)
@@ -155,4 +164,55 @@ func TestNotify(c *gin.Context) {
 	slog.Info("test notification triggered")
 
 	c.JSON(http.StatusOK, gin.H{"message": "test notification sent"})
+}
+
+// GetConfigHistory handles GET /api/v1/config/history
+func GetConfigHistory(c *gin.Context) {
+	limit := 20
+	snapshots, err := config.ListConfigVersions(limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list config history", "detail": err.Error()})
+		return
+	}
+	type historyEntry struct {
+		Version   int                      `json:"version"`
+		Timestamp time.Time                `json:"timestamp"`
+		Config    *models.Config           `json:"config"`
+	}
+	entries := make([]historyEntry, 0, len(snapshots))
+	for _, s := range snapshots {
+		cfg := *s.Config
+		cfg.Tokens = models.TokensConfig{
+			GitHub: maskToken(s.Config.Tokens.GitHub),
+			GitLab: maskToken(s.Config.Tokens.GitLab),
+			Gitea:  maskToken(s.Config.Tokens.Gitea),
+		}
+		cfg.Auth.JWTSecret = maskSecret(s.Config.Auth.JWTSecret)
+		entries = append(entries, historyEntry{
+			Version:   s.Version,
+			Timestamp: s.Timestamp,
+			Config:    &cfg,
+		})
+	}
+	c.JSON(http.StatusOK, entries)
+}
+
+// RollbackConfig handles POST /api/v1/config/rollback
+func RollbackConfig(c *gin.Context) {
+	var req struct {
+		Version int `json:"version"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request, need {version: N}"})
+		return
+	}
+	if req.Version <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "version must be positive"})
+		return
+	}
+	if err := config.RollbackConfig(req.Version); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "config rolled back", "version": req.Version})
 }

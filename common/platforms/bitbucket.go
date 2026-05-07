@@ -1,6 +1,7 @@
 package platforms
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -486,4 +487,20 @@ func (c *BitbucketClient) GetPRBranchInfo(ctx context.Context, owner, repo strin
 		info.BaseBranch = pr.Destination.Branch.Name
 	}
 	return info, nil
+}
+
+// RequestReview adds a reviewer to a Bitbucket PR.
+func (c *BitbucketClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
+	for _, reviewer := range reviewers {
+		payload := map[string]interface{}{
+			"uuid": reviewer,
+		}
+		body, _ := json.Marshal(payload)
+		path := fmt.Sprintf("/2.0/repositories/%s/%s/pullrequests/%d/request-changes", owner, repo, number)
+		_, err := c.doRequest(ctx, http.MethodPost, path, bytes.NewReader(body))
+		if err != nil {
+			return fmt.Errorf("failed to request review from %s: %w", reviewer, err)
+		}
+	}
+	return nil
 }

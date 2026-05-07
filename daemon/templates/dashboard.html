@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{template "pwa"}}
     {{template "styles"}}
     <title>{{.title}}</title>
 </head>
@@ -173,6 +174,7 @@
     }
     loadDashboard();
 </script>
+{{template "pwa_sw"}}
 {{template "client_auth"}}
 </body>
 </html>

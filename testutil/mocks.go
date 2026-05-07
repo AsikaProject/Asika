@@ -135,6 +135,10 @@ func (m *MockPlatformClient) GetDiffFiles(ctx context.Context, owner, repo strin
     return m.DiffFiles, m.Err
 }
 
+func (m *MockPlatformClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
+	return m.Err
+}
+
 func (m *MockPlatformClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
     if m.Err != nil {
         return nil, m.Err

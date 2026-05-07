@@ -88,8 +88,8 @@ func (l *Labeler) ApplyRules(pr *models.PRRecord, repoGroup string, files []stri
 
 	ctx := context.Background()
 	for _, rule := range rules {
-		if matchRule(rule.Pattern, files, pr.Title, pr.Author) {
-			slog.Info("adding label", "label", rule.Label, "pr", pr.PRNumber, "pattern", rule.Pattern)
+		if matchCompoundRule(rule, files, pr.Title, pr.Author) {
+			slog.Info("adding label", "label", rule.Label, "pr", pr.PRNumber)
 			color := rule.Color
 			if color == "" {
 				color = "ededed"
@@ -101,7 +101,42 @@ func (l *Labeler) ApplyRules(pr *models.PRRecord, repoGroup string, files []stri
 	}
 }
 
-func matchRule(pattern string, files []string, title, author string) bool {
+// matchCompoundRule evaluates a label rule against PR data.
+// Supports both simple (single pattern) and compound (conditions + logic) rules.
+func matchCompoundRule(rule models.LabelRule, files []string, title, author string) bool {
+	// Compound rule with conditions
+	if len(rule.Conditions) > 0 {
+		results := make([]bool, len(rule.Conditions))
+		for i, cond := range rule.Conditions {
+			results[i] = MatchRule(cond.Pattern, files, title, author)
+		}
+		logic := strings.ToLower(rule.Logic)
+		if logic == "or" {
+			for _, r := range results {
+				if r {
+					return true
+				}
+			}
+			return false
+		}
+		// Default: AND
+		for _, r := range results {
+			if !r {
+				return false
+			}
+		}
+		return true
+	}
+	// Simple rule with single pattern
+	if rule.Pattern != "" {
+		return MatchRule(rule.Pattern, files, title, author)
+	}
+	return false
+}
+
+// MatchRule checks if a pattern matches against files, title, or author.
+// Supports scope prefixes: file: (default), title:, author:
+func MatchRule(pattern string, files []string, title, author string) bool {
 	scope := "file"
 	pat := pattern
 

@@ -13,10 +13,11 @@ import (
     "asika/common/events"
     "asika/common/models"
     "asika/common/platforms"
-    "asika/daemon/labeler"
-    "asika/daemon/queue"
-    "asika/daemon/stale"
-    "asika/daemon/syncer"
+	"asika/daemon/labeler"
+	"asika/daemon/queue"
+	"asika/daemon/reviewer"
+	"asika/daemon/stale"
+	"asika/daemon/syncer"
 )
 
 // Consumer consumes events and processes them
@@ -24,6 +25,7 @@ type Consumer struct {
 	cfg          *models.Config
 	clients      map[platforms.PlatformType]platforms.PlatformClient
 	labeler      *labeler.Labeler
+	reviewer     *reviewer.Reviewer
 	syncer       *syncer.Syncer
 	spamDetector *syncer.SpamDetector
 	queue        *queue.Manager
@@ -41,6 +43,7 @@ func NewConsumer() *Consumer {
 // NewConsumerWithClients creates a fully wired event consumer
 func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformType]platforms.PlatformClient) *Consumer {
 	l := labeler.NewLabeler(clients)
+	r := reviewer.NewReviewer(clients)
 	s := syncer.NewSyncer(cfg, clients)
 	sd := syncer.NewSpamDetectorWithClients(cfg, clients)
 	q := queue.NewManager(cfg, clients)
@@ -48,6 +51,7 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 		cfg:          cfg,
 		clients:      clients,
 		labeler:      l,
+		reviewer:     r,
 		syncer:       s,
 		spamDetector: sd,
 		queue:        q,
@@ -131,7 +135,12 @@ func (c *Consumer) handlePROpened(event events.Event) {
 		c.labeler.HandlePROpened(pr, event.RepoGroup)
 	}
 
-	// 3. Check for stale activity (remove stale label on new activity)
+	// 3. Trigger reviewer assignment
+	if c.reviewer != nil {
+		c.reviewer.HandlePROpened(pr, event.RepoGroup)
+	}
+
+	// 4. Check for stale activity (remove stale label on new activity)
 	if c.staleMgr != nil {
 		c.staleMgr.HandleActivity(pr, event.RepoGroup)
 	}

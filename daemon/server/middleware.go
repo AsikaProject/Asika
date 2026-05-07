@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"asika/common/auth"
 	"asika/common/db"
+	"asika/common/i18n"
 	"asika/common/models"
 )
 
@@ -80,6 +81,23 @@ func AuthMiddleware() gin.HandlerFunc {
 
         c.Next()
     }
+}
+
+// LocaleMiddleware detects the user's preferred locale from Accept-Language header
+// or cookie and sets the i18n locale for the request.
+func LocaleMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Check cookie first (user preference override)
+		if lang, err := c.Cookie("asika_lang"); err == nil && lang != "" {
+			i18n.SetLocale(lang)
+			c.Next()
+			return
+		}
+		// Fall back to Accept-Language header
+		locale := i18n.ParseAcceptLanguage(c.GetHeader("Accept-Language"))
+		i18n.SetLocale(locale)
+		c.Next()
+	}
 }
 
 // RequireAuth requires authentication

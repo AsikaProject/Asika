@@ -420,3 +420,11 @@ func (c *GitHubClient) GetDiffFiles(ctx context.Context, owner, repo string, num
 	}
 	return files, nil
 }
+
+// RequestReview requests reviewers for a PR on GitHub.
+func (c *GitHubClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
+	_, _, err := c.client.PullRequests.RequestReviewers(ctx, owner, repo, number, github.ReviewersRequest{
+		Reviewers: reviewers,
+	})
+	return err
+}

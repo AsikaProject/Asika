@@ -320,7 +320,7 @@ func TestMatchRule_TitleScope(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := matchRule(tt.pattern, tt.files, tt.title, tt.author)
+			got := MatchRule(tt.pattern, tt.files, tt.title, tt.author)
 			if got != tt.want {
 				t.Errorf("matchRule(%q, %v, %q, %q) = %v, want %v",
 					tt.pattern, tt.files, tt.title, tt.author, got, tt.want)

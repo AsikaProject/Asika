@@ -1,12 +1,14 @@
 package handlers
 
 import (
-    "encoding/json"
-    "net/http"
-    "strings"
+	"encoding/json"
+	"net/http"
+	"strings"
 
-    "github.com/gin-gonic/gin"
-    "golang.org/x/crypto/bcrypt"
+	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
+
+	"asika/common/i18n"
 
     "asika/common/auth"
     "asika/common/config"
@@ -180,4 +182,19 @@ func DeleteUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "user deleted"})
+}
+
+// SetLocale handles POST /api/v1/locale
+// Sets the UI locale via cookie.
+func SetLocale(c *gin.Context) {
+	var req struct {
+		Locale string `json:"locale"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Locale == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "locale required"})
+		return
+	}
+	i18n.SetLocale(req.Locale)
+	c.SetCookie("asika_lang", req.Locale, 86400*365, "/", "", false, true)
+	c.JSON(http.StatusOK, gin.H{"message": "locale set", "locale": req.Locale})
 }

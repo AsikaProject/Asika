@@ -498,5 +498,14 @@ func NewForgejoClient(baseURL, token string, webhookSecret string) *GiteaClient 
 // Uses https://codeberg.org as the default base URL.
 // Note: Codeberg client is created via NewForgejoClient in bootstrap to allow URL override.
 func NewCodebergClient(token string, webhookSecret string) *GiteaClient {
-	return NewForgejoClient("https://codeberg.org", token, webhookSecret)
+ 	return NewForgejoClient("https://codeberg.org", token, webhookSecret)
+ }
+
+// RequestReview requests reviewers for a PR on Gitea/Forgejo via a comment note.
+func (c *GiteaClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
+	note := fmt.Sprintf("Review requested from: %s", strings.Join(reviewers, ", "))
+	_, _, err := c.client.CreateIssueComment(owner, repo, int64(number), gitea.CreateIssueCommentOption{
+		Body: note,
+	})
+	return err
 }

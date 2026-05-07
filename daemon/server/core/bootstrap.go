@@ -15,6 +15,7 @@ import (
 	"asika/daemon/platform"
 	"asika/daemon/polling"
 	"asika/daemon/queue"
+	"asika/daemon/reports"
 	"asika/daemon/server"
 	"asika/daemon/syncer"
 )
@@ -131,6 +132,12 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	ic.SlackBot = StartSlack(cfg, clients, ic.QueueMgr, nil, ic.SpamDetector)
 
 	startUpdateCheck(cfg)
+
+	if cfg.Reports.Enabled {
+		reportScheduler := reports.NewScheduler(cfg.Reports)
+		reportScheduler.Start()
+		slog.Info("scheduled reports enabled", "cron", cfg.Reports.Cron)
+	}
 
 	srv := server.NewServer(cfg, clients)
 	ic.Server = srv

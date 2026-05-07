@@ -54,6 +54,13 @@ func Close() error {
     return nil
 }
 
+// BackupToFile creates a hot online backup of the bbolt database to the given path.
+func BackupToFile(dest string) error {
+    return DB.View(func(tx *bbolt.Tx) error {
+        return tx.CopyFile(dest, 0600)
+    })
+}
+
 // Ping checks if the database is accessible
 func Ping() error {
     if DB == nil {
@@ -289,6 +296,52 @@ func GetDueWebhookRetries(now time.Time) ([]*models.WebhookRetry, error) {
         return nil
     })
     return due, err
+}
+
+// PutConfigSnapshot stores a config snapshot with a version timestamp key.
+func PutConfigSnapshot(version int, data []byte) error {
+    key := fmt.Sprintf("%06d", version)
+    return Put(BucketConfigHistory, key, data)
+}
+
+// GetConfigSnapshot retrieves a config snapshot by version number.
+func GetConfigSnapshot(version int) ([]byte, error) {
+    key := fmt.Sprintf("%06d", version)
+    return Get(BucketConfigHistory, key)
+}
+
+// ListConfigSnapshots returns all stored config snapshots (latest first).
+// Returns slice of [version, data] pairs.
+func ListConfigSnapshots(limit int) ([]struct {
+    Version int
+    Data    []byte
+}, error) {
+    var results []struct {
+        Version int
+        Data    []byte
+    }
+    err := DB.View(func(tx *bbolt.Tx) error {
+        b := tx.Bucket([]byte(BucketConfigHistory))
+        if b == nil {
+            return nil
+        }
+        c := b.Cursor()
+        for k, v := c.Last(); k != nil; k, v = c.Prev() {
+            if limit > 0 && len(results) >= limit {
+                break
+            }
+            var ver int
+            fmt.Sscanf(string(k), "%d", &ver)
+            val := make([]byte, len(v))
+            copy(val, v)
+            results = append(results, struct {
+                Version int
+                Data    []byte
+            }{ver, val})
+        }
+        return nil
+    })
+    return results, err
 }
 
 // AppendAuditLog adds an audit log entry to the database

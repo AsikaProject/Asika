@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{template "pwa"}}
     {{template "styles"}}
     <title>Queue - Asika</title>
 </head>
@@ -119,5 +120,6 @@
     loadRepoGroups().then(() => loadQueue());
 </script>
 {{template "client_auth"}}
+{{template "pwa_sw"}}
 </body>
 </html>

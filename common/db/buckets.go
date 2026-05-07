@@ -12,4 +12,5 @@ const (
     BucketPRIndexByID  = "pr_index_by_id"
     BucketPRIndexByRG  = "pr_index_by_rg_num"
     BucketWebhookRetries = "webhook_retries"
+    BucketConfigHistory  = "config_history"
 )

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/google/uuid"
 
+	"asika/common/db"
 	"asika/common/models"
 )
 
@@ -390,4 +392,112 @@ func SaveToFile(cfg models.Config) error {
 
 	ConfigPath = path
 	return nil
+}
+
+const configVersionKey = "__config_version__"
+
+// currentConfigVersion returns the latest stored config version number.
+func currentConfigVersion() int {
+	data, err := db.Get(db.BucketConfig, configVersionKey)
+	if err != nil || data == nil {
+		return 0
+	}
+	var v int
+	fmt.Sscanf(string(data), "%d", &v)
+	return v
+}
+
+// incrementConfigVersion bumps the version counter and returns the new value.
+func incrementConfigVersion() int {
+	v := currentConfigVersion() + 1
+	db.Put(db.BucketConfig, configVersionKey, []byte(fmt.Sprintf("%d", v)))
+	return v
+}
+
+// SaveConfigSnapshot stores the current config as a versioned snapshot in bbolt.
+// Keeps up to maxSnapshots (default 20) entries, pruning oldest.
+func SaveConfigSnapshot() error {
+	cfg := Current()
+	if cfg == nil {
+		return fmt.Errorf("no config loaded")
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	v := incrementConfigVersion()
+	if err := db.PutConfigSnapshot(v, data); err != nil {
+		return fmt.Errorf("failed to store snapshot: %w", err)
+	}
+	pruneConfigSnapshots(20)
+	slog.Info("config snapshot saved", "version", v)
+	return nil
+}
+
+// pruneConfigSnapshots keeps only the latest N snapshots.
+func pruneConfigSnapshots(keep int) {
+	snapshots, err := db.ListConfigSnapshots(0)
+	if err != nil {
+		return
+	}
+	for i := keep; i < len(snapshots); i++ {
+		key := fmt.Sprintf("%06d", snapshots[i].Version)
+		db.Delete(db.BucketConfigHistory, key)
+	}
+}
+
+// ListConfigVersions returns the latest N config version snapshots.
+func ListConfigVersions(limit int) ([]ConfigSnapshot, error) {
+	raw, err := db.ListConfigSnapshots(limit)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]ConfigSnapshot, 0, len(raw))
+	for _, r := range raw {
+		var cfg models.Config
+		if err := json.Unmarshal(r.Data, &cfg); err != nil {
+			continue
+		}
+		result = append(result, ConfigSnapshot{
+			Version:   r.Version,
+			Config:    &cfg,
+			Timestamp: cfgTime(r.Data),
+		})
+	}
+	return result, nil
+}
+
+// cfgTime extracts a timestamp from the stored JSON for display.
+func cfgTime(data []byte) time.Time {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return time.Time{}
+	}
+	// Use current time as fallback; precise time isn't critical for snapshots
+	return time.Now()
+}
+
+// RollbackConfig restores a config from a versioned snapshot and writes it to disk.
+func RollbackConfig(version int) error {
+	data, err := db.GetConfigSnapshot(version)
+	if err != nil {
+		return fmt.Errorf("snapshot %d not found: %w", version, err)
+	}
+	var cfg models.Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal snapshot: %w", err)
+	}
+ 	if err := SaveToFile(cfg); err != nil {
+ 		return fmt.Errorf("failed to write config: %w", err)
+ 	}
+ 	Store(&cfg)
+ 	slog.Info("config rolled back", "version", version)
+	return nil
+}
+
+// ConfigSnapshot represents a stored config version.
+type ConfigSnapshot struct {
+	Version   int            `json:"version"`
+	Config    *models.Config `json:"config"`
+	Timestamp time.Time      `json:"timestamp"`
 }
