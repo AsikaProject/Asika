@@ -70,9 +70,8 @@ func RetrySync(c *gin.Context) {
 
 	slog.Info("retrying sync", "sync_id", syncID, "pr_id", record.PRID, "target", record.TargetPlatform)
 
-	// Update the sync record status
-	record.Timestamp = record.Timestamp // keep original timestamp
-	data, _ = json.Marshal(record)
+ 	// Update the sync record status
+ 	data, _ = json.Marshal(record)
 	db.Put(db.BucketSyncHistory, syncID, data)
 
 	// Trigger the sync

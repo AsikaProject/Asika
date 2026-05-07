@@ -63,10 +63,15 @@ stop() {
 	sudo killall asikad
 }
 
+lint () {
+	go fmt
+	go vet ./...
+}
+
 # Parse command line arguments
 case "${1:-build}" in
 	build)
-		build
+		build && lint
 		;;
 	dep)
 		dep
