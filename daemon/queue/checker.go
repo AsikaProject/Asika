@@ -261,7 +261,7 @@ func (c *Checker) tryAutoRebase(ctx context.Context, pr *models.PRRecord, group 
 		return false
 	}
 
-	cloneURL := config.GetCloneURL(group, platform, owner, repo)
+	cloneURL := config.GetCloneURL(platform, owner, repo)
 	token := config.GetToken(c.cfg, platform)
 	clonePath := c.cfg.Git.RepoClonePath
 

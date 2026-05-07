@@ -143,7 +143,7 @@ func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID
 	prData, _ := json.Marshal(pr)
 	db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 
-	cloneURL := config.GetCloneURL(group, platform, owner, repo)
+	cloneURL := config.GetCloneURL(platform, owner, repo)
 	clonePath := cfg.Git.RepoClonePath
 
 	rebaseErr := gitutil.Rebase("", cloneURL, config.GetToken(cfg, platform), branchInfo.HeadBranch, branchInfo.BaseBranch, clonePath)
@@ -286,7 +286,7 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 		pr.MergeCommitSHA = freshPR.MergeCommitSHA
 	}
 
-	cloneURL := config.GetCloneURL(group, platform, owner, repo)
+	cloneURL := config.GetCloneURL(platform, owner, repo)
 	token := config.GetToken(cfg, platform)
 	clonePath := cfg.Git.RepoClonePath
 

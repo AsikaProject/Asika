@@ -357,7 +357,7 @@ func (m *Manager) tryRebaseBeforeMerge(ctx context.Context, pr *models.PRRecord,
 		return fmt.Errorf("PR author has not enabled 'allow edits from maintainers'")
 	}
 
-	cloneURL := config.GetCloneURL(group, platform, owner, repo)
+	cloneURL := config.GetCloneURL(platform, owner, repo)
 	token := config.GetToken(m.cfg, platform)
 	clonePath := m.cfg.Git.RepoClonePath
 

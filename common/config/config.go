@@ -287,7 +287,7 @@ func GetPlatformForGroup(group *models.RepoGroup) string {
 }
 
 // GetCloneURL builds the HTTPS clone URL for a platform repository.
-func GetCloneURL(group *models.RepoGroup, platform, owner, repo string) string {
+func GetCloneURL(platform, owner, repo string) string {
 	var baseURL string
 	switch platform {
 	case "github":
@@ -310,13 +310,10 @@ func GetCloneURL(group *models.RepoGroup, platform, owner, repo string) string {
 		cfg := Current()
 		if cfg != nil && cfg.ForgejoBaseURL != "" {
 			baseURL = strings.TrimSuffix(cfg.ForgejoBaseURL, "/")
+		} else if cfg != nil && cfg.GiteaBaseURL != "" {
+			baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
 		} else {
-			cfg := Current()
-			if cfg != nil && cfg.GiteaBaseURL != "" {
-				baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
-			} else {
-				baseURL = "https://forgejo.example.com"
-			}
+			baseURL = "https://forgejo.example.com"
 		}
 	case "codeberg":
 		cfg := Current()
