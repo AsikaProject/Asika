@@ -16,7 +16,7 @@ type platformTest struct {
 
 func TestPlatformClientInterface(t *testing.T) {
 	tests := []platformTest{
-		{"GitHubClient", NewGitHubClient("test-token", "test-webhook-secret")},
+		{"GitHubClient", NewGitHubClient("test-token", "test-webhook-secret", "")},
 		{"GitLabClient", NewGitLabClient("test-token", "", "test-webhook-secret")},
 	}
 

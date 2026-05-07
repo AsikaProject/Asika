@@ -20,10 +20,18 @@ type GitHubClient struct {
 	webhookSecret string
 }
 
-// NewGitHubClient creates a new GitHub client
-func NewGitHubClient(token string, webhookSecret string) *GitHubClient {
+// NewGitHubClient creates a new GitHub client. If baseURL is empty, uses github.com.
+// For GitHub Enterprise, pass the base URL (e.g. "https://github.example.com/api/v3").
+func NewGitHubClient(token, webhookSecret, baseURL string) *GitHubClient {
+	httpClient := github.NewTokenClient(context.Background(), token)
+	if baseURL != "" {
+		ec, err := httpClient.WithEnterpriseURLs(baseURL, baseURL)
+		if err == nil {
+			httpClient = ec
+		}
+	}
 	return &GitHubClient{
-		client:        github.NewTokenClient(context.Background(), token),
+		client:        httpClient,
 		token:         token,
 		webhookSecret: webhookSecret,
 	}

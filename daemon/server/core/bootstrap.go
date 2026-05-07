@@ -64,7 +64,7 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 
 	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
 	if cfg.Tokens.GitHub != "" {
-		clients[platforms.PlatformGitHub] = platforms.NewGitHubClient(cfg.Tokens.GitHub, cfg.Events.WebhookSecret)
+		clients[platforms.PlatformGitHub] = platforms.NewGitHubClient(cfg.Tokens.GitHub, cfg.Events.WebhookSecret, cfg.GitHubBaseURL)
 	}
 	if cfg.Tokens.GitLab != "" {
 		clients[platforms.PlatformGitLab] = platforms.NewGitLabClient(cfg.Tokens.GitLab, cfg.GitLabBaseURL, cfg.Events.WebhookSecret)

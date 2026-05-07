@@ -291,7 +291,12 @@ func GetCloneURL(platform, owner, repo string) string {
 	var baseURL string
 	switch platform {
 	case "github":
-		baseURL = "https://github.com"
+		cfg := Current()
+		if cfg != nil && cfg.GitHubBaseURL != "" {
+			baseURL = strings.TrimSuffix(cfg.GitHubBaseURL, "/")
+		} else {
+			baseURL = "https://github.com"
+		}
 	case "gitlab":
 		cfg := Current()
 		if cfg != nil && cfg.GitLabBaseURL != "" {

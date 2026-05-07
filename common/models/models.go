@@ -256,6 +256,7 @@ type Config struct {
 	GitLabBaseURL  string          `toml:"gitlab_base_url" json:"gitlab_base_url"`
 	GiteaBaseURL   string          `toml:"gitea_base_url" json:"gitea_base_url"`
 	ForgejoBaseURL  string          `toml:"forgejo_base_url" json:"forgejo_base_url"`
+	GitHubBaseURL  string          `toml:"github_base_url" json:"github_base_url"`
 	Telegram        TelegramConfig  `toml:"telegram" json:"telegram"`
 	Feishu        FeishuConfig     `toml:"feishu" json:"feishu"`
 	Discord       DiscordConfig    `toml:"discord" json:"discord"`

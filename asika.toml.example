@@ -181,6 +181,7 @@ core_contributors  = ["senior-dev1", "senior-dev2"]
 # gitlab_base_url  = "https://gitlab.example.com"
 # gitea_base_url   = "https://gitea.example.com"
 # forgejo_base_url = "https://forgejo.example.com"  # falls back to gitea_base_url if empty
+# github_base_url  = "https://github.example.com/api/v3"  # GitHub Enterprise Server; empty = github.com
 # Codeberg uses gitea_base_url by default (or https://codeberg.org if empty)
 
 # Custom hook path (global)
