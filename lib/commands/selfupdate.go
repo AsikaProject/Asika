@@ -2,7 +2,7 @@ package commands
 
 import (
 	"context"
-	"crypto/sha512"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -142,7 +142,7 @@ func runSelfUpdate(cmd *cobra.Command, args []string) {
 
 	if checksumURL != "" {
 		fmt.Println("Verifying checksum...")
-		checksumPath := filepath.Join(tmpDir, assetName+".sha512sum")
+		checksumPath := filepath.Join(tmpDir, assetName+".sha256sum")
 		if err := downloadFile(checksumURL, checksumPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Error downloading checksum: %v\n", err)
 			os.Exit(1)
@@ -153,7 +153,7 @@ func runSelfUpdate(cmd *cobra.Command, args []string) {
 		}
 		fmt.Println("Checksum OK.")
 	} else {
-		fmt.Printf("Warning: no .sha512sum found for %s, skipping checksum verification\n", assetName)
+		fmt.Printf("Warning: no .sha256sum found for %s, skipping checksum verification\n", assetName)
 	}
 
 	currentPath, err := os.Executable()
@@ -223,7 +223,7 @@ func findAssets(release *github.RepositoryRelease, assetName string) (binaryURL,
 		if name == assetName {
 			binaryURL = asset.GetBrowserDownloadURL()
 		}
-		if name == assetName+".sha512sum" {
+		if name == assetName+".sha256sum" {
 			checksumURL = asset.GetBrowserDownloadURL()
 		}
 	}
@@ -260,10 +260,10 @@ func verifyChecksum(binaryPath, checksumPath string) error {
 	if err != nil {
 		return err
 	}
-	hash := sha512.Sum512(data)
+	hash := sha256.Sum256(data)
 	actual := hex.EncodeToString(hash[:])
 
-	expected, err := parseSha512sumFile(checksumPath)
+	expected, err := parseSha256sumFile(checksumPath)
 	if err != nil {
 		return fmt.Errorf("cannot read checksum: %w", err)
 	}
@@ -274,7 +274,7 @@ func verifyChecksum(binaryPath, checksumPath string) error {
 	return nil
 }
 
-func parseSha512sumFile(path string) (string, error) {
+func parseSha256sumFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err

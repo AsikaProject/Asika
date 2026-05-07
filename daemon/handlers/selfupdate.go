@@ -2,7 +2,7 @@ package handlers
 
 import (
     "context"
-	"crypto/sha512"
+	"crypto/sha256"
     "encoding/hex"
     "fmt"
     "io"
@@ -119,7 +119,7 @@ func PerformWebUpdate(c *gin.Context) {
 		if asset.GetName() == assetName {
 			downloadURL = asset.GetBrowserDownloadURL()
 		}
-		if asset.GetName() == assetName+".sha512sum" {
+		if asset.GetName() == assetName+".sha256sum" {
 			checksumURL = asset.GetBrowserDownloadURL()
 		}
 	}
@@ -150,7 +150,7 @@ func PerformWebUpdate(c *gin.Context) {
 	if checksumURL != "" {
 		sendEvent("progress", `{"status":"verifying","progress":100,"message":"Verifying checksum..."}`)
 
-		checksumPath := filepath.Join(tmpDir, assetName+".sha512sum")
+		checksumPath := filepath.Join(tmpDir, assetName+".sha256sum")
 		resp, err := httpUpdateClient.Get(checksumURL)
 		if err != nil {
 			sendEvent("error", fmt.Sprintf(`{"error":"failed to download checksum: %s"}`, err.Error()))
@@ -265,10 +265,10 @@ func verifyWebChecksum(binaryPath, checksumPath string) error {
 	if err != nil {
 		return err
 	}
-	hash := sha512.Sum512(data)
+	hash := sha256.Sum256(data)
 	actual := hex.EncodeToString(hash[:])
 
-	expected, err := parseSha512sumFile(checksumPath)
+	expected, err := parseSha256sumFile(checksumPath)
 	if err != nil {
 		return fmt.Errorf("cannot read checksum: %w", err)
 	}
@@ -279,7 +279,7 @@ func verifyWebChecksum(binaryPath, checksumPath string) error {
 	return nil
 }
 
-func parseSha512sumFile(path string) (string, error) {
+func parseSha256sumFile(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err

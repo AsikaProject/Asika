@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"crypto/sha512"
+	"crypto/sha256"
 	"encoding/hex"
 	"os"
 	"path/filepath"
@@ -26,13 +26,13 @@ func TestVerifyChecksum(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sum := sha512.Sum512(binaryData)
+	sum := sha256.Sum256(binaryData)
 	expectedSum := hex.EncodeToString(sum[:])
 
-	t.Run("valid sha512sum", func(t *testing.T) {
-		// Standard sha512sum file format: "<hash>  <filename>"
+	t.Run("valid sha256sum", func(t *testing.T) {
+		// Standard sha256sum file format: "<hash>  <filename>"
 		checksumContent := expectedSum + "  asikad-linux-amd64\n"
-		checksumPath := filepath.Join(dir, "asikad-linux-amd64.sha512sum")
+		checksumPath := filepath.Join(dir, "asikad-linux-amd64.sha256sum")
 		if err := os.WriteFile(checksumPath, []byte(checksumContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -42,8 +42,8 @@ func TestVerifyChecksum(t *testing.T) {
 	})
 
 	t.Run("mismatched checksum", func(t *testing.T) {
-		checksumContent := "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000  asikad-linux-amd64\n"
-		checksumPath := filepath.Join(dir, "asikad-linux-amd64.sha512sum")
+		checksumContent := "0000000000000000000000000000000000000000000000000000000000000000  asikad-linux-amd64\n"
+		checksumPath := filepath.Join(dir, "asikad-linux-amd64.sha256sum")
 		if err := os.WriteFile(checksumPath, []byte(checksumContent), 0644); err != nil {
 			t.Fatal(err)
 		}
@@ -53,7 +53,7 @@ func TestVerifyChecksum(t *testing.T) {
 	})
 
 	t.Run("empty file", func(t *testing.T) {
-		checksumPath := filepath.Join(dir, "empty.sha512sum")
+		checksumPath := filepath.Join(dir, "empty.sha256sum")
 		if err := os.WriteFile(checksumPath, []byte(""), 0644); err != nil {
 			t.Fatal(err)
 		}

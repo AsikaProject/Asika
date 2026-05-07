@@ -95,7 +95,7 @@ jobs:
             cp pack/doc/asika.html "dist/${PKG}/"
             cp pack/doc/asikad.html "dist/${PKG}/"
             tar -czf "dist/${PKG}.tar.gz" -C dist "${PKG}"
-            sha512sum "bin/asikad-linux-${GOARCH}" > "dist/asikad-linux-${GOARCH}.sha512sum"
+            sha256sum "bin/asikad-linux-${GOARCH}" > "dist/asikad-linux-${GOARCH}.sha256sum"
           done
 
           for GOARCH in amd64 arm64; do
@@ -109,7 +109,7 @@ jobs:
             cp pack/doc/asika.html "dist/${PKG}/"
             cp pack/doc/asikad.html "dist/${PKG}/"
             tar -czf "dist/${PKG}.tar.gz" -C dist "${PKG}"
-            sha512sum "bin/asikad-darwin-${GOARCH}" > "dist/asikad-darwin-${GOARCH}.sha512sum"
+            sha256sum "bin/asikad-darwin-${GOARCH}" > "dist/asikad-darwin-${GOARCH}.sha256sum"
           done
 
           PKG="asika-windows-amd64"
@@ -121,7 +121,7 @@ jobs:
           cp pack/doc/asika.html "dist/${PKG}/"
           cp pack/doc/asikad.html "dist/${PKG}/"
           tar -czf "dist/${PKG}.tar.gz" -C dist "${PKG}"
-          sha512sum "bin/asikad-windows-amd64.exe" > "dist/asikad-windows-amd64.sha512sum"
+          sha256sum "bin/asikad-windows-amd64.exe" > "dist/asikad-windows-amd64.sha256sum"
 
           ls -lh dist/
 
@@ -130,7 +130,7 @@ jobs:
           name: binaries
           path: |
             dist/*.tar.gz
-            dist/*.sha512sum
+            dist/*.sha256sum
 
   package-deb:
     needs: build
@@ -312,7 +312,7 @@ jobs:
         run: |
           mkdir -p release-assets
           cp binaries/*.tar.gz release-assets/
-          cp binaries/*.sha512sum release-assets/
+          cp binaries/*.sha256sum release-assets/
           cp deb-packages/* release-assets/ 2>/dev/null || true
           cp pkg-packages/* release-assets/ 2>/dev/null || true
           cp inno-packages/* release-assets/ 2>/dev/null || true
