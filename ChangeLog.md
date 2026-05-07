@@ -1,6 +1,15 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Microsoft Teams notifier:**
+  - Add `MSTeamsNotifier` via Incoming Webhook (MessageCard format)
+  - Config: `type = "msteams"`, `webhook_url` required
+- **Slack Bot:**
+  - Add interactive Slack bot using Socket Mode (no public URL needed)
+  - Supports: prs, pr, approve, close, reopen, spam, queue, recheck, config, rebase, cherry-pick, stats, version, help
+  - Config: `[slack]` section with `token` (xoxb-), `app_token` (xapp-), `admin_ids`
+  - Add `SlackBotNotifier` for bot-based notifications (separate from existing webhook notifier)
+  - Reuses command routing and business logic from Discord bot
 - **GitHub Enterprise Server support:**
   - Add `github_base_url` config field (`Config.GitHubBaseURL`)
   - `NewGitHubClient` accepts optional baseURL; uses `go-github` `WithEnterpriseURLs` for GHE

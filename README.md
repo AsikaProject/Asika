@@ -102,6 +102,23 @@ See `asika.toml.example` for the full reference — it covers notifications, spa
 
 ## Chat Bots
 
+### Slack
+
+Use natural language commands in any channel the bot is invited to:
+
+```
+prs my-project        → List PRs
+pr my-project 42      → Show PR #42
+approve my-project 42 → Approve
+close my-project 42   → Close
+reopen my-project 42  → Reopen
+spam my-project 42    → Mark as spam
+queue my-project      → Check merge queue
+recheck my-project    → Trigger recheck
+config                → Show config summary
+help                  → All commands
+```
+
 ### Telegram
 
 Start a chat with your bot:
@@ -268,6 +285,16 @@ Get alerts where you work. Supports multiple channels simultaneously — just ad
 type   = "smtp"
 config = { host = "smtp.example.com", port = 587, username = "bot@example.com",
            password = "xxx", to = ["team@example.com"] }
+
+# Microsoft Teams — Incoming Webhook
+[[notify]]
+type   = "msteams"
+config = { webhook_url = "https://outlook.office.com/webhook/xxx/IncomingWebhook/yyy" }
+
+# Slack — Bot API
+[[notify]]
+type   = "slack_bot"
+config = { token = "xoxb-your-bot-token", channel_id = "#general" }
 
 # WeCom — Webhook mode (single URL)
 [[notify]]

@@ -31,6 +31,7 @@ type InitConfig struct {
 	TgBot         *platform.TelegramBot
 	FsBot         *platform.FeishuBot
 	DiscordBot    *platform.DiscordBot
+	SlackBot      *platform.SlackBot
 }
 
 // InitWithRetry initializes the database with retries for lock conflicts.
@@ -127,6 +128,7 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	ic.TgBot = StartTelegram(cfg, clients, ic.QueueMgr, nil, ic.SpamDetector)
 	ic.FsBot = StartFeishu(cfg, clients, ic.QueueMgr, nil, ic.SpamDetector)
 	ic.DiscordBot = StartDiscord(cfg, clients, ic.QueueMgr, nil, ic.SpamDetector)
+	ic.SlackBot = StartSlack(cfg, clients, ic.QueueMgr, nil, ic.SpamDetector)
 
 	startUpdateCheck(cfg)
 

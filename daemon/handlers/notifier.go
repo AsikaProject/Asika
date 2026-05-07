@@ -85,6 +85,14 @@ func createNotifierFromNotifyConfig(nc models.NotifyConfig) notifier.Notifier {
 		if n := notifier.NewDingTalkNotifier(nc.Config); n != nil {
 			return n
 		}
+	case "msteams":
+		if n := notifier.NewMSTeamsNotifier(nc.Config); n != nil {
+			return n
+		}
+	case "slack_bot":
+		if n := notifier.NewSlackBotNotifier(nc.Config); n != nil {
+			return n
+		}
 	}
 	return nil
 }

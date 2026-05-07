@@ -133,6 +133,14 @@ config = { host = "smtp.example.com", port = 587, username = "bot@example.com", 
 # config = { webhook_url = "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX",
 #            channel = "#deployments", username = "Asika Bot", icon_emoji = ":robot_face:" }
 
+# [[notify]]
+# type   = "slack_bot"
+# config = { token = "xoxb-your-bot-token", channel_id = "#general" }
+
+# [[notify]]
+# type   = "msteams"
+# config = { webhook_url = "https://outlook.office.com/webhook/xxx/IncomingWebhook/yyy" }
+
 # Label rules (hot-reloadable)
 [[label_rules]]
 pattern = "**/*.go"
@@ -236,3 +244,10 @@ enabled   = false
 token     = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 admin_ids = [12345678, 87654321]
 chat_ids  = ["@mychannel", "-1001234567890"]
+
+# Slack bot configuration
+[slack]
+enabled   = false
+token     = "xoxb-your-bot-token"       # Bot User OAuth Token
+app_token = "xapp-your-app-token"        # App-Level Token (for Socket Mode)
+admin_ids = ["U0123456789"]

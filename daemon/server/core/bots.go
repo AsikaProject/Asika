@@ -3,6 +3,8 @@ package core
 import (
 	"log/slog"
 
+	"github.com/slack-go/slack"
+	"github.com/slack-go/slack/socketmode"
 	"gopkg.in/telebot.v3"
 
 	"asika/common/models"
@@ -117,4 +119,48 @@ func StartDiscord(
 	go discordBot.Start()
 	slog.Info("discord bot started", "admin_ids", len(cfg.Discord.AdminIDs))
 	return discordBot
+}
+
+// StartSlack starts the Slack interactive bot if configured.
+// Uses Socket Mode for bidirectional communication (no public URL needed).
+func StartSlack(
+	cfg *models.Config,
+	clients map[platforms.PlatformType]platforms.PlatformClient,
+	queueMgr *queue.Manager,
+	syncr *syncer.Syncer,
+	spamDetector *syncer.SpamDetector,
+) *platform.SlackBot {
+	if cfg == nil || !cfg.Slack.Enabled || cfg.Slack.Token == "" || cfg.Slack.AppToken == "" {
+		return nil
+	}
+
+	slackClient := slack.New(cfg.Slack.Token, slack.OptionAppLevelToken(cfg.Slack.AppToken))
+	socketClient := socketmode.New(slackClient)
+
+	cfgMap := map[string]interface{}{
+		"token":      cfg.Slack.Token,
+		"channel_id": "",
+	}
+	slackNotifier := notifier.NewSlackBotNotifier(cfgMap)
+
+	slackBot := platform.NewSlackBot(cfg, clients, queueMgr, syncr, spamDetector, slackNotifier, cfg.Slack.AdminIDs)
+	slackBot.SetSocketClient(socketClient)
+
+	go func() {
+		for evt := range socketClient.Events {
+			switch evt.Type {
+			case socketmode.EventTypeConnecting:
+				slog.Info("slack bot connecting...")
+			case socketmode.EventTypeConnected:
+				slog.Info("slack bot connected")
+			case socketmode.EventTypeDisconnect:
+				slog.Warn("slack bot disconnected")
+			default:
+				slackBot.HandleEvent(evt, socketClient)
+			}
+		}
+	}()
+
+	slog.Info("slack bot started", "admin_ids", len(cfg.Slack.AdminIDs))
+	return slackBot
 }

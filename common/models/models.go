@@ -260,6 +260,7 @@ type Config struct {
 	Telegram        TelegramConfig  `toml:"telegram" json:"telegram"`
 	Feishu        FeishuConfig     `toml:"feishu" json:"feishu"`
 	Discord       DiscordConfig    `toml:"discord" json:"discord"`
+	Slack         SlackConfig      `toml:"slack" json:"slack"`
 	Updates       UpdatesConfig    `toml:"updates" json:"updates"`
 	Stale         StaleConfig      `toml:"stale" json:"stale"`
 }
@@ -301,4 +302,12 @@ type DiscordConfig struct {
 	Token     string   `toml:"token" json:"token"`
 	AdminIDs  []string `toml:"admin_ids" json:"admin_ids"`
 	ChannelID string   `toml:"channel_id" json:"channel_id"`
+}
+
+// SlackConfig represents Slack bot configuration
+type SlackConfig struct {
+	Enabled  bool     `toml:"enabled" json:"enabled"`
+	Token    string   `toml:"token" json:"token"`       // Bot User OAuth Token (xoxb-...)
+	AppToken string   `toml:"app_token" json:"app_token"` // App-Level Token (xapp-...) for Socket Mode
+	AdminIDs []string `toml:"admin_ids" json:"admin_ids"`
 }
