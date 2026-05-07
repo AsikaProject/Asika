@@ -308,16 +308,13 @@ func GetCloneURL(platform, owner, repo string) string {
 			slog.Warn("gitea_base_url not configured, defaulting to https://gitea.com")
 			baseURL = "https://gitea.com"
 		}
-	case "forgejo":
+	case "forgejo", "codeberg":
 		cfg := Current()
 		if cfg != nil && cfg.ForgejoBaseURL != "" {
 			baseURL = strings.TrimSuffix(cfg.ForgejoBaseURL, "/")
 		} else {
-			slog.Warn("forgejo_base_url not configured, defaulting to https://codeberg.org")
 			baseURL = "https://codeberg.org"
 		}
-	case "codeberg":
-		baseURL = "https://codeberg.org"
 	case "bitbucket":
 		baseURL = "https://bitbucket.org"
 	}
