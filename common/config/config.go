@@ -310,18 +310,11 @@ func GetCloneURL(platform, owner, repo string) string {
 		cfg := Current()
 		if cfg != nil && cfg.ForgejoBaseURL != "" {
 			baseURL = strings.TrimSuffix(cfg.ForgejoBaseURL, "/")
-		} else if cfg != nil && cfg.GiteaBaseURL != "" {
-			baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
 		} else {
 			baseURL = "https://forgejo.example.com"
 		}
 	case "codeberg":
-		cfg := Current()
-		if cfg != nil && cfg.GiteaBaseURL != "" {
-			baseURL = strings.TrimSuffix(cfg.GiteaBaseURL, "/")
-		} else {
-			baseURL = "https://codeberg.org"
-		}
+		baseURL = "https://codeberg.org"
 	case "bitbucket":
 		baseURL = "https://bitbucket.org"
 	}
