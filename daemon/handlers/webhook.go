@@ -100,7 +100,11 @@ func processWebhook(platform, repoGroup string, body []byte) (eventType string, 
         return
     }
     if eventType != "" && pr != nil {
-        events.PublishPR(events.EventType(eventType), repoGroup, platform, pr, nil)
+        var payload interface{}
+        if events.EventType(eventType) == events.EventPRComment {
+            payload = extractCommentPayload(platform, body)
+        }
+        events.PublishPR(events.EventType(eventType), repoGroup, platform, pr, payload)
         slog.Info("webhook event published", "type", eventType, "repo_group", repoGroup, "platform", platform, "pr", pr.PRNumber)
     }
     return
@@ -141,14 +145,32 @@ func parseWebhookEvent(platform string, body []byte, repoGroup string) (string, 
 		return parseGitHubWebhook(body, repoGroup)
 	case "gitlab":
 		return parseGitLabWebhook(body, repoGroup)
-	case "gitea":
-		return parseGiteaWebhook(body, repoGroup)
+	case "gitea", "forgejo", "codeberg":
+		return parseGiteaWebhook(body, repoGroup, platform)
+	case "bitbucket":
+		return parseBitbucketWebhook(body, repoGroup)
 	}
 	return "", nil, nil
 }
 
 // parseGitHubWebhook parses GitHub webhook payload
 func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
+	// Check if this is an issue_comment event on a PR
+	var commentCheck struct {
+		Action  string `json:"action"`
+		Issue   struct {
+			PullRequest struct {
+				URL string `json:"url"`
+			} `json:"pull_request"`
+		} `json:"issue"`
+		Comment struct {
+			Body string `json:"body"`
+		} `json:"comment"`
+	}
+	if err := json.Unmarshal(body, &commentCheck); err == nil && commentCheck.Action == "created" && commentCheck.Comment.Body != "" && commentCheck.Issue.PullRequest.URL != "" {
+		return parseGitHubIssueComment(body, repoGroup)
+	}
+
 	// Check if this is a pull_request_review event (for approvals)
 	var reviewPayload struct {
 		Action      string `json:"action"`
@@ -280,8 +302,79 @@ func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 	return eventType, pr, nil
 }
 
+// parseGitHubIssueComment handles GitHub issue_comment events for PRs
+func parseGitHubIssueComment(body []byte, repoGroup string) (string, *models.PRRecord, error) {
+	var payload struct {
+		Action string `json:"action"`
+		Issue  struct {
+			Number     int    `json:"number"`
+			Title      string `json:"title"`
+			State      string `json:"state"`
+			Draft      bool   `json:"draft"`
+			HTMLURL    string `json:"html_url"`
+			User       struct {
+				Login string `json:"login"`
+			} `json:"user"`
+			PullRequest struct {
+				URL string `json:"url"`
+			} `json:"pull_request"`
+			Labels []struct {
+				Name string `json:"name"`
+			} `json:"labels"`
+		} `json:"issue"`
+		Comment struct {
+			Body string `json:"body"`
+			User struct {
+				Login string `json:"login"`
+			} `json:"user"`
+		} `json:"comment"`
+		Repository struct {
+			FullName string `json:"full_name"`
+		} `json:"repository"`
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", nil, err
+	}
+
+	if payload.Action != "created" {
+		return "", nil, nil
+	}
+
+	if payload.Issue.PullRequest.URL == "" {
+		return "", nil, nil
+	}
+
+	pr := &models.PRRecord{
+		Platform:  "github",
+		PRNumber:  payload.Issue.Number,
+		Title:     payload.Issue.Title,
+		Author:    payload.Issue.User.Login,
+		State:     payload.Issue.State,
+		RepoGroup: repoGroup,
+		IsDraft:   payload.Issue.Draft,
+	}
+
+	for _, lbl := range payload.Issue.Labels {
+		pr.Labels = append(pr.Labels, lbl.Name)
+	}
+
+	return string(events.EventPRComment), pr, nil
+}
+
 // parseGitLabWebhook parses GitLab webhook payload
 func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
+	var kindCheck struct {
+		ObjectKind string `json:"object_kind"`
+	}
+	if err := json.Unmarshal(body, &kindCheck); err != nil {
+		return "", nil, err
+	}
+
+	if kindCheck.ObjectKind == "note" {
+		return parseGitLabNoteWebhook(body, repoGroup)
+	}
+
 	var payload struct {
 		ObjectKind string `json:"object_kind"`
 		EventName  string `json:"event_name"`
@@ -349,8 +442,67 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 	return eventType, pr, nil
 }
 
+// parseGitLabNoteWebhook handles GitLab Note Hook events for MR comments
+func parseGitLabNoteWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
+	var payload struct {
+		ObjectKind string `json:"object_kind"`
+		ObjectAttributes struct {
+			ID        int    `json:"id"`
+			Note      string `json:"note"`
+			NoteableType string `json:"noteable_type"`
+			Action    string `json:"action"`
+		} `json:"object_attributes"`
+		MergeRequest struct {
+			IID   int    `json:"iid"`
+			Title string `json:"title"`
+			State string `json:"state"`
+		} `json:"merge_request"`
+		User struct {
+			Username string `json:"username"`
+		} `json:"user"`
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", nil, err
+	}
+
+	if payload.ObjectAttributes.NoteableType != "MergeRequest" {
+		return "", nil, nil
+	}
+
+	if payload.ObjectAttributes.Action != "create" && payload.ObjectAttributes.Action != "" {
+		if payload.ObjectAttributes.Action != "create" {
+			return "", nil, nil
+		}
+	}
+
+	pr := &models.PRRecord{
+		Platform:  "gitlab",
+		PRNumber:  payload.MergeRequest.IID,
+		Title:     payload.MergeRequest.Title,
+		Author:    payload.User.Username,
+		State:     payload.MergeRequest.State,
+		RepoGroup: repoGroup,
+	}
+
+	return string(events.EventPRComment), pr, nil
+}
+
 // parseGiteaWebhook parses Gitea/Forgejo webhook payload
-func parseGiteaWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
+func parseGiteaWebhook(body []byte, repoGroup string, platform string) (string, *models.PRRecord, error) {
+	var typeCheck struct {
+		Action string `json:"action"`
+		Issue  struct {
+			PullRequest interface{} `json:"pull_request"`
+		} `json:"issue"`
+		Comment struct {
+			Body string `json:"body"`
+		} `json:"comment"`
+	}
+	if err := json.Unmarshal(body, &typeCheck); err == nil && typeCheck.Comment.Body != "" && typeCheck.Issue.PullRequest != nil {
+		return parseGiteaIssueCommentWebhook(body, repoGroup, platform)
+	}
+
 	var payload struct {
 		Action     string `json:"action"`
 		Number     int    `json:"number"`
@@ -380,8 +532,12 @@ func parseGiteaWebhook(body []byte, repoGroup string) (string, *models.PRRecord,
 		author = payload.Sender.Login
 	}
 
+	if platform == "" {
+		platform = "gitea"
+	}
+
 	pr := &models.PRRecord{
-		Platform:  "gitea",
+		Platform:  platform,
 		PRNumber:  payload.Number,
 		Title:     payload.PullRequest.Title,
 		Author:    author,
@@ -413,6 +569,168 @@ func parseGiteaWebhook(body []byte, repoGroup string) (string, *models.PRRecord,
 	}
 
 	return eventType, pr, nil
+}
+
+// parseGiteaIssueCommentWebhook handles Gitea/Forgejo issue_comment events for PRs
+func parseGiteaIssueCommentWebhook(body []byte, repoGroup string, platform string) (string, *models.PRRecord, error) {
+	var payload struct {
+		Action string `json:"action"`
+		Issue  struct {
+			Number int    `json:"number"`
+			Title  string `json:"title"`
+			State  string `json:"state"`
+			Draft  bool   `json:"draft"`
+			User   struct {
+				Login string `json:"login"`
+			} `json:"user"`
+			PullRequest interface{} `json:"pull_request"`
+		} `json:"issue"`
+		Comment struct {
+			Body string `json:"body"`
+			User struct {
+				Login string `json:"login"`
+			} `json:"user"`
+		} `json:"comment"`
+		Repository struct {
+			FullName string `json:"full_name"`
+		} `json:"repository"`
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", nil, err
+	}
+
+	if payload.Action != "created" {
+		return "", nil, nil
+	}
+
+	if payload.Issue.PullRequest == nil {
+		return "", nil, nil
+	}
+
+	if platform == "" {
+		platform = "gitea"
+	}
+
+	pr := &models.PRRecord{
+		Platform:  platform,
+		PRNumber:  payload.Issue.Number,
+		Title:     payload.Issue.Title,
+		Author:    payload.Issue.User.Login,
+		State:     payload.Issue.State,
+		RepoGroup: repoGroup,
+		IsDraft:   payload.Issue.Draft,
+	}
+
+	return string(events.EventPRComment), pr, nil
+}
+
+// parseBitbucketWebhook parses Bitbucket Cloud webhook payload
+func parseBitbucketWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
+	var payload struct {
+		Comment struct {
+			Content struct {
+				Raw string `json:"raw"`
+			} `json:"content"`
+			User struct {
+				DisplayName string `json:"display_name"`
+			} `json:"user"`
+		} `json:"comment"`
+		PullRequest struct {
+			ID    int    `json:"id"`
+			Title string `json:"title"`
+			State string `json:"state"`
+			Author struct {
+				DisplayName string `json:"display_name"`
+			} `json:"author"`
+		} `json:"pullrequest"`
+		Repository struct {
+			FullName string `json:"full_name"`
+		} `json:"repository"`
+		Actor struct {
+			DisplayName string `json:"display_name"`
+		} `json:"actor"`
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", nil, err
+	}
+
+	if payload.Comment.Content.Raw == "" || payload.PullRequest.ID == 0 {
+		return "", nil, nil
+	}
+
+	pr := &models.PRRecord{
+		Platform:  "bitbucket",
+		PRNumber:  payload.PullRequest.ID,
+		Title:     payload.PullRequest.Title,
+		Author:    payload.PullRequest.Author.DisplayName,
+		State:     payload.PullRequest.State,
+		RepoGroup: repoGroup,
+	}
+
+	return string(events.EventPRComment), pr, nil
+}
+
+// extractCommentPayload extracts comment data from a webhook payload for PR comment events
+func extractCommentPayload(platform string, body []byte) *models.PRCommentPayload {
+	switch platform {
+	case "github":
+		var payload struct {
+			Comment struct {
+				Body string `json:"body"`
+				User struct {
+					Login string `json:"login"`
+				} `json:"user"`
+			} `json:"comment"`
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return nil
+		}
+		return &models.PRCommentPayload{CommentBody: payload.Comment.Body, CommentAuthor: payload.Comment.User.Login}
+	case "gitlab":
+		var payload struct {
+			ObjectAttributes struct {
+				Note string `json:"note"`
+			} `json:"object_attributes"`
+			User struct {
+				Username string `json:"username"`
+			} `json:"user"`
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return nil
+		}
+		return &models.PRCommentPayload{CommentBody: payload.ObjectAttributes.Note, CommentAuthor: payload.User.Username}
+	case "gitea", "forgejo", "codeberg":
+		var payload struct {
+			Comment struct {
+				Body string `json:"body"`
+				User struct {
+					Login string `json:"login"`
+				} `json:"user"`
+			} `json:"comment"`
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return nil
+		}
+		return &models.PRCommentPayload{CommentBody: payload.Comment.Body, CommentAuthor: payload.Comment.User.Login}
+	case "bitbucket":
+		var payload struct {
+			Comment struct {
+				Content struct {
+					Raw string `json:"raw"`
+				} `json:"content"`
+			} `json:"comment"`
+			Actor struct {
+				DisplayName string `json:"display_name"`
+			} `json:"actor"`
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return nil
+		}
+		return &models.PRCommentPayload{CommentBody: payload.Comment.Content.Raw, CommentAuthor: payload.Actor.DisplayName}
+	}
+	return nil
 }
 
 // StartWebhookRetryWorker starts a background worker that retries failed webhooks.

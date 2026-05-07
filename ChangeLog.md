@@ -1,6 +1,17 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **PR comment commands (all platforms):**
+  - Add `EventPRComment` event type to event bus
+  - Add `PRCommentPayload` model for carrying comment data through the event pipeline
+  - Add GitHub `issue_comment` webhook parsing (filters for PR comments via `pull_request` field)
+  - Add GitLab `Note Hook` webhook parsing (filters for MR comments via `noteable_type == "MergeRequest"`)
+  - Add Gitea/Forgejo/Codeberg `issue_comment` webhook parsing (filters for PR comments via `issue.pull_request != null`)
+  - Add Bitbucket `pullrequest:comment_created` webhook parsing (dedicated PR comment event, no filtering needed)
+  - Add comment command consumer in `daemon/consumer` — parses `/command` syntax from comment body
+  - Supported commands: `/approve`, `/close`, `/reopen`, `/merge`, `/spam`, `/rebase`, `/cherry-pick`, `/queue`, `/recheck`, `/help`
+  - Posts reply comment with execution result after each command
+  - `forgejo`/`codeberg` reuse Gitea webhook parser (same API, different URL)
 - **WebUI settings page (config form):**
   - Add `settings.html` with form-based editing of all hot-reloadable config items
   - Sections: Merge Queue (approvals, CI, fast forward, core contributors), Spam Detection, Stale PR Management, Label Rules editor, Config History with rollback

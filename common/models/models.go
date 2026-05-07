@@ -68,6 +68,12 @@ type PREvent struct {
 	Detail    string    `json:"detail"`
 }
 
+// PRCommentPayload carries comment event data through the event bus
+type PRCommentPayload struct {
+	CommentBody string `json:"comment_body"`
+	CommentAuthor string `json:"comment_author"`
+}
+
 // QueueItem represents a merge queue item
 type QueueItem struct {
     PRID          string         `json:"pr_id"`

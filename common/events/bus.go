@@ -18,6 +18,7 @@ const (
 	EventPRLabeled     EventType = "pr_labeled"
 	EventPRSynced      EventType = "pr_synced"
 	EventPRReopened    EventType = "pr_reopened"
+	EventPRComment     EventType = "pr_comment"
 	EventSpamDetected  EventType = "spam_detected"
 	EventBranchDeleted EventType = "branch_deleted"
 	EventSyncCompleted EventType = "sync_completed"
