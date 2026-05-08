@@ -162,6 +162,9 @@
 	"common.save": "保存",
 	"common.delete": "删除",
 	"common.edit": "编辑",
-	"common.back": "返回",
-	"common.confirm": "确认"
+ 	"common.back": "返回",
+ 	"common.confirm": "确认",
+ 	"common.select_all": "全选",
+ 	"common.delete_selected": "删除选中",
+ 	"settings.add_keyword": "添加关键词"
 }

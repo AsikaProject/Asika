@@ -1,6 +1,10 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **WebUI settings enhancements — individual & batch delete for label rules and spam keywords:**
+  - Label rules: add per-row checkboxes + "Select All" + "Delete Selected" batch delete button
+  - Spam keywords: replace textarea with individual tag chips (each with ✕ remove) + input with Enter-to-add
+  - Add i18n keys: `common.select_all`, `common.delete_selected`, `settings.add_keyword`
 - **Fix merged/closed PRs re-entering merge queue on re-approval:**
   - Add state check in `queue.Manager.AddToQueue()` — skips non-open PRs (merged, closed, etc.)
   - Add state check in `ApprovePR` handler before queue addition — returns `queued: false` for non-open PRs

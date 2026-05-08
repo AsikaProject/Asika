@@ -76,7 +76,12 @@
     </div>
     <div style="margin-top:12px;">
         <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.title_keywords"}}</label>
-        <textarea id="spamKeywords" rows="3" placeholder="spam&#10;test-spam" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
+        <div id="spamKeywordsContainer" style="display:flex; flex-wrap:wrap; gap:6px; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:40px; align-items:center;">
+        </div>
+        <div style="display:flex; gap:6px; margin-top:6px;">
+            <input id="spamKeywordInput" type="text" placeholder="{{t "settings.add_keyword"}}" onkeydown="if(event.key==='Enter'){event.preventDefault();addSpamKeyword();}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+            <button class="btn btn-secondary btn-sm" onclick="addSpamKeyword()">{{t "users.add"}}</button>
+        </div>
     </div>
 </div>
 
@@ -139,9 +144,15 @@
 <div class="card" style="margin-bottom:20px;">
     <h2>{{t "settings.label_rules"}}</h2>
     <p style="color:#666; font-size:13px; margin-bottom:12px;">Auto-apply labels based on file paths, PR title, or author. Scopes: <code>file:</code> (default), <code>title:</code>, <code>author:</code></p>
+    <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
+        <input type="checkbox" id="selectAllLabelRules" onchange="toggleAllLabelRules(this.checked)" style="cursor:pointer;">
+        <label for="selectAllLabelRules" style="font-size:13px; color:#666; cursor:pointer; margin:0;">{{t "common.select_all"}}</label>
+        <button class="btn btn-danger btn-sm" onclick="deleteSelectedLabelRules()" style="margin-left:auto; padding:2px 8px; font-size:12px;">{{t "common.delete_selected"}}</button>
+    </div>
     <table id="labelRulesTable" style="width:100%; margin-bottom:12px;">
         <thead>
             <tr>
+                <th style="width:30px;"></th>
                 <th>Pattern</th>
                 <th>Label</th>
                 <th>Color</th>
@@ -202,7 +213,7 @@
                 document.getElementById('spamTimeWindow').value = spam.time_window || '1h';
                 document.getElementById('spamThreshold').value = spam.threshold || 5;
                 document.getElementById('spamAuthor').value = spam.trigger_on_author ? 'true' : 'false';
-                document.getElementById('spamKeywords').value = (spam.trigger_on_title_kw || []).join('\n');
+                renderSpamKeywords(spam.trigger_on_title_kw || []);
 
                 // Stale
                 const stale = c.stale || {};
@@ -255,6 +266,7 @@
         const tbody = document.getElementById('labelRulesBody');
         tbody.innerHTML = '';
         rules.forEach((r, i) => addLabelRuleRow(r.pattern || '', r.label || '', r.color || '', r.description || ''));
+        updateSelectAllState();
     }
 
     function addLabelRule() { addLabelRuleRow('', '', '', ''); }
@@ -262,12 +274,74 @@
     function addLabelRuleRow(pattern, label, color, description) {
         const tbody = document.getElementById('labelRulesBody');
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td><input type="text" value="' + escapeHtml(pattern) + '" placeholder="**/*.go" class="lr-pattern" style="width:100%;padding:4px;border:1px solid #ddd;border-radius:3px;"></td>'
+        tr.innerHTML = '<td><input type="checkbox" class="lr-check" style="cursor:pointer;" onchange="updateSelectAllState()"></td>'
+            + '<td><input type="text" value="' + escapeHtml(pattern) + '" placeholder="**/*.go" class="lr-pattern" style="width:100%;padding:4px;border:1px solid #ddd;border-radius:3px;"></td>'
             + '<td><input type="text" value="' + escapeHtml(label) + '" placeholder="go" class="lr-label" style="width:100%;padding:4px;border:1px solid #ddd;border-radius:3px;"></td>'
             + '<td><input type="text" value="' + escapeHtml(color) + '" placeholder="00ADD8" class="lr-color" style="width:100%;padding:4px;border:1px solid #ddd;border-radius:3px;"></td>'
             + '<td><input type="text" value="' + escapeHtml(description) + '" placeholder="Go source files" class="lr-desc" style="width:100%;padding:4px;border:1px solid #ddd;border-radius:3px;"></td>'
-            + '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+            + '<td><button class="btn btn-sm btn-danger" onclick="this.closest(\'tr\').remove(); updateSelectAllState();">✕</button></td>';
         tbody.appendChild(tr);
+    }
+
+    function toggleAllLabelRules(checked) {
+        document.querySelectorAll('.lr-check').forEach(cb => cb.checked = checked);
+    }
+
+    function updateSelectAllState() {
+        const all = document.querySelectorAll('.lr-check');
+        const sel = document.querySelectorAll('.selectAllLabelRules');
+        const sa = document.getElementById('selectAllLabelRules');
+        if (all.length === 0) { sa.checked = false; sa.indeterminate = false; return; }
+        const checked = document.querySelectorAll('.lr-check:checked').length;
+        sa.checked = checked === all.length;
+        sa.indeterminate = checked > 0 && checked < all.length;
+    }
+
+    function deleteSelectedLabelRules() {
+        const rows = document.querySelectorAll('#labelRulesBody tr');
+        let removed = 0;
+        rows.forEach(row => {
+            if (row.querySelector('.lr-check').checked) {
+                row.remove();
+                removed++;
+            }
+        });
+        if (removed > 0) {
+            updateSelectAllState();
+        }
+    }
+
+    function renderSpamKeywords(keywords) {
+        const container = document.getElementById('spamKeywordsContainer');
+        container.innerHTML = '';
+        keywords.forEach(kw => addSpamKeywordTag(kw));
+    }
+
+    function addSpamKeywordTag(keyword) {
+        const container = document.getElementById('spamKeywordsContainer');
+        const span = document.createElement('span');
+        span.style.cssText = 'display:inline-flex; align-items:center; gap:4px; padding:3px 8px; background:#e7f3ff; color:#0066cc; border-radius:12px; font-size:12px; white-space:nowrap;';
+        span.innerHTML = escapeHtml(keyword) + '<span style="cursor:pointer; font-weight:bold; margin-left:2px;" onclick="this.parentElement.remove()">✕</span>';
+        container.appendChild(span);
+    }
+
+    function addSpamKeyword() {
+        const input = document.getElementById('spamKeywordInput');
+        const val = input.value.trim();
+        if (val) {
+            addSpamKeywordTag(val);
+            input.value = '';
+        }
+    }
+
+    function collectSpamKeywords() {
+        const tags = document.querySelectorAll('#spamKeywordsContainer span');
+        const keywords = [];
+        tags.forEach(tag => {
+            const text = tag.childNodes[0].textContent.trim();
+            if (text) keywords.push(text);
+        });
+        return keywords;
     }
 
     function collectLabelRules() {
@@ -308,7 +382,7 @@
         lines.push('time_window = "' + document.getElementById('spamTimeWindow').value.trim() + '"');
         lines.push('threshold = ' + parseInt(document.getElementById('spamThreshold').value || 5));
         lines.push('trigger_on_author = ' + (document.getElementById('spamAuthor').value === 'true' ? 'true' : 'false'));
-        const kwLines = document.getElementById('spamKeywords').value.split('\n').map(s => s.trim()).filter(Boolean);
+        const kwLines = collectSpamKeywords();
         if (kwLines.length > 0) lines.push('trigger_on_title_kw = ["' + kwLines.join('", "') + '"]');
         lines.push('');
 
