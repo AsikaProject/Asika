@@ -485,6 +485,13 @@ func ClosePR(c *gin.Context) {
 		return
 	}
 
+	// Remove from merge queue if present
+	if queueMgr != nil {
+		if rmErr := queueMgr.RemoveFromQueue(repoGroup, pr.ID); rmErr != nil {
+			slog.Warn("failed to remove closed PR from queue", "pr_id", pr.ID, "error", rmErr)
+		}
+	}
+
 	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
 		"pr_number":  prNumber,
 		"repo_group":  repoGroup,
@@ -590,7 +597,10 @@ func MarkSpam(c *gin.Context) {
 		return
 	}
 	var pr models.PRRecord
-	json.Unmarshal(data, &pr)
+	if err := json.Unmarshal(data, &pr); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to unmarshal PR data"})
+		return
+	}
 	if pr.Platform != "" {
 		platform = pr.Platform
 	}
@@ -626,6 +636,13 @@ func MarkSpam(c *gin.Context) {
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mark as spam"})
 		return
+	}
+
+	// Remove from merge queue if present
+	if queueMgr != nil {
+		if rmErr := queueMgr.RemoveFromQueue(repoGroup, pr.ID); rmErr != nil {
+			slog.Warn("failed to remove spam PR from queue", "pr_id", pr.ID, "error", rmErr)
+		}
 	}
 
 	// Update PR record to mark as spam

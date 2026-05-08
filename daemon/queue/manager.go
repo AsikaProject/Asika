@@ -136,7 +136,8 @@ func (m *Manager) CheckQueue() {
 	err := db.ForEach(db.BucketQueueItems, func(key, value []byte) error {
 		var item models.QueueItem
 		if err := json.Unmarshal(value, &item); err != nil {
-			return err
+			slog.Warn("skipping corrupted queue item", "key", string(key), "error", err)
+			return nil
 		}
 		// Collect completed items for cleanup
 		if item.Status == "done" {
@@ -347,13 +348,16 @@ func (m *Manager) ClearQueue(repoGroup string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	var deleted int
 	for _, k := range keys {
 		if delErr := db.Delete(db.BucketQueueItems, k); delErr != nil {
 			slog.Error("failed to delete queue item", "key", k, "error", delErr)
+		} else {
+			deleted++
 		}
 	}
-	slog.Info("queue cleared", "repo_group", repoGroup, "count", len(keys))
-	return len(keys), nil
+	slog.Info("queue cleared", "repo_group", repoGroup, "requested", len(keys), "deleted", deleted)
+	return deleted, nil
 }
 
 // Stop signals the periodic checker goroutine to stop.

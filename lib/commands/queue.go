@@ -60,7 +60,7 @@ var queueClearCmd = &cobra.Command{
 }
 
 var queueRemoveCmd = &cobra.Command{
-	Use:   "remove [repo_group] [pr_id]",
+	Use:   "remove <repo_group> <pr_id>",
 	Short: "Remove a specific PR from the queue",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {

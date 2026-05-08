@@ -13,6 +13,14 @@
   - Add `queue_clear [group]` and `queue_remove <group> <pr_id>` Slack bot commands
   - Fix Slack `handleRecheckQueue` not actually calling `queueMgr.CheckQueue()` (was a no-op stub)
   - Fix PR list not auto-refreshing when switching between open/closed states by calling `loadPRs(refresh=true)` on state change
+- **Bug fixes:**
+  - Fix `queue.html` `const repoGroup` redeclaration causing `loadQueue` to be completely broken (JS SyntaxError)
+  - Fix `CheckQueue` aborting entire scan on single corrupted queue item — now logs and skips
+  - Fix `MarkSpam` handler ignoring `json.Unmarshal` error — could corrupt DB records
+  - Fix `MarkSpam` and `ClosePR` not removing PR from merge queue — could cause spam/closed PRs to be auto-merged
+  - Fix `ClearQueue` returning wrong count when some deletions failed — now returns actual deleted count
+  - Fix `pr_list.html` label `for` attribute missing — selector `label[for="repoGroupSelect"]` never matched
+  - Fix CLI `queue remove` usage string showing optional args with brackets instead of angle brackets
 - **Fix PR write handlers (approve/close/reopen/spam/comment) DB key mismatch:**
   - All write handlers used incorrect 2-part key (`repoGroup#prID`) but DB stores PRs with 3-part key (`repoGroup#platform#prNumber`)
   - Replace `db.Get(db.BucketPRs, key)` with `db.GetPRByIndex("", repoGroup, prNumber)` for correct index-based lookup

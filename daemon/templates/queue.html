@@ -82,7 +82,6 @@
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Queue is empty</td></tr>';
                 return;
             }
-             const repoGroup = document.getElementById('repoGroupSelect').value;
              tbody.innerHTML = items.map(item => {
                  const statusText = {
                      'waiting': '<span style="color: #ffc107;">Waiting for conditions</span>',
