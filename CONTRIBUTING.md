@@ -134,11 +134,11 @@ Asika's development process follows a linear release principle, meaning there is
 The version number refers to a commit on the main branch that we consider to have stabilized code.
 
 Asika's versioning uses a date-based system, i.e., YYYYMMDD. Different suffixes carry different meanings:
-- HF: Hot fix, a hot security update (CVSS <= 8)
-- CVE: CVE security update (CVSS > 8 or when a CVE vulnerability is published)
+- HF: Hot fix, a hot security update (CVSS < 8)
+- CVE: CVE security update (CVSS >= 8 or when a CVE vulnerability is published)
 - DEV: Development, a development version, which can be understood as a Beta version or a pre-release version, and may contain significant changes
 - DEP: Dependencies, dependency library updates, limited to gomod dependency updates (if a CVE breaks out in gomod, the CVE label is used instead)
 
-Generally, only coredev can release versions without a suffix and HF versions, 
-while external collaborators can release DEV versions. Under special circumstances, 
+Generally, only coredev can release versions without a suffix and DEP versions, 
+while external collaborators can release DEV and HF versions. Under special circumstances, 
 HF and CVE versions can be released directly without approval requirements.

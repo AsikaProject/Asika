@@ -44,10 +44,13 @@ graph TB
 
         subgraph Notify["Notifications"]
             SMTP[SMTP]
-            TG[Telegram Bot]
-            FS[Feishu Bot]
-            DC[Discord Bot]
-            SL[Slack Bot]
+        end
+
+        subgraph Bots["Platform Bots"]
+            TG[telegram/]
+            FS[feishu/]
+            DC[discord/]
+            SL[slack/]
         end
 
         subgraph DB["Storage"]
@@ -85,11 +88,11 @@ graph TB
     PC_FJ --> SY
     PC_BB --> SY
 
-    QC --> SMTP
-    QC --> TG
-    QC --> FS
-    QC --> DC
-    QC --> SL
+     QC --> SMTP
+     SRV --> TG
+     SRV --> FS
+     SRV --> DC
+     SRV --> SL
 
     SY --> BDB
     QC --> BDB
@@ -201,7 +204,11 @@ graph LR
         LABEL[labeler/ → Label rule engine]
         POLL[polling/ → Polling mode]
         TPL[templates/ → Web UI templates + embed]
-        BOTS[platform/ → Telegram/Feishu/Discord/Slack bots]
+         BOTS[platform/ → Bot sub-packages]\
+         BOTS_TG[platform/telegram/ → Telegram bot]\
+         BOTS_FS[platform/feishu/ → Feishu bot]\
+         BOTS_DC[platform/discord/ → Discord bot]\
+         BOTS_SL[platform/slack/ → Slack bot]
         HOOKS[hooks/ → Git hook runner]
         STALE[stale/ → Stale PR management]
         SPAM[syncer/ → Spam detection + auto-clean]
@@ -216,10 +223,14 @@ graph LR
     ASIKAD --> SRV
     SRV --> HAND
     SRV --> QUEUE
-    HAND --> SYNC
-    HAND --> CONS
-    CONS --> LABEL
-    CONS --> QUEUE
+     SRV --> BOTS_TG
+     SRV --> BOTS_FS
+     SRV --> BOTS_DC
+     SRV --> BOTS_SL
+     HAND --> SYNC
+     HAND --> CONS
+     CONS --> LABEL
+     CONS --> QUEUE
 ```
 
 ### Running Tests
@@ -274,4 +285,5 @@ bash build.sh distclean
 - **i18n**: User-facing strings use `{{t "key"}}` in templates. Add translations to `common/i18n/locales/zh.json`.
 - **Database**: Use `PutPRWithIndex` when storing PRs (maintains indices). Use `BucketForEachPrefix` for group-scoped queries.
 - **Permissions**: Write handlers check `RequirePermission`. Bot handlers check permissions at the command level.
+- **Platform bots**: Each bot lives in its own sub-package under `daemon/platform/`. Shared helpers (GetPRByID, Truncate, InactivityDays, HasLabelStr, ParseInt) are in `common/platformutil/`.
 - **Testing**: New features should include tests. Use `testutil.NewTestDB()` for isolated DB tests.
