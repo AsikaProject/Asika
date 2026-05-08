@@ -175,62 +175,64 @@ Performance optimizations:
 ### Project Structure
 
 ```mermaid
-graph LR
+graph TB
     subgraph cmd["cmd/"]
-        ASIKA[asika/ → CLI binary]
-        ASIKAD[asikad/ → Daemon binary]
-    end
-
-    subgraph common["common/"]
-        CONFIG[config/ → Config loading/validation, platform helpers]
-        DB[db/ → bbolt wrapper with prefix iteration]
-        PLAT[platforms/ → GitHub/GitLab/Gitea/Forgejo/Bitbucket clients + helpers]
-        MODELS[models/ → Data structures]
-        EVENTS[events/ → Event bus]
-        AUTH[auth/ → JWT, password hash]
-        GIT[gitutil/ → Pure Go git ops]
-        CI[ci/ → CI provider detection]
-        NOTIF[notifier/ → Notification channels]
-        VER[version/ → Version info]
-        I18N[i18n/ → Translation framework]
-    end
-
-    subgraph daemon["daemon/"]
-        SRV[server/ → HTTP server, middleware, bootstrap]
-        HAND[handlers/ → API routes]
-        QUEUE[queue/ → Merge queue state machine]
-        SYNC[syncer/ → Cross-platform sync]
-        CONS[consumer/ → Event consumer]
-        LABEL[labeler/ → Label rule engine]
-        POLL[polling/ → Polling mode]
-        TPL[templates/ → Web UI templates + embed]
-         BOTS[platform/ → Bot sub-packages]\
-         BOTS_TG[platform/telegram/ → Telegram bot]\
-         BOTS_FS[platform/feishu/ → Feishu bot]\
-         BOTS_DC[platform/discord/ → Discord bot]\
-         BOTS_SL[platform/slack/ → Slack bot]
-        HOOKS[hooks/ → Git hook runner]
-        STALE[stale/ → Stale PR management]
-        SPAM[syncer/ → Spam detection + auto-clean]
+        ASIKA[asika/ → CLI]
+        ASIKAD[asikad/ → Daemon]
     end
 
     subgraph lib["lib/"]
-        LIB_CMD[commands/ → CLI command handlers]
+        LIB_CMD[commands/ → CLI handlers]
         FMT[formatter/ → Output formatting]
+    end
+
+    subgraph common["common/"]
+        CONFIG[config/ → Config]
+        DB[db/ → bbolt]
+        PLAT[platforms/ → API clients]
+        MODELS[models/ → Data structures]
+        EVENTS[events/ → Event bus]
+        AUTH[auth/ → JWT/hash]
+        GIT[gitutil/ → Git ops]
+        CI[ci/ → CI detection]
+        NOTIF[notifier/ → Channels]
+        VER[version/ → Version]
+        I18N[i18n/ → i18n]
+        PUTIL[platformutil/ → Shared helpers]
+    end
+
+    subgraph daemon["daemon/"]
+        SRV[server/ → HTTP/bootstrap]
+        HAND[handlers/ → API routes]
+        QUEUE[queue/ → Merge queue]
+        SYNC[syncer/ → Cross-sync]
+        CONS[consumer/ → Events]
+        LABEL[labeler/ → Labels]
+        POLL[polling/ → Polling]
+        TPL[templates/ → WebUI]
+        TG[telegram/ → Telegram bot]
+        FS[feishu/ → Feishu bot]
+        DC[discord/ → Discord bot]
+        SL[slack/ → Slack bot]
+        HOOKS[hooks/ → Git hooks]
+        STALE[stale/ → Stale PRs]
+        SPAM[spam/ → Spam detect]
     end
 
     ASIKA --> LIB_CMD
     ASIKAD --> SRV
+    LIB_CMD --> common
+    SRV --> common
     SRV --> HAND
     SRV --> QUEUE
-     SRV --> BOTS_TG
-     SRV --> BOTS_FS
-     SRV --> BOTS_DC
-     SRV --> BOTS_SL
-     HAND --> SYNC
-     HAND --> CONS
-     CONS --> LABEL
-     CONS --> QUEUE
+    SRV --> TG
+    SRV --> FS
+    SRV --> DC
+    SRV --> SL
+    HAND --> SYNC
+    HAND --> CONS
+    CONS --> LABEL
+    CONS --> QUEUE
 ```
 
 ### Running Tests
