@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"asika/common/config"
@@ -316,14 +315,13 @@ func findPRByID(prID string) (*models.PRRecord, error) {
 // GetQueueItems returns all queue items for a repo group
 func (m *Manager) GetQueueItems(repoGroup string) ([]models.QueueItem, error) {
 	var items []models.QueueItem
-	err := db.ForEach(db.BucketQueueItems, func(key, value []byte) error {
+	prefix := repoGroup + "#"
+	err := db.BucketForEachPrefix(db.BucketQueueItems, prefix, func(key, value []byte) error {
 		var item models.QueueItem
 		if err := json.Unmarshal(value, &item); err != nil {
 			return err
 		}
-		if item.RepoGroup == repoGroup || strings.HasPrefix(string(key), repoGroup+"#") {
-			items = append(items, item)
-		}
+		items = append(items, item)
 		return nil
 	})
 	return items, err
@@ -341,14 +339,9 @@ func (m *Manager) RemoveFromQueue(repoGroup, prID string) error {
 // ClearQueue removes all queue items for a repo group.
 func (m *Manager) ClearQueue(repoGroup string) (int, error) {
 	var keys []string
-	err := db.ForEach(db.BucketQueueItems, func(key, value []byte) error {
-		var item models.QueueItem
-		if err := json.Unmarshal(value, &item); err != nil {
-			return nil
-		}
-		if item.RepoGroup == repoGroup || strings.HasPrefix(string(key), repoGroup+"#") {
-			keys = append(keys, string(key))
-		}
+	prefix := repoGroup + "#"
+	err := db.BucketForEachPrefix(db.BucketQueueItems, prefix, func(key, value []byte) error {
+		keys = append(keys, string(key))
 		return nil
 	})
 	if err != nil {

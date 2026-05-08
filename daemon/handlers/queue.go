@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"log/slog"
@@ -34,15 +33,14 @@ func GetQueue(c *gin.Context) {
 		return
 	}
 
-	// Get queue items from DB - match by item.RepoGroup field or legacy key prefix
-	err := db.ForEach(db.BucketQueueItems, func(key, value []byte) error {
+	// Get queue items from DB by prefix scan
+	prefix := repoGroup + "#"
+	err := db.BucketForEachPrefix(db.BucketQueueItems, prefix, func(key, value []byte) error {
 		var item models.QueueItem
 		if err := json.Unmarshal(value, &item); err != nil {
 			return nil
 		}
-		if item.RepoGroup == repoGroup || strings.HasPrefix(string(key), repoGroup+"#") {
-			items = append(items, item)
-		}
+		items = append(items, item)
 		return nil
 	})
 	if err != nil {

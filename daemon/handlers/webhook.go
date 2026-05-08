@@ -153,59 +153,71 @@ func parseWebhookEvent(platform string, body []byte, repoGroup string) (string, 
 	return "", nil, nil
 }
 
-// parseGitHubWebhook parses GitHub webhook payload
+// parseGitHubWebhook parses GitHub webhook payload.
+// Uses a single-pass approach: first detect event type with a minimal struct,
+// then parse the full payload only once.
 func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
-	// Check if this is an issue_comment event on a PR
-	var commentCheck struct {
-		Action  string `json:"action"`
-		Issue   struct {
+	// Single unmarshal to detect event type and extract common fields
+	var eventDetect struct {
+		Action      string `json:"action"`
+		Comment     struct {
+			Body string `json:"body"`
+		} `json:"comment"`
+		Issue       struct {
 			PullRequest struct {
 				URL string `json:"url"`
 			} `json:"pull_request"`
 		} `json:"issue"`
-		Comment struct {
-			Body string `json:"body"`
-		} `json:"comment"`
+		Review      struct {
+			State string `json:"state"`
+		} `json:"review"`
 	}
-	if err := json.Unmarshal(body, &commentCheck); err == nil && commentCheck.Action == "created" && commentCheck.Comment.Body != "" && commentCheck.Issue.PullRequest.URL != "" {
+	if err := json.Unmarshal(body, &eventDetect); err != nil {
+		return "", nil, fmt.Errorf("failed to parse webhook: %w", err)
+	}
+
+	// Route to specific parser based on detected event type
+	if eventDetect.Action == "created" && eventDetect.Comment.Body != "" && eventDetect.Issue.PullRequest.URL != "" {
 		return parseGitHubIssueComment(body, repoGroup)
 	}
 
-	// Check if this is a pull_request_review event (for approvals)
-	var reviewPayload struct {
-		Action      string `json:"action"`
-		Review      struct {
-			State string `json:"state"`
-			User  struct {
-				Login string `json:"login"`
-			} `json:"user"`
-		} `json:"review"`
-		PullRequest struct {
-			Number  int    `json:"number"`
-			Title   string `json:"title"`
-			State   string `json:"state"`
-			Merged  bool   `json:"merged"`
-			Draft   bool   `json:"draft"`
-			HTMLURL string `json:"html_url"`
-			User    struct {
-				Login string `json:"login"`
-			} `json:"user"`
-			Head struct {
-				Sha string `json:"sha"`
-			} `json:"head"`
-			Base struct {
-				Ref string `json:"ref"`
-			} `json:"base"`
-			Labels []struct {
-				Name string `json:"name"`
-			} `json:"labels"`
-		} `json:"pull_request"`
-		Repository struct {
-			FullName string `json:"full_name"`
-		} `json:"repository"`
-	}
-
-	if err := json.Unmarshal(body, &reviewPayload); err == nil && reviewPayload.Review.State != "" {
+	if eventDetect.Review.State != "" {
+		// This is a pull_request_review event — parse full payload once
+		var reviewPayload struct {
+			Action      string `json:"action"`
+			Review      struct {
+				State string `json:"state"`
+				User  struct {
+					Login string `json:"login"`
+				} `json:"user"`
+			} `json:"review"`
+			PullRequest struct {
+				Number  int    `json:"number"`
+				Title   string `json:"title"`
+				State   string `json:"state"`
+				Merged  bool   `json:"merged"`
+				Draft   bool   `json:"draft"`
+				HTMLURL string `json:"html_url"`
+				User    struct {
+					Login string `json:"login"`
+				} `json:"user"`
+				Head struct {
+					Sha string `json:"sha"`
+				} `json:"head"`
+				Base struct {
+					Ref string `json:"ref"`
+				} `json:"base"`
+				Labels []struct {
+					Name string `json:"name"`
+				} `json:"labels"`
+			} `json:"pull_request"`
+			Repository struct {
+				FullName string `json:"full_name"`
+			} `json:"repository"`
+		}
+		if err := json.Unmarshal(body, &reviewPayload); err != nil {
+			return "", nil, err
+		}
 		// This is a pull_request_review event
 		pr := &models.PRRecord{
 			Platform:  "github",

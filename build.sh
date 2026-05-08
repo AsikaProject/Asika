@@ -68,6 +68,10 @@ lint () {
 	go vet ./...
 }
 
+test () {
+	go test ./...
+}
+
 # Parse command line arguments
 case "${1:-build}" in
 	build)
@@ -87,6 +91,9 @@ case "${1:-build}" in
 		;;
 	stop)
 		stop
+		;;
+	test)
+		test
 		;;
 	*)
 		error "Unknown command: $1 (use: build, dep, clean, distclean)"

@@ -135,17 +135,29 @@ func (c *Checker) checkApprovals(ctx context.Context, pr *models.PRRecord, group
 	}
 
 	// Check if core contributors approved
-	// If core_contributors list is empty, allow any approval
 	coreApproved := make([]string, 0)
 	isCoreListEmpty := len(group.MergeQueue.CoreContributors) == 0
 	seen := make(map[string]bool)
-	for _, approver := range approvals {
-		if seen[approver] {
-			continue
+	if !isCoreListEmpty {
+		coreSet := make(map[string]bool, len(group.MergeQueue.CoreContributors))
+		for _, c := range group.MergeQueue.CoreContributors {
+			coreSet[c] = true
 		}
-		if isCoreListEmpty || contains(group.MergeQueue.CoreContributors, approver) {
-			coreApproved = append(coreApproved, approver)
-			seen[approver] = true
+		for _, approver := range approvals {
+			if seen[approver] {
+				continue
+			}
+			if coreSet[approver] {
+				coreApproved = append(coreApproved, approver)
+				seen[approver] = true
+			}
+		}
+	} else {
+		for _, approver := range approvals {
+			if !seen[approver] {
+				coreApproved = append(coreApproved, approver)
+				seen[approver] = true
+			}
 		}
 	}
 
@@ -199,35 +211,43 @@ func isTransientError(err error) bool {
 		strings.Contains(msg, "EOF")
 }
 
+var errStop = fmt.Errorf("stop")
+
 func getPRFromDB(repoGroup, prID string) (*models.PRRecord, error) {
-	var pr *models.PRRecord
-	err := db.ForEach(db.BucketPRs, func(key, value []byte) error {
-		var record models.PRRecord
-		if err := json.Unmarshal(value, &record); err != nil {
-			return err
+	// Try index lookup first (fast path for production data)
+	data, err := db.GetPRByIndex(prID, "", 0)
+	if err == nil && data != nil {
+		var pr models.PRRecord
+		if json.Unmarshal(data, &pr) == nil {
+			return &pr, nil
 		}
-		if record.ID == prID {
-			pr = &record
+	}
+	// Fallback: direct key lookup by repoGroup#prID
+	key := fmt.Sprintf("%s#%s", repoGroup, prID)
+	data, err = db.Get(db.BucketPRs, key)
+	if err == nil && data != nil {
+		var pr models.PRRecord
+		if json.Unmarshal(data, &pr) == nil {
+			return &pr, nil
+		}
+	}
+	// Last resort: scan all PRs (for test compatibility)
+	var found *models.PRRecord
+	_ = db.ForEach(db.BucketPRs, func(k, v []byte) error {
+		var pr models.PRRecord
+		if json.Unmarshal(v, &pr) != nil {
 			return nil
+		}
+		if pr.ID == prID {
+			found = &pr
+			return errStop
 		}
 		return nil
 	})
-	if err != nil {
-		return nil, err
+	if found != nil {
+		return found, nil
 	}
-	if pr == nil {
-		return nil, fmt.Errorf("PR not found: %s", prID)
-	}
-	return pr, nil
-}
-
-func contains(list []string, item string) bool {
-	for _, s := range list {
-		if s == item {
-			return true
-		}
-	}
-	return false
+	return nil, fmt.Errorf("PR not found: %s", prID)
 }
 
 // tryAutoRebase attempts to rebase a conflicted PR.

@@ -38,6 +38,7 @@ func GetConfig(c *gin.Context) {
 	// Mask JWT secret
 	masked.Auth.JWTSecret = maskSecret(cfg.Auth.JWTSecret)
 
+	c.Header("Cache-Control", "private, max-age=10")
 	c.JSON(http.StatusOK, masked)
 }
 

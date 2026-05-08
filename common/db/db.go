@@ -169,7 +169,24 @@ func min(a, b int) int {
 	return b
 }
 
-
+// BucketForEachPrefix iterates over key-value pairs in a bucket with the given key prefix.
+// More efficient than ForEach when you only need a subset of keys.
+func BucketForEachPrefix(bucket, prefix string, fn func(key, value []byte) error) error {
+	return DB.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		c := b.Cursor()
+		p := []byte(prefix)
+		for k, v := c.Seek(p); k != nil && string(k[:min(len(k), len(p))]) == prefix; k, v = c.Next() {
+			if err := fn(k, v); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
 
 // PutPRWithIndex stores a PR and updates indices atomically
 func PutPRWithIndex(key string, value []byte, prID, repoGroup string, prNumber int) error {

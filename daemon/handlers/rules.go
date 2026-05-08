@@ -54,11 +54,12 @@ func UpdateLabelRules(c *gin.Context) {
 		return
 	}
 
-	// Update in-memory config
+	// Update in-memory config (deep copy to avoid data race)
 	cfg := config.Current()
 	if cfg != nil {
-		cfg.LabelRules = rules
-		config.Store(cfg)
+		newCfg := *cfg
+		newCfg.LabelRules = rules
+		config.Store(&newCfg)
 	}
 
 	slog.Info("label rules updated")

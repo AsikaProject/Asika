@@ -439,6 +439,7 @@ func (s *Server) Stop() error {
 
 func manifestHandler(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
+	c.Header("Cache-Control", "public, max-age=3600")
 	c.JSON(http.StatusOK, gin.H{
 		"name":             "Asika",
 		"short_name":       "Asika",

@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -163,7 +164,7 @@ var prCommentCmd = &cobra.Command{
 func doRequest(method, url string, cmd *cobra.Command) *http.Response {
 	req, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return nil
 	}
 	token := GetToken(cmd)
@@ -172,7 +173,15 @@ func doRequest(method, url string, cmd *cobra.Command) *http.Response {
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: failed to connect to server: %v\n", err)
+		return nil
+	}
+	if resp.StatusCode == 401 {
+		fmt.Fprintln(os.Stderr, "Error: authentication failed. Use 'asika login' to authenticate.")
+		return nil
+	}
+	if resp.StatusCode == 403 {
+		fmt.Fprintln(os.Stderr, "Error: 权限不够")
 		return nil
 	}
 	return resp

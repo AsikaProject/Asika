@@ -261,26 +261,7 @@ func TestShouldMerge_NotEnoughApprovals(t *testing.T) {
 	}
 }
 
-func TestContains(t *testing.T) {
-	tests := []struct {
-		list  []string
-		item  string
-		want  bool
-	}{
-		{[]string{"a", "b", "c"}, "b", true},
-		{[]string{"a", "b", "c"}, "d", false},
-		{[]string{}, "a", false},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.item, func(t *testing.T) {
-			got := contains(tt.list, tt.item)
-			if got != tt.want {
-				t.Errorf("contains(%v, %q) = %v, want %v", tt.list, tt.item, got, tt.want)
-			}
-		})
-	}
-}
 
 func TestFindPRByID(t *testing.T) {
 	dir := t.TempDir()

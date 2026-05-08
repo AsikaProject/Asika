@@ -166,13 +166,10 @@ func (p *Poller) pollPlatform(client platforms.PlatformClient, repoGroup, platfo
 		key := fmt.Sprintf("%s#%s#%d", repoGroup, platform, pr.PRNumber)
 		data, _ := db.Get(db.BucketPRs, key)
 
-		if data == nil {
-			pr.CreatedAt = time.Now()
-			pr.UpdatedAt = time.Now()
-			events.PublishPR(events.EventPROpened, repoGroup, platform, pr, nil)
-		} else {
-			var existing models.PRRecord
+		var existing models.PRRecord
+		if data != nil {
 			if err := json.Unmarshal(data, &existing); err == nil {
+				// State change detection
 				if existing.State != pr.State {
 					switch pr.State {
 					case "open":
@@ -183,22 +180,21 @@ func (p *Poller) pollPlatform(client platforms.PlatformClient, repoGroup, platfo
 						events.PublishPR(events.EventPRMerged, repoGroup, platform, pr, nil)
 					}
 				}
+				// Preserve local-only fields
+				pr.IsApproved = existing.IsApproved
+				pr.SpamFlag = existing.SpamFlag
+				if !existing.CreatedAt.IsZero() && pr.CreatedAt.IsZero() {
+					pr.CreatedAt = existing.CreatedAt
+				}
 			}
+		} else {
+			pr.CreatedAt = time.Now()
+			pr.UpdatedAt = time.Now()
+			events.PublishPR(events.EventPROpened, repoGroup, platform, pr, nil)
 		}
 
 		if pr.ID == "" {
 			pr.ID = uuid.New().String()
-		}
-		// Preserve local-only fields from existing DB record
-		if data != nil {
-			var existing models.PRRecord
-			if json.Unmarshal(data, &existing) == nil {
-				pr.IsApproved = existing.IsApproved
-				pr.SpamFlag = existing.SpamFlag
-				if existing.CreatedAt.IsZero() == false && pr.CreatedAt.IsZero() {
-					pr.CreatedAt = existing.CreatedAt
-				}
-			}
 		}
 		prData, _ := json.Marshal(pr)
 		toWrite = append(toWrite, prSync{pr: pr, key: key, data: prData})

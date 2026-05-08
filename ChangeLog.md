@@ -1,6 +1,25 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Performance optimizations:**
+  - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
+  - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration
+  - Added `BucketForEachPrefix` to db package for efficient prefix scans
+  - PR checker `getPRFromDB`: use index lookup first, fallback to direct key, last-resort scan
+  - Poller: eliminated double unmarshal of same DB record (state check + field preserve merged)
+  - Webhook parser: reduced triple unmarshal to single detection struct + targeted parse
+  - `checkApprovals`: replaced linear `contains` with `map[string]bool` for core contributor lookup
+- **CLI experience optimization:**
+  - `user add`: added `--groups` and `--permissions` flags for repo group assignment and granular permissions
+  - New `user update` command: modify password, role, groups, permissions; supports `--permissions` and `--no-perms`
+  - Unified error output to stderr with `os.Exit(1)` for all CLI commands
+  - `doRequest`: added 401/403 detection with friendly Chinese error messages
+  - `handleWriteResponse`: errors now go to stderr
+- **WebUI feature improvements:**
+  - Logged-in users accessing `/` now redirect to `/dashboard` instead of `/login`
+  - Login failure shows "用户名或密码错误"
+  - 403 middleware responses return "权限不够" in Chinese
+  - HTTP cache headers: config (10s), stats (30s), manifest (1h)
 - **Fix: login redirect, error messages, and user list refresh:**
   - Logged-in users accessing `/` now redirect to `/dashboard` instead of `/login`
   - Login failure shows "用户名或密码错误" instead of generic "Login failed"
