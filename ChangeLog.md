@@ -4,7 +4,14 @@
 - **WebUI PR list real-time refresh and queue management:**
   - Add `refresh=1` query param to `ListPRs` handler — triggers `PollOnce()` to sync from platforms before returning data
   - Add `ClearQueue` method to queue manager and `DELETE /api/v1/queue/:repo_group` API endpoint
-  - Add "Clear Queue" button to WebUI queue page
+  - Add `RemoveFromQueue` method to queue manager and `DELETE /api/v1/queue/:repo_group/:pr_id` API endpoint
+  - Add "Clear Queue" button and per-item remove button to WebUI queue page
+  - Add `queue clear <group>` and `queue remove <group> <pr_id>` CLI subcommands
+  - Add `/queue_clear [group]` and `/queue_remove <group> <pr_id>` Telegram bot commands
+  - Add `queue_clear [group]` and `queue_remove <group> <pr_id>` Feishu bot commands
+  - Add `!queue_clear [group]` and `!queue_remove <group> <pr_id>` Discord bot commands
+  - Add `queue_clear [group]` and `queue_remove <group> <pr_id>` Slack bot commands
+  - Fix Slack `handleRecheckQueue` not actually calling `queueMgr.CheckQueue()` (was a no-op stub)
   - Fix PR list not auto-refreshing when switching between open/closed states by calling `loadPRs(refresh=true)` on state change
 - **Fix PR write handlers (approve/close/reopen/spam/comment) DB key mismatch:**
   - All write handlers used incorrect 2-part key (`repoGroup#prID`) but DB stores PRs with 3-part key (`repoGroup#platform#prNumber`)

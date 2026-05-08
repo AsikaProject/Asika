@@ -154,6 +154,10 @@ func (b *DiscordBot) handleMessageCreate(s *discordgo.Session, m *discordgo.Mess
 		b.handleShowQueue(s, m, parts)
 	case "!recheck":
 		b.handleRecheckQueue(s, m)
+	case "!queue_clear":
+		b.handleClearQueue(s, m, parts)
+	case "!queue_remove":
+		b.handleRemoveFromQueue(s, m, parts)
 	case "!config":
 		b.handleShowConfig(s, m)
 	case "!rebase":
@@ -603,6 +607,50 @@ func (b *DiscordBot) handleRecheckQueue(s *discordgo.Session, m *discordgo.Messa
 
 	go b.queueMgr.CheckQueue()
 	s.ChannelMessageSend(m.ChannelID, "Queue recheck triggered.")
+}
+
+// handleClearQueue handles !queue_clear command
+func (b *DiscordBot) handleClearQueue(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	repoGroup := ""
+	if len(args) > 1 {
+		repoGroup = args[1]
+	} else {
+		groups := config.GetRepoGroups(b.cfg)
+		if len(groups) > 0 {
+			repoGroup = groups[0].Name
+		}
+	}
+	if repoGroup == "" {
+		s.ChannelMessageSend(m.ChannelID, "No repo group configured.")
+		return
+	}
+	if b.queueMgr == nil {
+		s.ChannelMessageSend(m.ChannelID, "Queue manager not initialized.")
+		return
+	}
+	count, err := b.queueMgr.ClearQueue(repoGroup)
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to clear queue: %v", err))
+		return
+	}
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Queue cleared for **%s**. %d items removed.", repoGroup, count))
+}
+
+// handleRemoveFromQueue handles !queue_remove <repo_group> <pr_id> command
+func (b *DiscordBot) handleRemoveFromQueue(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if len(args) < 3 {
+		s.ChannelMessageSend(m.ChannelID, "Usage: !queue_remove <repo_group> <pr_id>")
+		return
+	}
+	if b.queueMgr == nil {
+		s.ChannelMessageSend(m.ChannelID, "Queue manager not initialized.")
+		return
+	}
+	if err := b.queueMgr.RemoveFromQueue(args[1], args[2]); err != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to remove: %v", err))
+		return
+	}
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Removed **%s** from queue.", args[2]))
 }
 
 // handleShowConfig handles !config command

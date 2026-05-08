@@ -106,6 +106,8 @@ func (b *TelegramBot) registerCommands() {
 	b.bot.Handle("/spam", b.handleMarkSpam)
 	b.bot.Handle("/queue", b.handleShowQueue)
 	b.bot.Handle("/recheck", b.handleRecheckQueue)
+	b.bot.Handle("/queue_clear", b.handleClearQueue)
+	b.bot.Handle("/queue_remove", b.handleRemoveFromQueue)
 	b.bot.Handle("/config", b.handleShowConfig)
 	b.bot.Handle("/stalecheck", b.handleStaleCheck)
 	b.bot.Handle("/unstale", b.handleUnstale)
@@ -763,6 +765,56 @@ func (b *TelegramBot) handleShowQueue(c telebot.Context) error {
 	}
 
 	return c.Send(sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeHTML})
+}
+
+// handleClearQueue handles /queue_clear command.
+func (b *TelegramBot) handleClearQueue(c telebot.Context) error {
+	if !b.requireAdmin(c) {
+		return nil
+	}
+	args := strings.Fields(c.Text())
+	repoGroup := ""
+	if len(args) > 1 {
+		repoGroup = args[1]
+	} else {
+		groups := config.GetRepoGroups(b.cfg)
+		if len(groups) > 0 {
+			repoGroup = groups[0].Name
+		}
+	}
+	if repoGroup == "" {
+		return c.Send("No repo group configured.")
+	}
+	if b.queueMgr == nil {
+		return c.Send("Queue manager not initialized.")
+	}
+	count, err := b.queueMgr.ClearQueue(repoGroup)
+	if err != nil {
+		return c.Send(fmt.Sprintf("Failed to clear queue: %v", err))
+	}
+	return c.Send(fmt.Sprintf("Queue cleared for <b>%s</b>. %d items removed.", html.EscapeString(repoGroup), count),
+		&telebot.SendOptions{ParseMode: telebot.ModeHTML})
+}
+
+// handleRemoveFromQueue handles /queue_remove <repo_group> <pr_id> command.
+func (b *TelegramBot) handleRemoveFromQueue(c telebot.Context) error {
+	if !b.requireAdmin(c) {
+		return nil
+	}
+	args := strings.Fields(c.Text())
+	if len(args) < 3 {
+		return c.Send("Usage: /queue_remove <repo_group> <pr_id>")
+	}
+	repoGroup := args[1]
+	prID := args[2]
+	if b.queueMgr == nil {
+		return c.Send("Queue manager not initialized.")
+	}
+	if err := b.queueMgr.RemoveFromQueue(repoGroup, prID); err != nil {
+		return c.Send(fmt.Sprintf("Failed to remove: %v", err))
+	}
+	return c.Send(fmt.Sprintf("Removed <b>%s</b> from queue.", html.EscapeString(prID)),
+		&telebot.SendOptions{ParseMode: telebot.ModeHTML})
 }
 
 // handleRecheckQueue handles /recheck command.

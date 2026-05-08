@@ -252,6 +252,41 @@ func (b *FeishuBot) processCommand(senderID, text string) string {
 		}
 		return "Queue manager not initialized."
 
+	case lower == "queue_clear" || lower == "/queue_clear":
+		groupName := ""
+		if len(parts) > 1 {
+			groupName = parts[1]
+		}
+		if groupName == "" {
+			groups := config.GetRepoGroups(b.cfg)
+			if len(groups) > 0 {
+				groupName = groups[0].Name
+			}
+		}
+		if groupName == "" {
+			return "No repo group configured."
+		}
+		if b.queueMgr == nil {
+			return "Queue manager not initialized."
+		}
+		count, err := b.queueMgr.ClearQueue(groupName)
+		if err != nil {
+			return fmt.Sprintf("Failed to clear queue: %v", err)
+		}
+		return fmt.Sprintf("Queue cleared for %s. %d items removed.", groupName, count)
+
+	case strings.HasPrefix(lower, "queue_remove ") || strings.HasPrefix(lower, "/queue_remove "):
+		if len(parts) < 3 {
+			return "Usage: queue_remove <repo_group> <pr_id>"
+		}
+		if b.queueMgr == nil {
+			return "Queue manager not initialized."
+		}
+		if err := b.queueMgr.RemoveFromQueue(parts[1], parts[2]); err != nil {
+			return fmt.Sprintf("Failed to remove: %v", err)
+		}
+		return fmt.Sprintf("Removed %s from queue.", parts[2])
+
 	case lower == "config" || lower == "/config":
 		return b.showConfigText()
 

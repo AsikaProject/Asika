@@ -75,6 +75,31 @@ func RecheckQueue(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "queue recheck triggered"})
 }
 
+// RemoveFromQueue handles DELETE /api/v1/queue/:repo_group/:pr_id (8.3)
+func RemoveFromQueue(c *gin.Context) {
+	repoGroup := c.Param("repo_group")
+	prID := c.Param("pr_id")
+
+	if prID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "pr_id is required"})
+		return
+	}
+
+	if queueMgr == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "queue manager not initialized"})
+		return
+	}
+
+	if err := queueMgr.RemoveFromQueue(repoGroup, prID); err != nil {
+		slog.Error("failed to remove queue item", "repo_group", repoGroup, "pr_id", prID, "error", err)
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	slog.Info("queue item removed via API", "repo_group", repoGroup, "pr_id", prID)
+	c.JSON(http.StatusOK, gin.H{"message": "queue item removed"})
+}
+
 // ClearQueue handles DELETE /api/v1/queue/:repo_group (8.3)
 func ClearQueue(c *gin.Context) {
 	repoGroup := c.Param("repo_group")

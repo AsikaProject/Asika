@@ -321,6 +321,16 @@ func (m *Manager) GetQueueItems(repoGroup string) ([]models.QueueItem, error) {
 	})
 	return items, err
 }
+// RemoveFromQueue removes a single queue item by repo group and PR ID.
+func (m *Manager) RemoveFromQueue(repoGroup, prID string) error {
+	key := fmt.Sprintf("%s#%s", repoGroup, prID)
+	data, err := db.Get(db.BucketQueueItems, key)
+	if err != nil || data == nil {
+		return fmt.Errorf("queue item not found: %s", key)
+	}
+	return db.Delete(db.BucketQueueItems, key)
+}
+
 // ClearQueue removes all queue items for a repo group.
 func (m *Manager) ClearQueue(repoGroup string) (int, error) {
 	var keys []string

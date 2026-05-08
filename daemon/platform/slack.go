@@ -207,6 +207,10 @@ func (b *SlackBot) handleMessage(ev *slack.MessageEvent, client *socketmode.Clie
 		b.handleShowQueue(ev, client, parts)
 	case "recheck":
 		b.handleRecheckQueue(ev, client)
+	case "queue_clear":
+		b.handleClearQueue(ev, client, parts)
+	case "queue_remove":
+		b.handleRemoveFromQueue(ev, client, parts)
 	case "config":
 		b.handleShowConfig(ev, client)
 	case "rebase":
@@ -404,7 +408,54 @@ func (b *SlackBot) handleShowQueue(ev *slack.MessageEvent, client *socketmode.Cl
 }
 
 func (b *SlackBot) handleRecheckQueue(ev *slack.MessageEvent, client *socketmode.Client) {
+	if b.queueMgr == nil {
+		b.postMessage(client, ev.Channel, "Queue manager not initialized.")
+		return
+	}
+	go b.queueMgr.CheckQueue()
 	b.postMessage(client, ev.Channel, "Queue recheck triggered.")
+}
+
+func (b *SlackBot) handleClearQueue(ev *slack.MessageEvent, client *socketmode.Client, args []string) {
+	repoGroup := ""
+	if len(args) > 1 {
+		repoGroup = args[1]
+	} else {
+		groups := config.GetRepoGroups(b.cfg)
+		if len(groups) > 0 {
+			repoGroup = groups[0].Name
+		}
+	}
+	if repoGroup == "" {
+		b.postMessage(client, ev.Channel, "No repo group configured.")
+		return
+	}
+	if b.queueMgr == nil {
+		b.postMessage(client, ev.Channel, "Queue manager not initialized.")
+		return
+	}
+	count, err := b.queueMgr.ClearQueue(repoGroup)
+	if err != nil {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("Failed to clear queue: %v", err))
+		return
+	}
+	b.postMessage(client, ev.Channel, fmt.Sprintf("Queue cleared for *%s*. %d items removed.", repoGroup, count))
+}
+
+func (b *SlackBot) handleRemoveFromQueue(ev *slack.MessageEvent, client *socketmode.Client, args []string) {
+	if len(args) < 3 {
+		b.postMessage(client, ev.Channel, "Usage: queue_remove <repo_group> <pr_id>")
+		return
+	}
+	if b.queueMgr == nil {
+		b.postMessage(client, ev.Channel, "Queue manager not initialized.")
+		return
+	}
+	if err := b.queueMgr.RemoveFromQueue(args[1], args[2]); err != nil {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("Failed to remove: %v", err))
+		return
+	}
+	b.postMessage(client, ev.Channel, fmt.Sprintf("Removed *%s* from queue.", args[2]))
 }
 
 func (b *SlackBot) handleShowConfig(ev *slack.MessageEvent, client *socketmode.Client) {

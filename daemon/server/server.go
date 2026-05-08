@@ -197,6 +197,7 @@ func (s *Server) setupRoutes() {
 			queue.POST("/recheck", handlers.RecheckQueue)
 			queue.POST("/rebase", handlers.RebaseQueue)
 			queue.DELETE("", handlers.ClearQueue)
+			queue.DELETE("/:pr_id", handlers.RemoveFromQueue)
 		}
 
 		// Audit logs (8.2)

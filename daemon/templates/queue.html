@@ -82,34 +82,44 @@
                 tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Queue is empty</td></tr>';
                 return;
             }
-            tbody.innerHTML = items.map(item => {
-                const statusText = {
-                    'waiting': '<span style="color: #ffc107;">Waiting for conditions</span>',
-                    'checking': '<span style="color: #17a2b8;">Checking...</span>',
-                    'done': '<span style="color: #28a745;">Ready to merge</span>',
-                    'failed': '<span style="color: #dc3545;">Failed: ' + escapeHtml(item.failure_reason || '') + '</span>'
-                }[item.status] || item.status;
-                
-                const approvals = (item.criteria && item.criteria.approved_by) 
-                    ? item.criteria.approved_by.map(v => escapeHtml(v)).join(', ') 
-                    : '-';
-                
-                const ciStatus = item.criteria ? escapeHtml(item.criteria.ci_status) : '-';
-                
-                return '<tr>' +
-                    '<td>#' + item.pr_id + '</td>' +
-                    '<td>' + escapeHtml(item.title || 'PR #' + item.pr_id) + '</td>' +
-                    '<td class="status-' + escapeHtml(item.status) + '">' + escapeHtml(item.status) + '</td>' +
-                    '<td>' + approvals + '</td>' +
-                    '<td>' + ciStatus + '</td>' +
-                    '<td>' + statusText + '</td>' +
-                    '</tr>';
-            }).join('');
+             const repoGroup = document.getElementById('repoGroupSelect').value;
+             tbody.innerHTML = items.map(item => {
+                 const statusText = {
+                     'waiting': '<span style="color: #ffc107;">Waiting for conditions</span>',
+                     'checking': '<span style="color: #17a2b8;">Checking...</span>',
+                     'done': '<span style="color: #28a745;">Ready to merge</span>',
+                     'failed': '<span style="color: #dc3545;">Failed: ' + escapeHtml(item.failure_reason || '') + '</span>'
+                 }[item.status] || item.status;
+
+                 const approvals = (item.criteria && item.criteria.approved_by)
+                     ? item.criteria.approved_by.map(v => escapeHtml(v)).join(', ')
+                     : '-';
+
+                 const ciStatus = item.criteria ? escapeHtml(item.criteria.ci_status) : '-';
+
+                 return '<tr>' +
+                     '<td>#' + item.pr_id + '</td>' +
+                     '<td>' + escapeHtml(item.title || 'PR #' + item.pr_id) + '</td>' +
+                     '<td class="status-' + escapeHtml(item.status) + '">' + escapeHtml(item.status) + '</td>' +
+                     '<td>' + approvals + '</td>' +
+                     '<td>' + ciStatus + '</td>' +
+                     '<td>' + statusText + '</td>' +
+                     '<td><button class="btn btn-danger" style="padding:2px 6px;font-size:11px;" onclick="removeQueueItem(\'' + escapeHtml(item.pr_id) + '\')">✕</button></td>' +
+                     '</tr>';
+             }).join('');
         } catch (e) {
             console.error(e);
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">Failed to load queue: ' + e.message + '</td></tr>';
         }
     }
+     async function removeQueueItem(prID) {
+         const repoGroup = document.getElementById('repoGroupSelect').value;
+         if (!confirm('Remove PR #' + prID + ' from queue?')) return;
+         try {
+             const resp = await apiRequest('/api/v1/queue/' + repoGroup + '/' + prID, {method:'DELETE'});
+             if (resp.ok) { loadQueue(); } else { alert('Failed to remove item'); }
+         } catch(e) { alert('Failed: ' + e.message); }
+     }
      async function clearQueue() {
          const repoGroup = document.getElementById('repoGroupSelect').value;
          if (!confirm('Clear all queue items for "' + repoGroup + '"? This will remove all PRs from the merge queue.')) return;
