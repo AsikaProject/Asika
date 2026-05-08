@@ -142,3 +142,5 @@ Asika's versioning uses a date-based system, i.e., YYYYMMDD. Different suffixes 
 Generally, only coredev can release versions without a suffix and DEP versions, 
 while external collaborators can release DEV and HF versions. Under special circumstances, 
 HF and CVE versions can be released directly without approval requirements.
+
+For the readability of the ChangeLog, we will attach a copy of the current version's ChangeLog when releasing a version, and at the same time clear the ChangeLog on the main branch.
