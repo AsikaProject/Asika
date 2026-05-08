@@ -1,6 +1,7 @@
 package i18n
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -9,6 +10,9 @@ import (
 	"sync"
 )
 
+//go:embed locales/*
+var localeFS embed.FS
+
 var (
 	mu       sync.RWMutex
 	current  = "en"
@@ -16,6 +20,32 @@ var (
 		"en": {},
 	}
 )
+
+func init() {
+	entries, err := localeFS.ReadDir("locales")
+	if err != nil {
+		slog.Warn("failed to read embedded locales directory", "error", err)
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		data, err := localeFS.ReadFile("locales/" + entry.Name())
+		if err != nil {
+			slog.Warn("failed to read embedded locale file", "file", entry.Name(), "error", err)
+			continue
+		}
+		var msgs map[string]string
+		if err := json.Unmarshal(data, &msgs); err != nil {
+			slog.Warn("failed to parse embedded locale file", "file", entry.Name(), "error", err)
+			continue
+		}
+		locale := strings.TrimSuffix(entry.Name(), ".json")
+		messages[locale] = msgs
+		slog.Info("locale loaded", "locale", locale, "keys", len(msgs))
+	}
+}
 
 // SetLocale sets the current locale.
 func SetLocale(locale string) {
