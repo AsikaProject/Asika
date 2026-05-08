@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"asika/common/auth"
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
@@ -16,15 +17,16 @@ import (
 
 // Bot wraps the Feishu/Lark bot with Asika management functionality.
 type Bot struct {
-	cfg          *models.Config
-	clients      map[platforms.PlatformType]platforms.PlatformClient
-	queueMgr     *queue.Manager
-	syncerRef    *syncer.Syncer
-	spamDetector *syncer.SpamDetector
-	notifier     *notifier.FeishuNotifier
-	adminIDs     map[string]bool
-	stop         chan struct{}
-	feishuCfg    models.FeishuConfig
+	cfg           *models.Config
+	clients       map[platforms.PlatformType]platforms.PlatformClient
+	queueMgr      *queue.Manager
+	syncerRef     *syncer.Syncer
+	spamDetector  *syncer.SpamDetector
+	notifier      *notifier.FeishuNotifier
+	adminIDs      map[string]bool
+	stop          chan struct{}
+	feishuCfg     models.FeishuConfig
+	internalToken string
 }
 
 // NewBot creates a new Feishu bot.
@@ -36,16 +38,18 @@ func NewBot(
 	spamDetector *syncer.SpamDetector,
 	n *notifier.FeishuNotifier,
 ) *Bot {
+	token, _ := auth.GenerateInternalToken()
 	b := &Bot{
-		cfg:          cfg,
-		clients:      clients,
-		queueMgr:     queueMgr,
-		syncerRef:    syncerRef,
-		spamDetector: spamDetector,
-		notifier:     n,
-		adminIDs:     make(map[string]bool),
-		stop:         make(chan struct{}),
-		feishuCfg:    cfg.Feishu,
+		cfg:           cfg,
+		clients:       clients,
+		queueMgr:      queueMgr,
+		syncerRef:     syncerRef,
+		spamDetector:  spamDetector,
+		notifier:      n,
+		adminIDs:      make(map[string]bool),
+		stop:          make(chan struct{}),
+		feishuCfg:     cfg.Feishu,
+		internalToken: token,
 	}
 	for _, id := range cfg.Feishu.AdminIDs {
 		b.adminIDs[id] = true

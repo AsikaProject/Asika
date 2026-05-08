@@ -6,6 +6,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 
+	"asika/common/auth"
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
@@ -15,15 +16,16 @@ import (
 
 // Bot wraps the Discord bot with Asika management functionality.
 type Bot struct {
-	session      *discordgo.Session
-	cfg          *models.Config
-	clients      map[platforms.PlatformType]platforms.PlatformClient
-	queueMgr     *queue.Manager
-	syncerRef    *syncer.Syncer
-	spamDetector *syncer.SpamDetector
-	notifier     *notifier.DiscordNotifier
-	adminIDs     map[string]bool
-	stop         chan struct{}
+	session       *discordgo.Session
+	cfg           *models.Config
+	clients       map[platforms.PlatformType]platforms.PlatformClient
+	queueMgr      *queue.Manager
+	syncerRef     *syncer.Syncer
+	spamDetector  *syncer.SpamDetector
+	notifier      *notifier.DiscordNotifier
+	adminIDs      map[string]bool
+	stop          chan struct{}
+	internalToken string
 }
 
 // NewBot creates a new Discord bot.
@@ -36,15 +38,17 @@ func NewBot(
 	discordNotifier *notifier.DiscordNotifier,
 	adminIDs []string,
 ) *Bot {
+	token, _ := auth.GenerateInternalToken()
 	b := &Bot{
-		cfg:          cfg,
-		clients:      clients,
-		queueMgr:     queueMgr,
-		syncerRef:    syncerRef,
-		spamDetector: spamDetector,
-		notifier:     discordNotifier,
-		adminIDs:     make(map[string]bool),
-		stop:         make(chan struct{}),
+		cfg:           cfg,
+		clients:       clients,
+		queueMgr:      queueMgr,
+		syncerRef:     syncerRef,
+		spamDetector:  spamDetector,
+		notifier:      discordNotifier,
+		adminIDs:      make(map[string]bool),
+		stop:          make(chan struct{}),
+		internalToken: token,
 	}
 	for _, id := range adminIDs {
 		b.adminIDs[id] = true

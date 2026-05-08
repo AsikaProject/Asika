@@ -5,6 +5,7 @@ import (
 
 	"gopkg.in/telebot.v3"
 
+	"asika/common/auth"
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
@@ -14,15 +15,16 @@ import (
 
 // Bot wraps the Telegram bot with Asika management functionality.
 type Bot struct {
-	bot          *telebot.Bot
-	cfg          *models.Config
-	clients      map[platforms.PlatformType]platforms.PlatformClient
-	queueMgr     *queue.Manager
-	syncerRef    *syncer.Syncer
-	spamDetector *syncer.SpamDetector
-	notifier     *notifier.TelegramNotifier
-	adminIDs     map[int64]bool
-	stop         chan struct{}
+	bot           *telebot.Bot
+	cfg           *models.Config
+	clients       map[platforms.PlatformType]platforms.PlatformClient
+	queueMgr      *queue.Manager
+	syncerRef     *syncer.Syncer
+	spamDetector  *syncer.SpamDetector
+	notifier      *notifier.TelegramNotifier
+	adminIDs      map[int64]bool
+	stop          chan struct{}
+	internalToken string
 }
 
 // NewBot creates a new Telegram bot with interactive decision support.
@@ -36,16 +38,18 @@ func NewBot(
 	telegramNotifier *notifier.TelegramNotifier,
 	adminIDs []int64,
 ) *Bot {
+	token, _ := auth.GenerateInternalToken()
 	b := &Bot{
-		bot:          bot,
-		cfg:          cfg,
-		clients:      clients,
-		queueMgr:     queueMgr,
-		syncerRef:    syncerRef,
-		spamDetector: spamDetector,
-		notifier:     telegramNotifier,
-		adminIDs:     make(map[int64]bool),
-		stop:         make(chan struct{}),
+		bot:           bot,
+		cfg:           cfg,
+		clients:       clients,
+		queueMgr:      queueMgr,
+		syncerRef:     syncerRef,
+		spamDetector:  spamDetector,
+		notifier:      telegramNotifier,
+		adminIDs:      make(map[int64]bool),
+		stop:          make(chan struct{}),
+		internalToken: token,
 	}
 	for _, id := range adminIDs {
 		b.adminIDs[id] = true

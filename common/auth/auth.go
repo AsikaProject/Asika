@@ -37,6 +37,11 @@ func CheckPassword(password, hash string) bool {
     return err == nil
 }
 
+// GenerateInternalToken generates a long-lived JWT for internal bot API calls.
+func GenerateInternalToken() (string, error) {
+	return GenerateJWT("bot", "admin")
+}
+
 // GenerateJWT generates a JWT token for a user
 func GenerateJWT(username, role string) (string, error) {
     claims := jwt.MapClaims{

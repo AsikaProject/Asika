@@ -650,7 +650,7 @@ func (b *Bot) handleRebasePR(c telebot.Context) error {
 	if err != nil {
 		return c.Send(fmt.Sprintf("Error: %v", err))
 	}
-	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return c.Send(fmt.Sprintf("Rebase request failed: %v", err))
@@ -699,7 +699,7 @@ func (b *Bot) handleCherryPickPR(c telebot.Context) error {
 		return c.Send(fmt.Sprintf("Error: %v", err))
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return c.Send(fmt.Sprintf("Cherry-pick request failed: %v", err))
@@ -729,7 +729,7 @@ func (b *Bot) handleStats(c telebot.Context) error {
 	}
 	url := fmt.Sprintf("http://localhost%s/api/v1/stats?period=30", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return c.Send(fmt.Sprintf("Failed to fetch stats: %v", err))

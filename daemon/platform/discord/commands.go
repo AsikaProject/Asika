@@ -489,7 +489,7 @@ func (b *Bot) handleRebasePR(s *discordgo.Session, m *discordgo.MessageCreate, p
 	}
 	url := fmt.Sprintf("http://localhost%s/api/v1/repos/%s/prs/%d/rebase", b.cfg.Server.Listen, repoGroup, prNumber)
 	req, _ := http.NewRequest("POST", url, nil)
-	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Rebase request failed: %v", err))
@@ -515,7 +515,7 @@ func (b *Bot) handleRebasePR(s *discordgo.Session, m *discordgo.MessageCreate, p
 func (b *Bot) handleStats(s *discordgo.Session, m *discordgo.MessageCreate) {
 	url := fmt.Sprintf("http://localhost%s/api/v1/stats?period=30", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to fetch stats: %v", err))
@@ -595,7 +595,7 @@ func (b *Bot) handleCherryPickPR(s *discordgo.Session, m *discordgo.MessageCreat
 	body := fmt.Sprintf(`{"target_branch": "%s"}`, targetBranch)
 	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Cherry-pick request failed: %v", err))

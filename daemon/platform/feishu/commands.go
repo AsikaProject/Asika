@@ -549,7 +549,7 @@ func (b *Bot) doRebase(senderID, repoGroup, prNumberStr string) string {
 	}
 	url := fmt.Sprintf("http://localhost%s/api/v1/repos/%s/prs/%d/rebase", cfg.Server.Listen, repoGroup, prNumber)
 	req, _ := http.NewRequest("POST", url, nil)
-	req.Header.Set("Authorization", "Bearer "+cfg.Auth.JWTSecret)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Sprintf("Rebase request failed: %v", err)
@@ -587,7 +587,7 @@ func (b *Bot) doCherryPick(senderID, repoGroup, prNumberStr, targetBranch string
 	body := fmt.Sprintf(`{"target_branch": "%s"}`, targetBranch)
 	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+cfg.Auth.JWTSecret)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Sprintf("Cherry-pick request failed: %v", err)
@@ -611,7 +611,7 @@ func (b *Bot) doCherryPick(senderID, repoGroup, prNumberStr, targetBranch string
 func (b *Bot) showStatsText() string {
 	url := fmt.Sprintf("http://localhost%s/api/v1/stats?period=30", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Authorization", "Bearer "+b.cfg.Auth.JWTSecret)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Sprintf("Failed to fetch stats: %v", err)
