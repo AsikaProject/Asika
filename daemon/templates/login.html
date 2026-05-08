@@ -72,14 +72,7 @@
                     })
                 });
                 if (!resp.ok) {
-                    let errorText = '{{t "login.failed"}} (HTTP ' + resp.status + ')';
-                    try {
-                        const data = await resp.json();
-                        errorText = data.error || errorText;
-                    } catch (e) {
-                        // Response might be empty or not JSON
-                    }
-                    errorMsg.textContent = errorText;
+                    errorMsg.textContent = '{{t "login.failed"}}';
                     errorMsg.style.display = 'block';
                     return;
                 }

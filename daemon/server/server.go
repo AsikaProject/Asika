@@ -301,10 +301,15 @@ func (s *Server) setupRoutes() {
 
 	// WebUI routes - server-rendered (SSR) per tasks.md 2.3
 	s.engine.GET("/", func(c *gin.Context) {
-		if config.Current() != nil {
-			c.Redirect(http.StatusFound, "/login")
-		} else {
+		if config.Current() == nil {
 			c.Redirect(http.StatusFound, "/wizard")
+			return
+		}
+		// Check if user is already logged in
+		if cookie, err := c.Cookie("asika_token"); err == nil && cookie != "" {
+			c.Redirect(http.StatusFound, "/dashboard")
+		} else {
+			c.Redirect(http.StatusFound, "/login")
 		}
 	})
 

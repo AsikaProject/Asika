@@ -134,11 +134,11 @@ func RequireRole(role string) gin.HandlerFunc {
             return
         }
 
-        if !auth.HasPermission(userRole.(string), role) {
-            c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "code": 403})
-            c.Abort()
-            return
-        }
+         if !auth.HasPermission(userRole.(string), role) {
+             c.JSON(http.StatusForbidden, gin.H{"error": "权限不够", "code": 403})
+             c.Abort()
+             return
+         }
 
         c.Next()
     }
@@ -195,7 +195,7 @@ func RequireRepoGroupAccess() gin.HandlerFunc {
 			}
 		}
 
-		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: no access to repo group", "repo_group": repoGroup, "code": 403})
+		c.JSON(http.StatusForbidden, gin.H{"error": "权限不够: 无权访问仓库组 " + repoGroup, "code": 403})
 		c.Abort()
 	}
 }
@@ -271,7 +271,7 @@ func RequirePermission(permField string) gin.HandlerFunc {
 		}
 
 		if !hasPerm {
-			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: missing permission: " + permField, "code": 403})
+			c.JSON(http.StatusForbidden, gin.H{"error": "权限不够", "code": 403})
 			c.Abort()
 			return
 		}

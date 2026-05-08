@@ -1,6 +1,11 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Fix: login redirect, error messages, and user list refresh:**
+  - Logged-in users accessing `/` now redirect to `/dashboard` instead of `/login`
+  - Login failure shows "用户名或密码错误" instead of generic "Login failed"
+  - 403 responses from middleware now return "权限不够" instead of "forbidden"
+  - User creation already refreshes the user list (confirmed working)
 - **User management — granular permissions & repo group assignment:**
   - Add `UserPermissions` struct (can_approve, can_merge, can_close, can_reopen, can_spam, can_manage_queue)
   - Add `PUT /api/v1/users/:username` UpdateUser handler — edit password, role, allowed groups, permissions
