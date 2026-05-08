@@ -1,6 +1,11 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Fix merged/closed PRs re-entering merge queue on re-approval:**
+  - Add state check in `queue.Manager.AddToQueue()` — skips non-open PRs (merged, closed, etc.)
+  - Add state check in `ApprovePR` handler before queue addition — returns `queued: false` for non-open PRs
+  - Fix Discord, Telegram, Feishu bot approve handlers to check PR state before adding to queue and before reporting "added to queue"
+  - Fix `dashboard.html` template syntax error: `{{template "styles"}>` → `{{template "styles"}}` (stray `>`)
 - **WebUI i18n language switcher:**
   - Embed `locales/zh.json` into binary via `//go:embed` in `common/i18n/i18n.go` — locale auto-loads at init
   - Add `currentLang` template function for dynamic `<html lang>` attribute

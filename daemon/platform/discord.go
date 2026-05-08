@@ -357,23 +357,33 @@ func (b *DiscordBot) handleApprovePR(s *discordgo.Session, m *discordgo.MessageC
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 
+	addedToQueue := false
+	if b.queueMgr != nil {
+		if pr.State != "" && pr.State != "open" {
+			slog.Info("discord bot: skipping queue add for non-open PR", "pr_number", pr.PRNumber, "state", pr.State)
+		} else {
+			if err := b.queueMgr.AddToQueue(pr); err != nil {
+				slog.Warn("discord bot: failed to add PR to queue", "error", err, "pr_number", pr.PRNumber)
+			} else {
+				addedToQueue = true
+				go b.queueMgr.CheckQueue()
+			}
+		}
+	}
+
 	db.AppendAuditLog("info", "PR approved", map[string]interface{}{
 		"pr_number":     pr.PRNumber,
 		"repo_group":    pr.RepoGroup,
 		"platform":      pr.Platform,
 		"actor":         "discord",
-		"added_to_queue": true,
+		"added_to_queue": addedToQueue,
 	})
 
-	if b.queueMgr != nil {
-		if err := b.queueMgr.AddToQueue(pr); err != nil {
-			slog.Warn("discord bot: failed to add PR to queue", "error", err, "pr_number", pr.PRNumber)
-		} else {
-			go b.queueMgr.CheckQueue()
-		}
+	if addedToQueue {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d approved and added to merge queue.", pr.PRNumber))
+	} else {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d approved.", pr.PRNumber))
 	}
-
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d approved and added to merge queue.", pr.PRNumber))
 }
 
 // handleClosePR handles !close command

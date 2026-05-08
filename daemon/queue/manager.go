@@ -100,6 +100,12 @@ func (m *Manager) AddToQueue(pr *models.PRRecord) error {
 		return nil
 	}
 
+	// Skip non-open PRs (merged, closed, etc.)
+	if pr.State != "" && pr.State != "open" {
+		slog.Info("skipping non-open PR", "pr_id", pr.ID, "title", pr.Title, "state", pr.State)
+		return nil
+	}
+
 	// Get merge criteria from repo group config
 	group := config.GetRepoGroupByName(m.cfg, pr.RepoGroup)
 	criteria := models.MergeCriteria{

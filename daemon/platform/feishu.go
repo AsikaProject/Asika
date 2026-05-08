@@ -436,23 +436,32 @@ func (b *FeishuBot) doApprove(senderID, repoGroup, prID string) string {
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 
+	addedToQueue := false
+	if b.queueMgr != nil {
+		if pr.State != "" && pr.State != "open" {
+			slog.Info("feishu bot: skipping queue add for non-open PR", "pr_number", pr.PRNumber, "state", pr.State)
+		} else {
+			if err := b.queueMgr.AddToQueue(pr); err != nil {
+				slog.Warn("feishu bot: failed to add PR to queue", "error", err, "pr_number", pr.PRNumber)
+			} else {
+				addedToQueue = true
+				go b.queueMgr.CheckQueue()
+			}
+		}
+	}
+
 	db.AppendAuditLog("info", "PR approved", map[string]interface{}{
 		"pr_number":     pr.PRNumber,
 		"repo_group":    pr.RepoGroup,
 		"platform":      pr.Platform,
 		"actor":         "feishu",
-		"added_to_queue": true,
+		"added_to_queue": addedToQueue,
 	})
 
-	if b.queueMgr != nil {
-		if err := b.queueMgr.AddToQueue(pr); err != nil {
-			slog.Warn("feishu bot: failed to add PR to queue", "error", err, "pr_number", pr.PRNumber)
-		} else {
-			go b.queueMgr.CheckQueue()
-		}
+	if addedToQueue {
+		return fmt.Sprintf("PR #%d approved and added to merge queue.", pr.PRNumber)
 	}
-
-	return fmt.Sprintf("PR #%d approved and added to merge queue.", pr.PRNumber)
+	return fmt.Sprintf("PR #%d approved.", pr.PRNumber)
 }
 
 func (b *FeishuBot) doClose(senderID, repoGroup, prID string) string {

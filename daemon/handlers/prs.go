@@ -400,27 +400,33 @@ func ApprovePR(c *gin.Context) {
 	updated, _ := json.Marshal(pr)
 	db.PutPRWithIndex(dbKey, updated, pr.ID, pr.RepoGroup, pr.PRNumber)
 
-	// Add to merge queue
+	// Add to merge queue (only if PR is still open)
+	addedToQueue := false
 	if queueMgr != nil {
-		if err := queueMgr.AddToQueue(pr); err != nil {
-			slog.Warn("failed to add PR to queue", "error", err, "pr_number", prNumber)
+		if pr.State != "" && pr.State != "open" {
+			slog.Info("skipping queue add for non-open PR", "pr_number", prNumber, "repo_group", repoGroup, "state", pr.State)
 		} else {
-			if isNew {
-				slog.Info("PR added to merge queue after approval", "pr_number", prNumber, "repo_group", repoGroup)
+			if err := queueMgr.AddToQueue(pr); err != nil {
+				slog.Warn("failed to add PR to queue", "error", err, "pr_number", prNumber)
+			} else {
+				addedToQueue = true
+				if isNew {
+					slog.Info("PR added to merge queue after approval", "pr_number", prNumber, "repo_group", repoGroup)
+				}
+				// Trigger immediate queue check
+				go queueMgr.CheckQueue()
 			}
-			// Trigger immediate queue check
-			go queueMgr.CheckQueue()
 		}
 	}
 
 	db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-		"pr_number":  prNumber,
-		"repo_group":  repoGroup,
-		"actor":       c.GetString("username"),
-		"platform":    platform,
-		"added_to_queue": true,
+		"pr_number":     prNumber,
+		"repo_group":    repoGroup,
+		"actor":         c.GetString("username"),
+		"platform":      platform,
+		"added_to_queue": addedToQueue,
 	})
-	c.JSON(http.StatusOK, gin.H{"message": "PR approved", "queued": true})
+	c.JSON(http.StatusOK, gin.H{"message": "PR approved", "queued": addedToQueue})
 }
 
 // ClosePR handles POST /api/v1/repos/:repo_group/prs/:pr_id/close (8.2)
