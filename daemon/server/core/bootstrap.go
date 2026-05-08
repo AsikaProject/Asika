@@ -13,7 +13,10 @@ import (
 	"asika/common/platforms"
 	"asika/daemon/consumer"
 	"asika/daemon/handlers"
-	"asika/daemon/platform"
+	"asika/daemon/platform/discord"
+	"asika/daemon/platform/feishu"
+	"asika/daemon/platform/slack"
+	"asika/daemon/platform/telegram"
 	"asika/daemon/polling"
 	"asika/daemon/queue"
 	"asika/daemon/reports"
@@ -30,10 +33,10 @@ type InitConfig struct {
 	SpamDetector  *syncer.SpamDetector
 	Poller        *polling.Poller
 	EventConsumer *consumer.Consumer
-	TgBot         *platform.TelegramBot
-	FsBot         *platform.FeishuBot
-	DiscordBot    *platform.DiscordBot
-	SlackBot      *platform.SlackBot
+	TgBot         *telegram.Bot
+	FsBot         *feishu.Bot
+	DiscordBot    *discord.Bot
+	SlackBot      *slack.Bot
 }
 
 // InitWithRetry initializes the database with retries for lock conflicts.

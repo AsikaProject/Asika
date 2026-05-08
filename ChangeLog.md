@@ -1,6 +1,15 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Refactor: split daemon/platform monolithic files into sub-packages:**
+  - Split `daemon/platform/telegram.go` (1581 lines) into `telegram/bot.go`, `telegram/commands.go`, `telegram/callbacks.go`, `telegram/helpers.go`
+  - Split `daemon/platform/feishu.go` (1006 lines) into `feishu/bot.go`, `feishu/commands.go`
+  - Split `daemon/platform/discord.go` (925 lines) into `discord/bot.go`, `discord/commands.go`
+  - Split `daemon/platform/slack.go` (497 lines) into `slack/bot.go`, `slack/commands.go`
+  - Extract shared helpers to `common/platformutil/shared.go`: `GetPRByID`, `Truncate`, `InactivityDays`, `HasLabelStr`, `ParseInt`
+  - Remove duplicate `getPRRecord`/`truncateStr`/`inactivityDays`/`hasLabelStr`/`parseInt` from individual platform files
+  - Add `slack_test.go` (no tests existed for Slack bot before)
+  - Update `bots.go` and `bootstrap.go` imports to use new sub-package paths
 - **Performance optimizations:**
   - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
   - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration

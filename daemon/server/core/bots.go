@@ -3,7 +3,7 @@ package core
 import (
 	"log/slog"
 
-	"github.com/slack-go/slack"
+	slackapi "github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
 	"gopkg.in/telebot.v3"
 
@@ -11,7 +11,10 @@ import (
 	"asika/common/notifier"
 	"asika/common/platforms"
 	"asika/daemon/handlers"
-	"asika/daemon/platform"
+	"asika/daemon/platform/discord"
+	"asika/daemon/platform/feishu"
+	"asika/daemon/platform/slack"
+	"asika/daemon/platform/telegram"
 	"asika/daemon/queue"
 	"asika/daemon/syncer"
 )
@@ -24,7 +27,7 @@ func StartTelegram(
 	queueMgr *queue.Manager,
 	syncr *syncer.Syncer,
 	spamDetector *syncer.SpamDetector,
-) *platform.TelegramBot {
+) *telegram.Bot {
 	if cfg == nil || !cfg.Telegram.Enabled || cfg.Telegram.Token == "" {
 		return nil
 	}
@@ -46,7 +49,7 @@ func StartTelegram(
 	}
 	telegramNotifier := notifier.NewTelegramNotifier(cfgMap)
 
-	tgBot := platform.NewTelegramBot(
+	tgBot := telegram.NewBot(
 		bot, cfg, clients, queueMgr, syncr, spamDetector,
 		telegramNotifier, cfg.Telegram.AdminIDs,
 	)
@@ -64,7 +67,7 @@ func StartFeishu(
 	queueMgr *queue.Manager,
 	syncr *syncer.Syncer,
 	spamDetector *syncer.SpamDetector,
-) *platform.FeishuBot {
+) *feishu.Bot {
 	if cfg == nil || !cfg.Feishu.Enabled || cfg.Feishu.AppID == "" {
 		return nil
 	}
@@ -76,7 +79,7 @@ func StartFeishu(
 	}
 	feishuNotifier := notifier.NewFeishuNotifier(cfgMap)
 
-	fsBot := platform.NewFeishuBot(
+	fsBot := feishu.NewBot(
 		cfg, clients, queueMgr, syncr, spamDetector, feishuNotifier,
 	)
 
@@ -94,7 +97,7 @@ func StartDiscord(
 	queueMgr *queue.Manager,
 	syncr *syncer.Syncer,
 	spamDetector *syncer.SpamDetector,
-) *platform.DiscordBot {
+) *discord.Bot {
 	if cfg == nil || !cfg.Discord.Enabled || cfg.Discord.Token == "" {
 		return nil
 	}
@@ -105,7 +108,7 @@ func StartDiscord(
 	}
 	discordNotifier := notifier.NewDiscordNotifier(cfgMap)
 
-	discordBot := platform.NewDiscordBot(
+	discordBot := discord.NewBot(
 		cfg, clients, queueMgr, syncr, spamDetector,
 		discordNotifier, cfg.Discord.AdminIDs,
 	)
@@ -129,12 +132,12 @@ func StartSlack(
 	queueMgr *queue.Manager,
 	syncr *syncer.Syncer,
 	spamDetector *syncer.SpamDetector,
-) *platform.SlackBot {
+) *slack.Bot {
 	if cfg == nil || !cfg.Slack.Enabled || cfg.Slack.Token == "" || cfg.Slack.AppToken == "" {
 		return nil
 	}
 
-	slackClient := slack.New(cfg.Slack.Token, slack.OptionAppLevelToken(cfg.Slack.AppToken))
+	slackClient := slackapi.New(cfg.Slack.Token, slackapi.OptionAppLevelToken(cfg.Slack.AppToken))
 	socketClient := socketmode.New(slackClient)
 
 	cfgMap := map[string]interface{}{
@@ -143,7 +146,7 @@ func StartSlack(
 	}
 	slackNotifier := notifier.NewSlackBotNotifier(cfgMap)
 
-	slackBot := platform.NewSlackBot(cfg, clients, queueMgr, syncr, spamDetector, slackNotifier, cfg.Slack.AdminIDs)
+	slackBot := slack.NewBot(cfg, clients, queueMgr, syncr, spamDetector, slackNotifier, cfg.Slack.AdminIDs)
 	slackBot.SetSocketClient(socketClient)
 
 	go func() {
