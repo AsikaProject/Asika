@@ -19,6 +19,7 @@ import (
 	"asika/common/models"
 	"asika/common/platforms"
 	commonutil "asika/common/platformutil"
+	"asika/common/utils"
 	"asika/common/version"
 )
 
@@ -742,16 +743,16 @@ func (b *Bot) handleStats(c telebot.Context) error {
 	var sb strings.Builder
 	sb.WriteString("<b>📊 DORA Metrics</b>\n\n")
 	if v, ok := result["deployment_frequency"]; ok {
-		sb.WriteString(fmt.Sprintf("🚀 Deployments/Day: <b>%.2f</b>\n", v))
+		sb.WriteString(fmt.Sprintf("🚀 Deployments/Day: <b>%.2f</b>\n", utils.ToFloat64(v)))
 	}
 	if v, ok := result["lead_time_hours"]; ok {
-		sb.WriteString(fmt.Sprintf("⏱ Lead Time: <b>%v</b>\n", v))
+		sb.WriteString(fmt.Sprintf("⏱ Lead Time: <b>%s</b>\n", utils.FormatHours(utils.ToFloat64(v))))
 	}
 	if v, ok := result["change_failure_rate"]; ok {
-		sb.WriteString(fmt.Sprintf("💥 Failure Rate: <b>%.1f%%</b>\n", v))
+		sb.WriteString(fmt.Sprintf("💥 Failure Rate: <b>%.1f%%</b>\n", utils.ToFloat64(v)*100))
 	}
 	if v, ok := result["mttr_hours"]; ok {
-		sb.WriteString(fmt.Sprintf("🔧 MTTR: <b>%v</b>\n", v))
+		sb.WriteString(fmt.Sprintf("🔧 MTTR: <b>%s</b>\n", utils.FormatHours(utils.ToFloat64(v))))
 	}
 	sb.WriteString("\n<b>Overview</b>\n")
 	if v, ok := result["total_prs"]; ok {
