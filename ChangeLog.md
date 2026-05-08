@@ -1,6 +1,14 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **User management — granular permissions & repo group assignment:**
+  - Add `UserPermissions` struct (can_approve, can_merge, can_close, can_reopen, can_spam, can_manage_queue)
+  - Add `PUT /api/v1/users/:username` UpdateUser handler — edit password, role, allowed groups, permissions
+  - Add `RequirePermission` middleware — per-route granular permission checks (admin always passes)
+  - Apply granular permissions to PR write routes (approve/close/reopen/spam/merge) and queue write routes
+  - WebUI: full user management with edit modal, repo group selector, permission checkboxes
+  - WebUI: user table shows assigned groups and enabled permissions
+  - Add i18n keys for all new user management UI strings
 - **Spam keyword batch delete & auto-clean:**
   - Spam keywords: add per-keyword checkboxes + "Select All" + "Delete Selected" batch delete
   - Add spam auto-clean: new config `auto_clean_enabled` (default false) + `auto_clean_interval`

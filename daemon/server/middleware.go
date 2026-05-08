@@ -222,6 +222,63 @@ func RequireAnyRole(roles ...string) gin.HandlerFunc {
     }
 }
 
+// RequirePermission checks if the user has a specific granular permission.
+// Admins always pass. For non-admins, checks the user's Permissions field loaded from DB.
+func RequirePermission(permField string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userRole, _ := c.Get("role")
+		if userRole != nil && userRole.(string) == "admin" {
+			c.Next()
+			return
+		}
+
+		username, _ := c.Get("username")
+		if username == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
+			c.Abort()
+			return
+		}
+
+		data, err := db.Get(db.BucketUsers, username.(string))
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "code": 403})
+			c.Abort()
+			return
+		}
+		var user models.User
+		if err := json.Unmarshal(data, &user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			c.Abort()
+			return
+		}
+
+		var hasPerm bool
+		switch permField {
+		case "approve":
+			hasPerm = user.Permissions.CanApprove
+		case "merge":
+			hasPerm = user.Permissions.CanMerge
+		case "close":
+			hasPerm = user.Permissions.CanClose
+		case "reopen":
+			hasPerm = user.Permissions.CanReopen
+		case "spam":
+			hasPerm = user.Permissions.CanSpam
+		case "manage_queue":
+			hasPerm = user.Permissions.CanManageQueue
+		default:
+			hasPerm = false
+		}
+
+		if !hasPerm {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: missing permission: " + permField, "code": 403})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 // extractToken extracts the JWT token from Authorization header or cookie
 func extractToken(c *gin.Context) string {
 	authHeader := c.GetHeader("Authorization")

@@ -2,13 +2,26 @@ package models
 
 import "time"
 
+// UserPermissions defines granular per-user permissions.
+// When Role is "admin", all permissions are implicitly granted.
+// When Role is "operator" or "viewer", these fields control specific actions.
+type UserPermissions struct {
+	CanApprove     bool `json:"can_approve" toml:"can_approve"`
+	CanMerge       bool `json:"can_merge" toml:"can_merge"`
+	CanClose       bool `json:"can_close" toml:"can_close"`
+	CanReopen      bool `json:"can_reopen" toml:"can_reopen"`
+	CanSpam        bool `json:"can_spam" toml:"can_spam"`
+	CanManageQueue bool `json:"can_manage_queue" toml:"can_manage_queue"`
+}
+
 // User represents an admin user
 type User struct {
-	Username          string    `json:"username"`
-	PasswordHash      string    `json:"password_hash"` // bcrypt
-	Role              string    `json:"role"`          // "admin" | "operator" | "viewer"
-	CreatedAt         time.Time `json:"created_at"`
-	AllowedRepoGroups []string  `json:"allowed_repo_groups"` // empty = all groups (for admin)
+	Username          string           `json:"username"`
+	PasswordHash      string           `json:"password_hash"` // bcrypt
+	Role              string           `json:"role"`          // "admin" | "operator" | "viewer"
+	CreatedAt         time.Time        `json:"created_at"`
+	AllowedRepoGroups []string         `json:"allowed_repo_groups"` // empty = all groups
+	Permissions       UserPermissions  `json:"permissions"`
 }
 
 // RepoGroup represents a repository group

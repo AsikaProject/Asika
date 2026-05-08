@@ -167,9 +167,10 @@ func (s *Server) setupRoutes() {
 		users := protected.Group("/users")
 		users.Use(RequireRole("admin"))
 		{
-			users.GET("", handlers.ListUsers)
-			users.POST("", handlers.CreateUser)
-			users.DELETE("/:username", handlers.DeleteUser)
+ 			users.GET("", handlers.ListUsers)
+ 			users.POST("", handlers.CreateUser)
+ 			users.PUT("/:username", handlers.UpdateUser)
+ 			users.DELETE("/:username", handlers.DeleteUser)
 		}
 
 		// PR management (8.2)
@@ -180,15 +181,41 @@ func (s *Server) setupRoutes() {
 			prs.GET("", handlers.ListPRs)
 			prs.POST("/sync", handlers.ListPRs)
 			prs.GET("/:pr_id", handlers.GetPR)
-			prs.POST("/:pr_id/approve", handlers.ApprovePR)
-			prs.POST("/:pr_id/close", handlers.ClosePR)
-			prs.POST("/:pr_id/reopen", handlers.ReopenPR)
-			prs.POST("/:pr_id/spam", handlers.MarkSpam)
 			prs.POST("/:pr_id/comment", handlers.CommentPR)
-			prs.POST("/:pr_id/rebase", handlers.RebaseSinglePR)
-			prs.POST("/:pr_id/cherry-pick", handlers.CherryPickSinglePR)
-			prs.POST("/batch/approve", handlers.BatchApprovePR)
-			prs.POST("/batch/close", handlers.BatchClosePR)
+
+			prsApprove := prs.Group("")
+			prsApprove.Use(RequirePermission("approve"))
+			{
+				prsApprove.POST("/:pr_id/approve", handlers.ApprovePR)
+				prsApprove.POST("/batch/approve", handlers.BatchApprovePR)
+			}
+
+			prsClose := prs.Group("")
+			prsClose.Use(RequirePermission("close"))
+			{
+				prsClose.POST("/:pr_id/close", handlers.ClosePR)
+				prsClose.POST("/batch/close", handlers.BatchClosePR)
+			}
+
+			prsReopen := prs.Group("")
+			prsReopen.Use(RequirePermission("reopen"))
+			{
+				prsReopen.POST("/:pr_id/reopen", handlers.ReopenPR)
+			}
+
+			prsSpam := prs.Group("")
+			prsSpam.Use(RequirePermission("spam"))
+			{
+				prsSpam.POST("/:pr_id/spam", handlers.MarkSpam)
+			}
+
+			prsMerge := prs.Group("")
+			prsMerge.Use(RequirePermission("merge"))
+			{
+				prsMerge.POST("/:pr_id/rebase", handlers.RebaseSinglePR)
+				prsMerge.POST("/:pr_id/cherry-pick", handlers.CherryPickSinglePR)
+			}
+
 			prs.POST("/batch/label", handlers.BatchLabelPR)
 		}
 
@@ -198,10 +225,15 @@ func (s *Server) setupRoutes() {
 		queue.Use(RequireRepoGroupAccess())
 		{
 			queue.GET("", handlers.GetQueue)
-			queue.POST("/recheck", handlers.RecheckQueue)
-			queue.POST("/rebase", handlers.RebaseQueue)
-			queue.DELETE("", handlers.ClearQueue)
-			queue.DELETE("/:pr_id", handlers.RemoveFromQueue)
+
+			queueWrite := queue.Group("")
+			queueWrite.Use(RequirePermission("manage_queue"))
+			{
+				queueWrite.POST("/recheck", handlers.RecheckQueue)
+				queueWrite.POST("/rebase", handlers.RebaseQueue)
+				queueWrite.DELETE("", handlers.ClearQueue)
+				queueWrite.DELETE("/:pr_id", handlers.RemoveFromQueue)
+			}
 		}
 
 		// Audit logs (8.2)

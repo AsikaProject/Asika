@@ -168,6 +168,99 @@ func CreateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "user created", "username": req.Username})
 }
 
+// UpdateUser handles PUT /api/v1/users/:username (8.1)
+func UpdateUser(c *gin.Context) {
+	username := c.Param("username")
+	if username == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "username required"})
+		return
+	}
+
+	var req struct {
+		Password          *string  `json:"password"`
+		Role              *string  `json:"role"`
+		AllowedRepoGroups []string `json:"allowed_repo_groups"`
+		Permissions       *struct {
+			CanApprove     *bool `json:"can_approve"`
+			CanMerge       *bool `json:"can_merge"`
+			CanClose       *bool `json:"can_close"`
+			CanReopen      *bool `json:"can_reopen"`
+			CanSpam        *bool `json:"can_spam"`
+			CanManageQueue *bool `json:"can_manage_queue"`
+		} `json:"permissions"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Load existing user
+	data, err := db.Get(db.BucketUsers, username)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+	var user models.User
+	if err := json.Unmarshal(data, &user); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user"})
+		return
+	}
+
+	// Update fields
+	if req.Password != nil && *req.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+			return
+		}
+		user.PasswordHash = string(hash)
+	}
+	if req.Role != nil {
+		validRoles := map[string]bool{"viewer": true, "operator": true, "admin": true}
+		if !validRoles[*req.Role] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role: must be viewer, operator, or admin"})
+			return
+		}
+		user.Role = *req.Role
+	}
+	if req.AllowedRepoGroups != nil {
+		user.AllowedRepoGroups = req.AllowedRepoGroups
+	}
+	if req.Permissions != nil {
+		p := req.Permissions
+		if p.CanApprove != nil {
+			user.Permissions.CanApprove = *p.CanApprove
+		}
+		if p.CanMerge != nil {
+			user.Permissions.CanMerge = *p.CanMerge
+		}
+		if p.CanClose != nil {
+			user.Permissions.CanClose = *p.CanClose
+		}
+		if p.CanReopen != nil {
+			user.Permissions.CanReopen = *p.CanReopen
+		}
+		if p.CanSpam != nil {
+			user.Permissions.CanSpam = *p.CanSpam
+		}
+		if p.CanManageQueue != nil {
+			user.Permissions.CanManageQueue = *p.CanManageQueue
+		}
+	}
+
+	data, err = json.Marshal(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	if err := db.Put(db.BucketUsers, username, data); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "user updated", "username": username})
+}
+
 // DeleteUser handles DELETE /api/v1/users/:username (8.1)
 func DeleteUser(c *gin.Context) {
 	username := c.Param("username")
