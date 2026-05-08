@@ -1,30 +1,30 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{currentLang}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
     {{template "styles"}}
-    <title>Config - Asika</title>
+    <title>{{t "config.title"}} - Asika</title>
 </head>
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>Configuration</h1>
-<p style="margin-bottom:15px;"><a href="/settings" class="btn btn-secondary btn-sm">⚙ Settings Editor</a> <span style="color:#999; font-size:13px; margin-left:8px;">(or edit raw TOML below)</span></p>
+<h1>{{t "config.title"}}</h1>
+<p style="margin-bottom:15px;"><a href="/settings" class="btn btn-secondary btn-sm">⚙ {{t "settings.title"}}</a> <span style="color:#999; font-size:13px; margin-left:8px;">(or edit raw TOML below)</span></p>
 <div id="errorMsg" class="error" style="display:none;"></div>
 <div id="successMsg" class="success" style="display:none;"></div>
 
 <div class="card" style="margin-bottom:20px;">
-    <h2>System</h2>
+    <h2>{{t "config.system"}}</h2>
     <div style="margin-bottom:15px;">
-        <strong>Current version:</strong> <span id="currentVersion">-</span>
+        <strong>{{t "config.current_version"}}</strong> <span id="currentVersion">-</span>
         <span id="latestVersionInfo" style="margin-left:10px; display:none;">
             (Latest: <span id="latestVersion">-</span>)
         </span>
     </div>
-    <button class="btn btn-primary" onclick="checkUpdate()" id="checkUpdateBtn">Check for Updates</button>
-    <button class="btn btn-success" onclick="performUpdate()" id="performUpdateBtn" style="display:none; margin-left:10px;">Update Now</button>
+    <button class="btn btn-primary" onclick="checkUpdate()" id="checkUpdateBtn">{{t "config.check_updates"}}</button>
+    <button class="btn btn-success" onclick="performUpdate()" id="performUpdateBtn" style="display:none; margin-left:10px;">{{t "config.update_now"}}</button>
     <div id="updateProgress" style="margin-top:10px; display:none;">
         <div style="background:#e9ecef; border-radius:4px; height:20px; overflow:hidden;">
             <div id="updateProgressBar" style="background:#28a745; height:100%; width:0%; transition:width 0.3s;"></div>
@@ -34,7 +34,7 @@
 </div>
 
 <div class="card" style="margin-bottom:20px;">
-    <h2>Stale PR Management</h2>
+    <h2>{{t "config.stale_pr_mgmt"}}</h2>
     <p style="color:#666; font-size:13px; margin-bottom:15px;">Configure automatic detection and management of inactive PRs.</p>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
         <div>
@@ -60,20 +60,20 @@
     <div style="margin-top:12px; color:#666; font-size:12px;">
         Exempt labels: long-term (configure additional via TOML below)
     </div>
-    <button class="btn btn-primary" onclick="triggerStaleCheck()" style="margin-top:12px;">Run Stale Check Now</button>
+    <button class="btn btn-primary" onclick="triggerStaleCheck()" style="margin-top:12px;">{{t "config.run_stale_check"}}</button>
     <span id="staleCheckStatus" style="font-size:12px; color:#666; margin-left:10px;"></span>
 </div>
 
 <div class="card">
-    <h2>Current Configuration</h2>
-    <pre id="configDisplay" style="background: #f9f9f9; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 13px;">Loading...</pre>
+    <h2>{{t "config.current_config"}}</h2>
+    <pre id="configDisplay" style="background: #f9f9f9; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 13px;">{{t "common.loading"}}</pre>
     <div style="margin-top: 20px;">
-        <h3>Update Configuration</h3>
-        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Paste TOML configuration below.</p>
+        <h3>{{t "config.update_config"}}</h3>
+        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">{{t "config.paste_toml"}}</p>
         <textarea id="configInput" rows="20" style="width:100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 13px;"></textarea>
         <div style="margin-top: 15px;">
-            <button class="btn btn-primary" onclick="updateConfig()">Update Config</button>
-            <button class="btn btn-secondary" onclick="loadConfig()" style="margin-left: 10px;">Refresh</button>
+            <button class="btn btn-primary" onclick="updateConfig()">{{t "config.update"}}</button>
+            <button class="btn btn-secondary" onclick="loadConfig()" style="margin-left: 10px;">{{t "settings.refresh"}}</button>
         </div>
     </div>
 </div>
@@ -108,13 +108,13 @@
         const cur = document.getElementById('currentVersion').textContent;
         const latest = document.getElementById('latestVersion').textContent;
         if (cur === latest || latest === '-') {
-            showSuccess('You are running the latest version (' + cur + ')');
+            showSuccess('{{t "config.you_are_latest"}}'.replace('%s', cur));
         } else {
-            showSuccess('New version ' + latest + ' available!');
+            showSuccess('{{t "config.new_version_available"}}'.replace('%s', latest));
         }
     }
     async function performUpdate() {
-        if (!confirm('This will download and install the latest version. The service will restart. Continue?')) return;
+        if (!confirm('{{t "config.update_confirm"}}')) return;
         document.getElementById('updateProgress').style.display = 'block';
         document.getElementById('performUpdateBtn').disabled = true;
         document.getElementById('checkUpdateBtn').disabled = true;

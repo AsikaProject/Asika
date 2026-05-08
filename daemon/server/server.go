@@ -26,6 +26,10 @@ func tFunc(key string, args ...interface{}) string {
 	return i18n.T(key, args...)
 }
 
+func currentLangFunc() string {
+	return i18n.Locale()
+}
+
 // Server represents the HTTP server
 type Server struct {
 	engine   *gin.Engine
@@ -43,7 +47,7 @@ func NewServer(cfg *models.Config, clients map[platforms.PlatformType]platforms.
 	engine := gin.New()
 
 	// Load HTML templates from embedded FS with i18n function
-	t, err := template.New("").Funcs(template.FuncMap{"t": tFunc}).ParseFS(templates.FS, "*.html")
+	t, err := template.New("").Funcs(template.FuncMap{"t": tFunc, "currentLang": currentLangFunc}).ParseFS(templates.FS, "*.html")
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse templates: %v", err))
 	}

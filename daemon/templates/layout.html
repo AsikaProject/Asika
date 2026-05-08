@@ -162,6 +162,17 @@
     function toggleMobileMenu() {
         document.querySelector('.header .nav').classList.toggle('open');
     }
+    function setLocale(locale) {
+        fetch('/api/v1/locale', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ locale: locale })
+        }).then(function() { window.location.reload(); });
+    }
+    function getCookie(name) {
+        var match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+        return match ? decodeURIComponent(match[1]) : '';
+    }
 </script>
 {{end}}
 
@@ -169,16 +180,20 @@
 <div class="header">
     <h1>Asika</h1>
     <div class="header-right">
-        <div class="user-info">{{.username}} | <a href="#" onclick="logout(); return false;" style="color: var(--danger);">Logout</a></div>
+        <select class="lang-select" onchange="setLocale(this.value)" aria-label="Language" style="padding: 4px 8px; font-size: 13px; border: 1px solid var(--border); border-radius: 4px; background: var(--card-bg); color: var(--text); cursor: pointer;">
+            <option value="en" {{if eq (currentLang) "en"}}selected{{end}}>English</option>
+            <option value="zh" {{if eq (currentLang) "zh"}}selected{{end}}>中文</option>
+        </select>
+        <div class="user-info">{{.username}} | <a href="#" onclick="logout(); return false;" style="color: var(--danger);">{{t "nav.logout"}}</a></div>
         <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Menu">&#9776;</button>
     </div>
     <div class="nav">
-        <a href="/dashboard">Dashboard</a>
-        <a href="/prs">PRs</a>
-        <a href="/queue">Queue</a>
-        <a href="/users">Users</a>
-        <a href="/settings">Settings</a>
-        <a href="/config">Config</a>
+        <a href="/dashboard">{{t "nav.dashboard"}}</a>
+        <a href="/prs">{{t "nav.prs"}}</a>
+        <a href="/queue">{{t "nav.queue"}}</a>
+        <a href="/users">{{t "nav.users"}}</a>
+        <a href="/settings">{{t "nav.settings"}}</a>
+        <a href="/config">{{t "nav.config"}}</a>
     </div>
 </div>
 {{end}}

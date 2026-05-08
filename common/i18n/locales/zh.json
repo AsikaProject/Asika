@@ -151,9 +151,10 @@
 	"wizard.complete": "完成设置",
 	"wizard.setup_complete": "设置完成！",
 	"wizard.setup_complete_desc": "配置已成功保存！",
-	"wizard.go_to_login": "前往登录",
+ 	"wizard.go_to_login": "前往登录",
+ 	"wizard.step": "步骤",
 
-	"common.loading": "加载中...",
+ 	"common.loading": "加载中...",
 	"common.no_data": "暂无数据",
 	"common.error": "错误：",
 	"common.success": "成功",

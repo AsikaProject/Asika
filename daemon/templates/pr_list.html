@@ -10,34 +10,34 @@
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>PR List</h1>
+<h1>{{t "pr_list.title"}}</h1>
 <div class="form-group">
-    <label for="repoGroupSelect">Repository Group:</label>
+    <label for="repoGroupSelect">{{t "pr_list.repo_group"}}</label>
     <select id="repoGroupSelect" onchange="changePage(1)">
     </select>
 </div>
 <div class="form-group">
-    <label>Filter by state:</label>
+    <label>{{t "pr_list.filter_state"}}</label>
     <select id="stateFilter" onchange="stateChanged()">
-        <option value="open">Open</option>
-        <option value="closed">Closed</option>
-        <option value="merged">Merged</option>
-        <option value="">All</option>
+        <option value="open">{{t "pr_list.state.open"}}</option>
+        <option value="closed">{{t "pr_list.state.closed"}}</option>
+        <option value="merged">{{t "pr_list.state.merged"}}</option>
+        <option value="">{{t "pr_list.state.all"}}</option>
     </select>
 </div>
 <div class="card">
     <div class="table-wrapper">
     <table>
         <thead>
-            <tr>
-                <th>#</th>
-                <th>Title</th>
-                <th>Author</th>
-                <th>Platform</th>
-                <th>State</th>
-                <th>Labels</th>
-                <th>Actions</th>
-            </tr>
+             <tr>
+                 <th>{{t "pr_list.th.number"}}</th>
+                 <th>{{t "pr_list.th.title"}}</th>
+                 <th>{{t "pr_list.th.author"}}</th>
+                 <th>{{t "pr_list.th.platform"}}</th>
+                 <th>{{t "pr_list.th.state"}}</th>
+                 <th>{{t "pr_list.th.labels"}}</th>
+                 <th>{{t "pr_list.th.actions"}}</th>
+             </tr>
         </thead>
         <tbody id="prTableBody">
             <tr><td colspan="7" style="text-align: center;">Loading...</td></tr>
@@ -91,7 +91,7 @@
         const repoGroup = document.getElementById('repoGroupSelect').value;
         const state = document.getElementById('stateFilter').value;
         const tbody = document.getElementById('prTableBody');
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Loading...</td></tr>';
+        tbody.innerHTML = '             <tr><td colspan="7" style="text-align: center;">{{t "common.loading"}}</td></tr>';
         try {
             var params = '?page=' + currentPage + '&per_page=' + perPage;
             if (state) params += '&state=' + state;
@@ -111,16 +111,16 @@
             }
             totalPRs = total;
             currentPage = page;
-            if (prs.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #999;">No PRs found</td></tr>'; renderPagination(); return; }
+            if (prs.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #999;">{{t "pr_list.no_prs"}}</td></tr>'; renderPagination(); return; }
             tbody.innerHTML = prs.map(pr => {
                 let actions = '';
                 if (pr.state === 'open') {
                     if (!pr.is_approved) {
-                        actions += '<button class="btn btn-success" onclick="approvePR('+pr.pr_number+')" style="padding: 4px 8px; font-size: 12px;">Approve</button> ';
+                        actions += '<button class="btn btn-success" onclick="approvePR('+pr.pr_number+')" style="padding: 4px 8px; font-size: 12px;">{{t "pr_list.approve"}}</button> ';
                     } else {
-                        actions += '<span style="color: #28a745; font-size: 12px; padding: 4px 8px;">✓ Approved</span> ';
+                        actions += '<span style="color: #28a745; font-size: 12px; padding: 4px 8px;">✓ {{t "pr_list.approved"}}</span> ';
                     }
-                    actions += '<button class="btn btn-danger" onclick="closePR('+pr.pr_number+')" style="padding: 4px 8px; font-size: 12px;">Close</button>';
+                    actions += '<button class="btn btn-danger" onclick="closePR('+pr.pr_number+')" style="padding: 4px 8px; font-size: 12px;">{{t "pr_list.close"}}</button>';
                 }
                 return '<tr><td>'+pr.pr_number+'</td><td><a href="/repos/'+repoGroup+'/prs/'+pr.pr_number+'" style="color: #0066cc; text-decoration: none;">'+escapeHtml(pr.title)+'</a></td><td>'+escapeHtml(pr.author)+'</td><td>'+(pr.html_url?'<a href="'+escapeHtml(pr.html_url)+'" target="_blank" title="View on platform">'+escapeHtml(pr.platform)+' ↗</a>':escapeHtml(pr.platform))+'</td><td class="status-'+escapeHtml(pr.state)+'">'+escapeHtml(pr.state)+'</td><td>'+(pr.labels||[]).map(l=>'<span class="label">'+escapeHtml(l)+'</span>').join('')+'</td><td>'+actions+'</td></tr>';
             }).join('');
@@ -131,10 +131,10 @@
         const el = document.getElementById('pagination');
         const totalPages = Math.ceil(totalPRs / perPage);
         if (totalPages <= 1) { el.innerHTML = ''; return; }
-        var html = '<span class="pagination-info">' + totalPRs + ' PRs, page ' + currentPage + ' of ' + totalPages + '</span>';
+        var html = '<span class="pagination-info">' + totalPRs + ' PRs, ' + currentPage + '/' + totalPages + '</span>';
         html += '<div class="pagination-btns">';
         if (currentPage > 1) {
-            html += '<button class="btn btn-secondary btn-sm" onclick="changePage(' + (currentPage - 1) + ')">&laquo; Prev</button>';
+             html += '<button class="btn btn-secondary btn-sm" onclick="changePage(' + (currentPage - 1) + ')">&laquo; {{t "pr_list.prev"}}</button>';
         }
         var start = Math.max(1, currentPage - 2);
         var end = Math.min(totalPages, currentPage + 2);
@@ -154,17 +154,17 @@
             html += '<button class="btn btn-secondary btn-sm" onclick="changePage(' + totalPages + ')">' + totalPages + '</button>';
         }
         if (currentPage < totalPages) {
-            html += '<button class="btn btn-secondary btn-sm" onclick="changePage(' + (currentPage + 1) + ')">Next &raquo;</button>';
+             html += '<button class="btn btn-secondary btn-sm" onclick="changePage(' + (currentPage + 1) + ')">{{t "pr_list.next"}} &raquo;</button>';
         }
         html += '</div>';
         el.innerHTML = html;
     }
     async function approvePR(n) {
         const repoGroup = document.getElementById('repoGroupSelect').value;
-        if(confirm('Approve PR #'+n+'?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/approve',{method:'POST'}); loadPRs(); } }
+        if(confirm('{{t "pr_list.confirm_approve"}}'.replace('%d',n))){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/approve',{method:'POST'}); loadPRs(); } }
     async function closePR(n) {
         const repoGroup = document.getElementById('repoGroupSelect').value;
-        if(confirm('Close PR #'+n+'?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/close',{method:'POST'}); loadPRs(); } }
+        if(confirm('{{t "pr_list.confirm_close"}}'.replace('%d',n))){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/close',{method:'POST'}); loadPRs(); } }
     loadRepoGroups();
 </script>
 {{template "client_auth"}}

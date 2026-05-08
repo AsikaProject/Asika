@@ -1,78 +1,78 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{currentLang}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
-    {{template "styles"}}
+    {{template "styles"}>
     <title>{{.title}}</title>
 </head>
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>Dashboard</h1>
+<h1>{{t "dashboard.title"}}</h1>
 
-<h2 style="margin-top:20px;">DORA Metrics <span style="font-size:13px;color:var(--text-secondary);font-weight:normal;">(last <span id="periodLabel">30</span> days)</span></h2>
+<h2 style="margin-top:20px;">{{t "dashboard.dora"}} <span style="font-size:13px;color:var(--text-secondary);font-weight:normal;">(last <span id="periodLabel">30</span> days)</span></h2>
 <div class="stats" id="doraStats">
     <div class="stat-card">
-        <h3>Deployments/Day</h3>
+        <h3>{{t "dashboard.deployments_per_day"}}</h3>
         <p id="deployFreq">-</p>
     </div>
     <div class="stat-card">
-        <h3>Lead Time</h3>
+        <h3>{{t "dashboard.lead_time"}}</h3>
         <p id="leadTime">-</p>
     </div>
     <div class="stat-card">
-        <h3>Failure Rate</h3>
+        <h3>{{t "dashboard.failure_rate"}}</h3>
         <p id="failRate">-</p>
     </div>
     <div class="stat-card">
-        <h3>MTTR</h3>
+        <h3>{{t "dashboard.mttr"}}</h3>
         <p id="mttr">-</p>
     </div>
 </div>
 
-<h2 style="margin-top:20px;">Overview</h2>
+<h2 style="margin-top:20px;">{{t "dashboard.overview"}}</h2>
 <div class="stats">
     <div class="stat-card">
-        <h3>Total PRs</h3>
+        <h3>{{t "dashboard.total_prs"}}</h3>
         <p id="totalPRs">-</p>
     </div>
     <div class="stat-card">
-        <h3>Open</h3>
+        <h3>{{t "dashboard.open"}}</h3>
         <p id="openPRs">-</p>
     </div>
     <div class="stat-card">
-        <h3>Merged</h3>
+        <h3>{{t "dashboard.merged"}}</h3>
         <p id="mergedPRs">-</p>
     </div>
     <div class="stat-card">
-        <h3>Queue Items</h3>
+        <h3>{{t "dashboard.queue_items"}}</h3>
         <p id="queueItems">-</p>
     </div>
     <div class="stat-card">
-        <h3>Failed Queue</h3>
+        <h3>{{t "dashboard.failed_queue"}}</h3>
         <p id="failedQueue">-</p>
     </div>
     <div class="stat-card">
-        <h3>Sync Failures</h3>
+        <h3>{{t "dashboard.sync_failures"}}</h3>
         <p id="syncFails">-</p>
     </div>
 </div>
 
-<h2 style="margin-top:20px;">Breakdown</h2>
+<h2 style="margin-top:20px;">{{t "dashboard.breakdown"}}</h2>
 <div class="card">
-    <h3>PRs by Repo Group</h3>
-    <div id="byGroup">Loading...</div>
+    <h3>{{t "dashboard.prs_by_repo_group"}}</h3>
+    <div id="byGroup">{{t "common.loading"}}</div>
 </div>
 <div class="card">
-    <h3>PRs by Platform</h3>
-    <div id="byPlatform">Loading...</div>
+    <h3>{{t "dashboard.prs_by_platform"}}</h3>
+    <div id="byPlatform">{{t "common.loading"}}</div>
 </div>
 
-<h2 style="margin-top:20px;">Recent Activity</h2>
+<h2 style="margin-top:20px;">{{t "dashboard.activity"}}</h2>
 <div class="card">
-    <div id="activity">Loading...</div>
+    <div id="activity">{{t "common.loading"}}</div>
 </div>
 </div>
 {{template "scripts"}}
@@ -124,15 +124,15 @@
                 ? '<table><tr><th>Repo Group</th><th>PRs</th></tr>' +
                   Object.entries(byGroup).map(([k,v]) => '<tr><td>' + escapeHtml(k) + '</td><td>' + v + '</td></tr>').join('') +
                   '</table>'
-                : '<p style="color:#666">No data</p>';
+                 : '<p style="color:#666">{{t "dashboard.no_data"}}</p>';
             document.getElementById('byGroup').innerHTML = groupHtml;
 
             const byPlat = s.prs_by_platform || {};
             const platHtml = Object.keys(byPlat).length > 0
-                ? '<table><tr><th>Platform</th><th>PRs</th></tr>' +
+                ? '<table><tr><th>{{t "pr_list.th.platform"}}</th><th>PRs</th></tr>' +
                   Object.entries(byPlat).map(([k,v]) => '<tr><td>' + escapeHtml(k) + '</td><td>' + v + '</td></tr>').join('') +
                   '</table>'
-                : '<p style="color:#666">No data</p>';
+                : '<p style="color:#666">{{t "dashboard.no_data"}}</p>';
             document.getElementById('byPlatform').innerHTML = platHtml;
         } catch (e) {}
     }
@@ -151,7 +151,7 @@
             if (logResp.ok) {
                 const logs = await logResp.json();
                 if (logs.length === 0) {
-                    act.innerHTML = '<p style="color:#666">No recent activity</p>';
+                    act.innerHTML = '<p style="color:#666">{{t "dashboard.no_activity"}}</p>';
                 } else {
                     act.innerHTML = logs.slice(0, 15).map(l =>
                         '<div class="activity-item">' +
@@ -161,10 +161,10 @@
                     ).join('');
                 }
             } else {
-                act.innerHTML = '<p style="color:#666">No recent activity</p>';
+                act.innerHTML = '<p style="color:#666">{{t "dashboard.no_activity"}}</p>';
             }
         } catch (e) {
-            document.getElementById('activity').innerHTML = '<p style="color:var(--text-secondary)">No recent activity</p>';
+            document.getElementById('activity').innerHTML = '<p style="color:var(--text-secondary)">{{t "dashboard.no_activity"}}</p>';
         }
     }
 

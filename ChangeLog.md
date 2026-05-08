@@ -1,6 +1,13 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **WebUI i18n language switcher:**
+  - Embed `locales/zh.json` into binary via `//go:embed` in `common/i18n/i18n.go` — locale auto-loads at init
+  - Add `currentLang` template function for dynamic `<html lang>` attribute
+  - Add language dropdown (English/中文) to wizard page, login page, and shared layout header
+  - Replace all hardcoded English strings with `{{t "key"}}` calls across all 10 HTML templates (dashboard, pr_list, pr_detail, queue, users, settings, config, wizard, login, layout nav)
+  - Add `wizard.step` key to `zh.json`
+  - Language preference stored in `asika_lang` cookie (1 year), switched via `POST /api/v1/locale` + page reload
 - **WebUI PR list real-time refresh and queue management:**
   - Add `refresh=1` query param to `ListPRs` handler — triggers `PollOnce()` to sync from platforms before returning data
   - Add `ClearQueue` method to queue manager and `DELETE /api/v1/queue/:repo_group` API endpoint

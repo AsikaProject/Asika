@@ -1,73 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{currentLang}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
-    {{template "styles"}}
-    <title>Settings - Asika</title>
+    {{template "styles"}>
+    <title>{{t "settings.title"}} - Asika</title>
 </head>
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>Settings</h1>
+<h1>{{t "settings.title"}}</h1>
 <div id="errorMsg" class="error" style="display:none;"></div>
 <div id="successMsg" class="success" style="display:none;"></div>
 
 <!-- Merge Queue Settings -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>Merge Queue</h2>
+    <h2>{{t "settings.merge_queue"}}</h2>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Required Approvals</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.required_approvals"}}</label>
             <input id="mqRequiredApprovals" type="number" min="0" value="1" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">CI Check Required</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.ci_check_required"}}</label>
             <select id="mqCICheck" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="true">Yes</option>
                 <option value="false">No</option>
             </select>
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Fast Forward Only</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.fast_forward_only"}}</label>
             <select id="mqFastForward" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="false">No (allow merge commits)</option>
                 <option value="true">Yes (auto-rebase first)</option>
             </select>
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">CI Provider</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.ci_provider"}}</label>
             <input id="mqCIProvider" type="text" placeholder="github-actions" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
     </div>
     <div style="margin-top:12px;">
-        <label style="display:block; font-weight:600; margin-bottom:4px;">Core Contributors (one per line)</label>
+        <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.core_contributors"}}</label>
         <textarea id="mqCoreContributors" rows="4" placeholder="username1&#10;username2" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
     </div>
 </div>
 
 <!-- Spam Detection Settings -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>Spam Detection</h2>
+    <h2>{{t "settings.spam_detection"}}</h2>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Enabled</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
             <select id="spamEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="false">Disabled</option>
-                <option value="true">Enabled</option>
+                <option value="true">{{t "settings.enabled"}}</option>
             </select>
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Time Window</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.time_window"}}</label>
             <input id="spamTimeWindow" type="text" value="1h" placeholder="1h, 30m, etc." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Threshold</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.threshold"}}</label>
             <input id="spamThreshold" type="number" min="1" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Trigger on Author</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.trigger_on_author"}}</label>
             <select id="spamAuthor" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="true">Yes</option>
                 <option value="false">No</option>
@@ -75,54 +75,54 @@
         </div>
     </div>
     <div style="margin-top:12px;">
-        <label style="display:block; font-weight:600; margin-bottom:4px;">Title Keywords (one per line)</label>
+        <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.title_keywords"}}</label>
         <textarea id="spamKeywords" rows="3" placeholder="spam&#10;test-spam" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
     </div>
 </div>
 
 <!-- Stale PR Settings -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>Stale PR Management</h2>
+    <h2>{{t "settings.stale_pr"}}</h2>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Enabled</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
             <select id="staleEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="false">Disabled</option>
-                <option value="true">Enabled</option>
+                <option value="true">{{t "settings.enabled"}}</option>
             </select>
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Check Interval</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.check_interval"}}</label>
             <input id="staleInterval" type="text" value="6h" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Days Until Stale</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.days_until_stale"}}</label>
             <input id="staleDaysStale" type="number" min="1" value="21" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Days Until Close (0 = never)</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.days_until_close"}}</label>
             <input id="staleDaysClose" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Stale Label</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.stale_label"}}</label>
             <input id="staleLabel" type="text" value="stale" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Notify on Stale</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.notify_on_stale"}}</label>
             <select id="staleNotify" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="true">Yes</option>
                 <option value="false">No</option>
             </select>
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Skip Draft PRs</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.skip_draft"}}</label>
             <select id="staleSkipDraft" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="true">Yes</option>
                 <option value="false">No</option>
             </select>
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">Remove on Activity</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.remove_on_activity"}}</label>
             <select id="staleRemoveActivity" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="true">Yes</option>
                 <option value="false">No</option>
@@ -130,14 +130,14 @@
         </div>
     </div>
     <div style="margin-top:12px;">
-        <label style="display:block; font-weight:600; margin-bottom:4px;">Exempt Labels (one per line)</label>
+        <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.exempt_labels"}}</label>
         <textarea id="staleExemptLabels" rows="2" placeholder="long-term&#10;pinned" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
     </div>
 </div>
 
 <!-- Label Rules -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>Label Rules</h2>
+    <h2>{{t "settings.label_rules"}}</h2>
     <p style="color:#666; font-size:13px; margin-bottom:12px;">Auto-apply labels based on file paths, PR title, or author. Scopes: <code>file:</code> (default), <code>title:</code>, <code>author:</code></p>
     <table id="labelRulesTable" style="width:100%; margin-bottom:12px;">
         <thead>
@@ -152,12 +152,12 @@
         <tbody id="labelRulesBody">
         </tbody>
     </table>
-    <button class="btn btn-secondary btn-sm" onclick="addLabelRule()">+ Add Rule</button>
+    <button class="btn btn-secondary btn-sm" onclick="addLabelRule()">{{t "settings.add_rule"}}</button>
 </div>
 
 <!-- Config History -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>Configuration History</h2>
+    <h2>{{t "settings.config_history"}}</h2>
     <div id="configHistoryLoading" style="color:#999;">Loading...</div>
     <table id="configHistoryTable" style="width:100%; display:none;">
         <thead>
@@ -174,8 +174,8 @@
 </div>
 
 <div style="margin-top:20px;">
-    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
-    <button class="btn btn-secondary" onclick="loadSettings()" style="margin-left:10px;">Refresh</button>
+    <button class="btn btn-primary" onclick="saveSettings()">{{t "settings.save"}}</button>
+    <button class="btn btn-secondary" onclick="loadSettings()" style="margin-left:10px;">{{t "settings.refresh"}}</button>
     <span id="saveStatus" style="margin-left:15px; font-size:13px;"></span>
 </div>
 </div>
@@ -353,7 +353,7 @@
                 showError(d.error);
                 document.getElementById('saveStatus').textContent = '';
             } else {
-                showSuccess('Settings saved successfully');
+                showSuccess('{{t "settings.saved"}}');
                 document.getElementById('saveStatus').textContent = 'Saved ✓';
                 setTimeout(() => { document.getElementById('saveStatus').textContent = ''; }, 3000);
                 loadSettings();

@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="{{currentLang}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0066cc">
-    <title>Setup Wizard - Asika</title>
+    <title>{{t "wizard.title"}} - Asika</title>
     <style>
         * { box-sizing: border-box; margin:0; padding:0; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
@@ -37,8 +37,14 @@
 </head>
 <body>
     <div class="card">
-        <h1>Setup Wizard</h1>
-        <p style="color: #666; margin-bottom: 20px;">Configure Asika for first use</p>
+        <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+            <select id="langSelect" onchange="setLocale(this.value)" style="padding:4px 8px; font-size:13px; border:1px solid #ddd; border-radius:4px; background:#fff; cursor:pointer;">
+                <option value="en">English</option>
+                <option value="zh">中文</option>
+            </select>
+        </div>
+        <h1>{{t "wizard.title"}}</h1>
+        <p style="color: #666; margin-bottom: 20px;">{{t "wizard.subtitle"}}</p>
 
         <div class="step-indicator">
             <div class="step-dot active" id="dot1">1</div>
@@ -55,7 +61,7 @@
 
         <!-- Step 1: Mode Selection -->
         <div class="step-content active" id="step1">
-            <h3>Step 1: Operation Mode</h3>
+            <h3>{{t "wizard.step"}} 1: Operation Mode</h3>
             <div class="form-group">
                 <label>Select mode:</label>
                 <select id="mode" onchange="onModeChange()">
@@ -69,26 +75,26 @@
             </div>
             <div class="nav-buttons">
                 <div></div>
-                <button class="btn btn-primary" onclick="nextStep(1)">Next</button>
+                <button class="btn btn-primary" onclick="nextStep(1)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 2: Database -->
         <div class="step-content" id="step2">
-            <h3>Step 2: Database Configuration</h3>
+            <h3>{{t "wizard.step"}} 2: Database Configuration</h3>
             <div class="form-group">
                 <label>Database file path:</label>
                 <input type="text" id="dbpath" value="/var/lib/asika/asika.db">
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(2)">Back</button>
-                <button class="btn btn-primary" onclick="nextStep(2)">Next</button>
+                <button class="btn btn-secondary" onclick="prevStep(2)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="nextStep(2)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 3: Platform Tokens -->
         <div class="step-content" id="step3">
-            <h3>Step 3: Platform Tokens</h3>
+            <h3>{{t "wizard.step"}} 3: Platform Tokens</h3>
             <div class="form-group">
                 <label>GitHub Token (optional):</label>
                 <input type="password" id="github_token" placeholder="ghp_xxxx or leave empty">
@@ -102,14 +108,14 @@
                 <input type="password" id="gitea_token" placeholder="gitea_xxxx or leave empty">
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(3)">Back</button>
-                <button class="btn btn-primary" onclick="nextStep(3)">Next</button>
+                <button class="btn btn-secondary" onclick="prevStep(3)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="nextStep(3)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 4: Repository Groups -->
         <div class="step-content" id="step4">
-            <h3>Step 4: Repository Group</h3>
+            <h3>{{t "wizard.step"}} 4: Repository Group</h3>
             <div class="form-group">
                 <label>Group Name:</label>
                 <input type="text" id="group_name" value="default">
@@ -139,14 +145,14 @@
                 <input type="text" id="default_branch" value="main">
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(4)">Back</button>
-                <button class="btn btn-primary" onclick="nextStep(4)">Next</button>
+                <button class="btn btn-secondary" onclick="prevStep(4)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="nextStep(4)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 5: Notification Channels -->
         <div class="step-content" id="step5">
-            <h3>Step 5: Notification Channels</h3>
+            <h3>{{t "wizard.step"}} 5: Notification Channels</h3>
             <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Configure how Asika sends alerts. All fields optional.</p>
 
             <div class="form-group">
@@ -204,14 +210,14 @@
             </div>
 
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(5)">Back</button>
-                <button class="btn btn-primary" onclick="nextStep(5)">Next</button>
+                <button class="btn btn-secondary" onclick="prevStep(5)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="nextStep(5)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 6: Admin Account -->
         <div class="step-content" id="step6">
-            <h3>Step 6: Admin Account & Server</h3>
+            <h3>{{t "wizard.step"}} 6: Admin Account & Server</h3>
             <div class="form-group">
                 <label>JWT Secret (leave empty to auto-generate):</label>
                 <input type="text" id="jwt_secret" placeholder="auto-generated if empty">
@@ -230,14 +236,14 @@
                 <input type="password" id="admin_pass" placeholder="set a strong password">
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(6)">Back</button>
-                <button class="btn btn-success" onclick="nextStep(6)">Next</button>
+                <button class="btn btn-secondary" onclick="prevStep(6)">{{t "common.back"}}</button>
+                <button class="btn btn-success" onclick="nextStep(6)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 7: Self-Updates -->
         <div class="step-content" id="step7">
-            <h3>Step 7: Self-Update Settings</h3>
+            <h3>{{t "wizard.step"}} 7: Self-Update Settings</h3>
             <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Configure automatic version checking.</p>
 
             <div class="form-group">
@@ -264,23 +270,37 @@
                 </label>
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(7)">Back</button>
-                <button class="btn btn-primary" onclick="submitWizard()">Complete Setup</button>
+                <button class="btn btn-secondary" onclick="prevStep(7)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="submitWizard()">{{t "wizard.complete"}}</button>
             </div>
         </div>
 
         <!-- Complete -->
         <div class="step-content" id="stepComplete">
-            <h3>Setup Complete!</h3>
-            <div class="success">Configuration saved successfully!</div>
-            <p style="margin-top: 15px;">You can now <a href="/login" style="color: #0066cc;">login</a> with your admin credentials.</p>
+            <h3>{{t "wizard.setup_complete"}}</h3>
+            <div class="success">{{t "wizard.setup_complete_desc"}}</div>
+            <p style="margin-top: 15px;">You can now <a href="/login" style="color: #0066cc;">{{t "wizard.go_to_login"}}</a> with your admin credentials.</p>
             <div class="nav-buttons">
-                <button class="btn btn-primary" onclick="window.location='/login'">Go to Login</button>
+                <button class="btn btn-primary" onclick="window.location='/login'">{{t "wizard.go_to_login"}}</button>
             </div>
         </div>
     </div>
 
     <script>
+        function setLocale(locale) {
+            fetch('/api/v1/locale', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ locale: locale })
+            }).then(function() { window.location.reload(); });
+        }
+        (function() {
+            var match = document.cookie.match(/(?:^|; )asika_lang=([^;]*)/);
+            var lang = match ? decodeURIComponent(match[1]) : 'en';
+            var sel = document.getElementById('langSelect');
+            if (sel) sel.value = lang;
+        })();
+
         let currentStep = 1;
 
         document.getElementById('updates_check').addEventListener('change', function() {

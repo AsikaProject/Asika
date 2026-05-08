@@ -1,55 +1,55 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{currentLang}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
-    {{template "styles"}}
-    <title>Users - Asika</title>
+    {{template "styles"}>
+    <title>{{t "users.title"}} - Asika</title>
 </head>
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>Users</h1>
+<h1>{{t "users.title"}}</h1>
 
 <div class="card">
-    <h2 style="margin-bottom:15px">Add User</h2>
+    <h2 style="margin-bottom:15px">{{t "users.add_user"}}</h2>
     <div style="display:flex; gap:15px; align-items:flex-end; flex-wrap: wrap;">
         <div class="form-group" style="flex:1; min-width:130px; margin:0;">
-            <label>Username</label>
-            <input type="text" id="newUsername" placeholder="username">
+            <label>{{t "users.th.username"}}</label>
+            <input type="text" id="newUsername" placeholder="{{t "users.th.username"}}">
         </div>
         <div class="form-group" style="flex:1; min-width:130px; margin:0;">
-            <label>Password</label>
-            <input type="password" id="newPassword" placeholder="password">
+            <label>{{t "login.password"}}</label>
+            <input type="password" id="newPassword" placeholder="{{t "login.password"}}">
         </div>
         <div class="form-group" style="margin:0;">
-            <label>Role</label>
+            <label>{{t "users.th.role"}}</label>
             <select id="newRole">
-                <option value="viewer">Viewer</option>
-                <option value="operator">Operator</option>
-                <option value="admin">Admin</option>
+                <option value="viewer">{{t "users.role.viewer"}}</option>
+                <option value="operator">{{t "users.role.operator"}}</option>
+                <option value="admin">{{t "users.role.admin"}}</option>
             </select>
         </div>
-        <button class="btn btn-primary" onclick="addUser()" style="height:38px; margin-top:21px;">Add</button>
+        <button class="btn btn-primary" onclick="addUser()" style="height:38px; margin-top:21px;">{{t "users.add"}}</button>
     </div>
     <div id="addMsg" style="margin-top:10px;"></div>
 </div>
 
 <div class="card">
-    <h2>User List</h2>
+    <h2>{{t "users.title"}}</h2>
     <div class="table-wrapper">
     <table style="margin-top:15px;">
         <thead>
             <tr>
-                <th>Username</th>
-                <th>Role</th>
-                <th>Created</th>
-                <th>Action</th>
-            </tr>
+                 <th>{{t "users.th.username"}}</th>
+                 <th>{{t "users.th.role"}}</th>
+                 <th>{{t "users.th.created"}}</th>
+                 <th>{{t "users.th.action"}}</th>
+             </tr>
         </thead>
         <tbody id="usersBody">
-            <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
+             <tr><td colspan="4" style="text-align:center;">{{t "common.loading"}}</td></tr>
         </tbody>
     </table>
     </div>
@@ -61,16 +61,16 @@
         const tbody = document.getElementById('usersBody');
         try {
             const resp = await apiRequest('/api/v1/users');
-            if (!resp.ok) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">No users found</td></tr>'; return; }
+            if (!resp.ok) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">{{t "users.no_users"}}</td></tr>'; return; }
             const users = await resp.json();
-            if (users.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">No users found</td></tr>'; return; }
+            if (users.length === 0) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">{{t "users.no_users"}}</td></tr>'; return; }
             tbody.innerHTML = users.map(u =>
                 '<tr><td>' + escapeHtml(u.username) + '</td>' +
                 '<td>' + escapeHtml(u.role) + '</td>' +
                 '<td>' + (u.created_at ? escapeHtml(u.created_at.substring(0,10)) : '-') + '</td>' +
-                '<td><button class="btn btn-danger" data-username="' + escapeHtml(u.username) + '" onclick="deleteUser(this.dataset.username)" style="padding:4px 8px;font-size:12px;">Delete</button></td></tr>'
+                 '<td><button class="btn btn-danger" data-username="' + escapeHtml(u.username) + '" onclick="deleteUser(this.dataset.username)" style="padding:4px 8px;font-size:12px;">{{t "users.delete"}}</button></td></tr>'
             ).join('');
-        } catch(e) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">No users found</td></tr>'; }
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">{{t "users.no_users"}}</td></tr>'; }
     }
 
     async function addUser() {
@@ -85,8 +85,8 @@
                 body: JSON.stringify({username: u, password: p, role: r})
             });
             const d = await resp.json();
-            if (resp.ok) {
-                m.innerHTML = '<span class="success">User ' + u + ' created</span>';
+             if (resp.ok) {
+                 m.innerHTML = '<span class="success">{{t "users.created"}}'.replace('%s', u) + '</span>';
                 document.getElementById('newUsername').value = '';
                 document.getElementById('newPassword').value = '';
                 loadUsers();

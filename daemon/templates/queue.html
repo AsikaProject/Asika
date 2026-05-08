@@ -1,35 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{currentLang}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
-    {{template "styles"}}
-    <title>Queue - Asika</title>
+    {{template "styles"}>
+    <title>{{t "queue.title"}} - Asika</title>
 </head>
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>Merge Queue</h1>
+<h1>{{t "queue.title"}}</h1>
 <div class="form-group">
-    <label>Repository Group:</label>
+    <label>{{t "pr_list.repo_group"}}</label>
     <select id="repoGroupSelect" onchange="loadQueue()">
     </select>
 </div>
 <div class="card">
-     <button class="btn btn-primary" onclick="recheckQueue()">Recheck Queue</button>
-     <button class="btn btn-danger" onclick="clearQueue()" style="margin-left: 10px;">Clear Queue</button>
+      <button class="btn btn-primary" onclick="recheckQueue()">{{t "queue.recheck"}}</button>
+     <button class="btn btn-danger" onclick="clearQueue()" style="margin-left: 10px;">{{t "common.delete"}}</button>
     <div class="table-wrapper">
     <table style="margin-top: 20px;">
         <thead>
-            <tr>
-                <th>PR</th>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Approvals</th>
-                <th>CI Status</th>
-                <th>Action</th>
-            </tr>
+             <tr>
+                 <th>{{t "queue.th.pr"}}</th>
+                 <th>{{t "queue.th.title"}}</th>
+                 <th>{{t "queue.th.status"}}</th>
+                 <th>{{t "queue.th.approvals"}}</th>
+                 <th>{{t "queue.th.ci"}}</th>
+                 <th>{{t "queue.th.action"}}</th>
+             </tr>
         </thead>
         <tbody id="queueBody">
             <tr><td colspan="6" style="text-align: center;">Loading...</td></tr>
@@ -70,24 +70,24 @@
         const repoGroup = document.getElementById('repoGroupSelect').value;
         if (!repoGroup) return;
         const tbody = document.getElementById('queueBody');
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">{{t "common.loading"}}</td></tr>';
         try {
             const resp = await apiRequest('/api/v1/queue/' + repoGroup);
             if (!resp.ok) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">No access or empty</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">{{t "queue.empty"}}</td></tr>';
                 return;
             }
             const items = await resp.json();
             if (!Array.isArray(items) || items.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Queue is empty</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">{{t "queue.empty"}}</td></tr>';
                 return;
             }
              tbody.innerHTML = items.map(item => {
                  const statusText = {
-                     'waiting': '<span style="color: #ffc107;">Waiting for conditions</span>',
-                     'checking': '<span style="color: #17a2b8;">Checking...</span>',
-                     'done': '<span style="color: #28a745;">Ready to merge</span>',
-                     'failed': '<span style="color: #dc3545;">Failed: ' + escapeHtml(item.failure_reason || '') + '</span>'
+                     'waiting': '<span style="color: #ffc107;">{{t "queue.status.waiting"}}</span>',
+                     'checking': '<span style="color: #17a2b8;">{{t "queue.status.checking"}}</span>',
+                     'done': '<span style="color: #28a745;">{{t "queue.status.ready"}}</span>',
+                     'failed': '<span style="color: #dc3545;">{{t "queue.status.failed"}} ' + escapeHtml(item.failure_reason || '') + '</span>'
                  }[item.status] || item.status;
 
                  const approvals = (item.criteria && item.criteria.approved_by)

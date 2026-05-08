@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{currentLang}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,11 +10,11 @@
 <body>
 {{template "header" .}}
 <div class="container">
-<div id="prDetail">Loading...</div>
+<div id="prDetail">{{t "common.loading"}}</div>
 <div style="margin: 20px 0;" id="actions"></div>
 <div class="card" style="margin-top: 20px;">
-    <h2>Events</h2>
-    <div id="eventList">Loading...</div>
+    <h2>{{t "pr_detail.events"}}</h2>
+    <div id="eventList">{{t "common.loading"}}</div>
 </div>
 </div>
 {{template "scripts"}}
@@ -32,22 +32,22 @@
             
             document.getElementById('prDetail').innerHTML = 
                 '<h1>'+escapeHtml(p.title)+' <span style="font-size:14px;color:#666;">#'+p.pr_number+'</span></h1>' +
-                '<p><strong>Author:</strong> '+escapeHtml(p.author)+'</p>' +
-                '<p><strong>State:</strong> <span class="status-'+escapeHtml(p.state)+'">'+escapeHtml(p.state)+'</span></p>' +
-                '<p><strong>Platform:</strong> '+platformLink+'</p>' +
-                '<p><strong>Labels:</strong> '+(p.labels||[]).map(function(l){return'<span class="label">'+escapeHtml(l)+'</span>'}).join('')+'</p>';
+                '<p><strong>{{t "pr_detail.author"}} </strong> '+escapeHtml(p.author)+'</p>' +
+                '<p><strong>{{t "pr_detail.state"}} </strong> <span class="status-'+escapeHtml(p.state)+'">'+escapeHtml(p.state)+'</span></p>' +
+                '<p><strong>{{t "pr_detail.platform"}} </strong> '+platformLink+'</p>' +
+                '<p><strong>{{t "pr_detail.labels"}} </strong> '+(p.labels||[]).map(function(l){return'<span class="label">'+escapeHtml(l)+'</span>'}).join('')+'</p>';
             
             var a = '';
             if(p.state === 'open'){
                 if(!p.is_approved){
-                    a += '<button class="btn btn-success" onclick="A()">Approve</button> ';
+                    a += '<button class="btn btn-success" onclick="A()">{{t "pr_detail.approve"}}</button> ';
                 } else {
-                    a += '<span style="color: #28a745; font-weight: 600; padding: 8px 14px; display: inline-block;">✓ Approved</span> ';
+                    a += '<span style="color: #28a745; font-weight: 600; padding: 8px 14px; display: inline-block;">✓ {{t "pr_list.approved"}}</span> ';
                 }
-                a += '<button class="btn btn-danger" onclick="C()">Close</button> ';
+                a += '<button class="btn btn-danger" onclick="C()">{{t "pr_detail.close"}}</button> ';
             }
-            a += '<button class="btn btn-secondary" onclick="R()">Reopen</button> ';
-            a += '<button class="btn" onclick="S()" style="background:#ffc107;color:black;">Mark Spam</button>';
+            a += '<button class="btn btn-secondary" onclick="R()">{{t "pr_detail.reopen"}}</button> ';
+            a += '<button class="btn" onclick="S()" style="background:#ffc107;color:black;">{{t "pr_detail.mark_spam"}}</button>';
             document.getElementById('actions').innerHTML = a;
             
             if(p.events && p.events.length > 0){
@@ -58,7 +58,7 @@
                         '</div>';
                 }).join('');
             } else {
-                document.getElementById('eventList').innerHTML = '<p style="color:#666;">No events yet</p>';
+                document.getElementById('eventList').innerHTML = '<p style="color:#666;">{{t "pr_detail.no_events"}}</p>';
             }
         } catch(e) {
             console.error(e);
