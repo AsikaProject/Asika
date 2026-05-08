@@ -16,6 +16,7 @@ import (
 	"asika/common/db"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/daemon/polling"
 	"asika/daemon/syncer"
 )
 
@@ -25,6 +26,9 @@ var clients map[platforms.PlatformType]platforms.PlatformClient
 // syncerRef is set by InitSyncer from cmd/asikad/main.go
 var syncerRef *syncer.Syncer
 
+// pollerRef is set by InitPoller for triggering manual sync
+var pollerRef *polling.Poller
+
 // InitClients initializes the platform clients for handlers
 func InitClients(c map[platforms.PlatformType]platforms.PlatformClient) {
 	clients = c
@@ -33,6 +37,11 @@ func InitClients(c map[platforms.PlatformType]platforms.PlatformClient) {
 // InitSyncer initializes the syncer for handlers
 func InitSyncer(s *syncer.Syncer) {
 	syncerRef = s
+}
+
+// InitPoller initializes the poller for handlers
+func InitPoller(p *polling.Poller) {
+	pollerRef = p
 }
 
 // ListPRs handles GET /api/v1/repos/:repo_group/prs (8.2)
@@ -47,6 +56,11 @@ func ListPRs(c *gin.Context) {
 	updatedAfter := c.Query("updated_after")
 	pageStr := c.Query("page")
 	perPageStr := c.Query("per_page")
+	refresh := c.Query("refresh")
+
+	if refresh == "1" && pollerRef != nil {
+		pollerRef.PollOnce()
+	}
 
 	records := make([]models.PRRecord, 0)
 
@@ -280,8 +294,7 @@ func ApprovePR(c *gin.Context) {
 		return
 	}
 
-	key := repoGroup + "#" + prID
-	data, dbErr := db.Get(db.BucketPRs, key)
+	data, dbErr := db.GetPRByIndex("", repoGroup, prNumber)
 	if dbErr != nil || data == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
 		return
@@ -324,13 +337,11 @@ func ApprovePR(c *gin.Context) {
 		return
 	}
 
-	// Fetch PR details from platform API
 	prFromAPI, apiErr := client.GetPR(c.Request.Context(), owner, repo, prNumber)
 	if apiErr != nil {
 		slog.Warn("failed to fetch PR after approval", "error", apiErr, "pr_number", prNumber)
 	}
 
-	// Build or update PR record
 	var pr *models.PRRecord
 	var isNew bool
 
@@ -351,7 +362,6 @@ func ApprovePR(c *gin.Context) {
 		}
 	}
 
-	// Ensure critical fields are populated (fallback for old DB records)
 	if pr.ID == "" {
 		pr.ID = fmt.Sprintf("%d", prNumber)
 	}
@@ -365,7 +375,6 @@ func ApprovePR(c *gin.Context) {
 		pr.Platform = platform
 	}
 
-	// Update with fresh data from API if available
 	if prFromAPI != nil {
 		if prFromAPI.Title != "" {
 			pr.Title = prFromAPI.Title
@@ -386,9 +395,10 @@ func ApprovePR(c *gin.Context) {
 		pr.PRNumber = prNumber
 	}
 
-	// Save PR to DB
+	pr.IsApproved = true
+	dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
 	updated, _ := json.Marshal(pr)
-	db.PutPRWithIndex(key, updated, pr.ID, pr.RepoGroup, pr.PRNumber)
+	db.PutPRWithIndex(dbKey, updated, pr.ID, pr.RepoGroup, pr.PRNumber)
 
 	// Add to merge queue
 	if queueMgr != nil {
@@ -432,8 +442,7 @@ func ClosePR(c *gin.Context) {
 		return
 	}
 
-	key := repoGroup + "#" + prID
-	data, dbErr := db.Get(db.BucketPRs, key)
+	data, dbErr := db.GetPRByIndex("", repoGroup, prNumber)
 	if dbErr != nil || data == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
 		return
@@ -504,8 +513,7 @@ func ReopenPR(c *gin.Context) {
 		return
 	}
 
-	key := repoGroup + "#" + prID
-	data, dbErr := db.Get(db.BucketPRs, key)
+	data, dbErr := db.GetPRByIndex("", repoGroup, prNumber)
 	if dbErr != nil || data == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
 		return
@@ -576,8 +584,7 @@ func MarkSpam(c *gin.Context) {
 		return
 	}
 
-	key := repoGroup + "#" + prID
-	data, dbErr := db.Get(db.BucketPRs, key)
+	data, dbErr := db.GetPRByIndex("", repoGroup, prNumber)
 	if dbErr != nil || data == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
 		return
@@ -628,7 +635,8 @@ func MarkSpam(c *gin.Context) {
 	pr.PRNumber = prNumber
 	pr.RepoGroup = repoGroup
 	updated, _ := json.Marshal(pr)
-	db.PutPRWithIndex(key, updated, pr.ID, repoGroup, prNumber)
+	dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
+	db.PutPRWithIndex(dbKey, updated, pr.ID, repoGroup, prNumber)
 
 	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
 		"pr_number":  prNumber,
@@ -662,9 +670,12 @@ func CommentPR(c *gin.Context) {
 
 	platform := config.GetPlatformForGroup(group)
 	prNumber, err := strconv.Atoi(prID)
+	if err != nil || prNumber == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid pr_id, must be a number"})
+		return
+	}
 
-	key := repoGroup + "#" + prID
-	data, dbErr := db.Get(db.BucketPRs, key)
+	data, dbErr := db.GetPRByIndex("", repoGroup, prNumber)
 	if dbErr == nil && data != nil {
 		var pr models.PRRecord
 		if json.Unmarshal(data, &pr) == nil && pr.Platform != "" {
@@ -677,10 +688,6 @@ func CommentPR(c *gin.Context) {
 
 	if platform == "" {
 		c.JSON(http.StatusBadGateway, gin.H{"error": "cannot determine platform"})
-		return
-	}
-	if err != nil || prNumber == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid pr_id, must be a number"})
 		return
 	}
 

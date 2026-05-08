@@ -12,6 +12,7 @@ import (
 	"asika/common/models"
 	"asika/common/platforms"
 	"asika/daemon/consumer"
+	"asika/daemon/handlers"
 	"asika/daemon/platform"
 	"asika/daemon/polling"
 	"asika/daemon/queue"
@@ -120,7 +121,8 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	MigratePRStates(cfg)
 	SyncPRStates(cfg, clients)
 
- 	ic.QueueMgr, ic.SpamDetector, ic.Poller, ic.EventConsumer, _ = StartWorkers(cfg, clients)
+  	ic.QueueMgr, ic.SpamDetector, ic.Poller, ic.EventConsumer, _ = StartWorkers(cfg, clients)
+  	handlers.InitPoller(ic.Poller)
 
  	InitNotifiers(cfg, clients)
 

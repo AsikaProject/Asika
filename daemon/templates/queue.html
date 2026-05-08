@@ -17,7 +17,8 @@
     </select>
 </div>
 <div class="card">
-    <button class="btn btn-primary" onclick="recheckQueue()">Recheck Queue</button>
+     <button class="btn btn-primary" onclick="recheckQueue()">Recheck Queue</button>
+     <button class="btn btn-danger" onclick="clearQueue()" style="margin-left: 10px;">Clear Queue</button>
     <div class="table-wrapper">
     <table style="margin-top: 20px;">
         <thead>
@@ -109,7 +110,21 @@
             tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">Failed to load queue: ' + e.message + '</td></tr>';
         }
     }
-    async function recheckQueue() {
+     async function clearQueue() {
+         const repoGroup = document.getElementById('repoGroupSelect').value;
+         if (!confirm('Clear all queue items for "' + repoGroup + '"? This will remove all PRs from the merge queue.')) return;
+         try {
+             const resp = await apiRequest('/api/v1/queue/' + repoGroup, {method:'DELETE'});
+             if (resp.ok) {
+                 const d = await resp.json();
+                 alert('Queue cleared (' + (d.count || 0) + ' items removed)');
+                 loadQueue();
+             } else {
+                 alert('Failed to clear queue');
+             }
+         } catch(e) { alert('Failed to clear queue: ' + e.message); }
+     }
+     async function recheckQueue() {
         const repoGroup = document.getElementById('repoGroupSelect').value;
         try {
             const resp = await apiRequest('/api/v1/queue/' + repoGroup + '/recheck', {method:'POST'});

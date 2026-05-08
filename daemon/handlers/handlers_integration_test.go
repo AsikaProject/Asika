@@ -186,7 +186,7 @@ func TestPRHandlers_SingleMode(t *testing.T) {
 			State:     "open",
 		}
 		data, _ := json.Marshal(pr)
-		db.Put(db.BucketPRs, "single-repo#42", data)
+		db.PutPRWithIndex("single-repo#github#42", data, "spam-pr", "single-repo", 42)
 
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/api/v1/repos/single-repo/prs/42/spam", nil)
@@ -197,7 +197,7 @@ func TestPRHandlers_SingleMode(t *testing.T) {
 		}
 
 		// Verify PR marked as spam in DB
-		stored, _ := db.Get(db.BucketPRs, "single-repo#42")
+		stored, _ := db.Get(db.BucketPRs, "single-repo#github#42")
 		var updated models.PRRecord
 		json.Unmarshal(stored, &updated)
 		if !updated.SpamFlag {

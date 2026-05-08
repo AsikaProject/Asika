@@ -18,7 +18,7 @@
 </div>
 <div class="form-group">
     <label>Filter by state:</label>
-    <select id="stateFilter" onchange="changePage(1)">
+    <select id="stateFilter" onchange="stateChanged()">
         <option value="open">Open</option>
         <option value="closed">Closed</option>
         <option value="merged">Merged</option>
@@ -67,21 +67,27 @@
                         if (i === 0) opt.selected = true;
                         sel.appendChild(opt);
                     });
-                    // If only one group, hide the selector
                     if (cfg.repo_groups.length === 1) {
                         sel.style.display = 'none';
                         document.querySelector('label[for="repoGroupSelect"]').style.display = 'none';
                     }
-                    loadPRs();
                 }
             }
         } catch (e) {}
+        loadPRs();
+    }
+    var lastState = '';
+    function stateChanged() {
+        var cur = document.getElementById('stateFilter').value;
+        currentPage = 1;
+        loadPRs(cur !== lastState);
+        lastState = cur;
     }
     function changePage(page) {
         currentPage = page;
         loadPRs();
     }
-    async function loadPRs() {
+    async function loadPRs(refresh) {
         const repoGroup = document.getElementById('repoGroupSelect').value;
         const state = document.getElementById('stateFilter').value;
         const tbody = document.getElementById('prTableBody');
@@ -89,6 +95,7 @@
         try {
             var params = '?page=' + currentPage + '&per_page=' + perPage;
             if (state) params += '&state=' + state;
+            if (refresh) params += '&refresh=1';
             const resp = await apiRequest('/api/v1/repos/' + repoGroup + '/prs' + params);
             const body = await resp.json();
             if (body.error) { tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #dc3545;">' + body.error + '</td></tr>'; return; }

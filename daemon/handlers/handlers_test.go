@@ -418,8 +418,6 @@ func TestPRManagement_SingleMode_ClosePR(t *testing.T) {
 	}
 	config.Store(cfg)
 
-	// Store a PR with "github" platform matching available client
-	key := "mirror-gh#1"
 	pr := models.PRRecord{
 		ID:        "1",
 		RepoGroup: "mirror-gh",
@@ -430,7 +428,7 @@ func TestPRManagement_SingleMode_ClosePR(t *testing.T) {
 		State:     "open",
 	}
 	data, _ := json.Marshal(pr)
-	db.Put(db.BucketPRs, key, data)
+	db.PutPRWithIndex("mirror-gh#github#1", data, "1", "mirror-gh", 1)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/repos/mirror-gh/prs/1/close", nil)
@@ -774,8 +772,8 @@ func TestListPRs_SingleMode_FiltersByMirrorPlatform(t *testing.T) {
 		Title:     "GitLab PR",
 		State:     "open",
 	}
-	db.Put(db.BucketPRs, "single-group#github#1", mustMarshal(prGitHub))
-	db.Put(db.BucketPRs, "single-group#gitlab#2", mustMarshal(prGitLab))
+	db.PutPRWithIndex("single-group#github#1", mustMarshal(prGitHub), "pr-gh-1", "single-group", 1)
+	db.PutPRWithIndex("single-group#gitlab#2", mustMarshal(prGitLab), "pr-gl-1", "single-group", 2)
 
 	// Without explicit platform filter, single mode should only return MirrorPlatform PRs
 	w := httptest.NewRecorder()
@@ -837,7 +835,7 @@ func TestApprovePR_SingleMode_UsesMirrorPlatform(t *testing.T) {
 		State:     "open",
 	}
 	data, _ := json.Marshal(pr)
-	db.Put(db.BucketPRs, "single-approve#42", data)
+	db.PutPRWithIndex("single-approve#github#42", data, "single-pr-1", "single-approve", 42)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/repos/single-approve/prs/42/approve", nil)
@@ -876,7 +874,7 @@ func TestClosePR_SingleMode_UsesMirrorPlatform(t *testing.T) {
 		State:     "open",
 	}
 	data, _ := json.Marshal(pr)
-	db.Put(db.BucketPRs, "single-close#55", data)
+	db.PutPRWithIndex("single-close#github#55", data, "single-close-pr-1", "single-close", 55)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/repos/single-close/prs/55/close", nil)
@@ -915,7 +913,7 @@ func TestMarkSpam_SingleMode_UsesMirrorPlatform(t *testing.T) {
 		State:     "open",
 	}
 	data, _ := json.Marshal(pr)
-	db.Put(db.BucketPRs, "single-spam#66", data)
+	db.PutPRWithIndex("single-spam#github#66", data, "", "single-spam", 66)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/repos/single-spam/prs/66/spam", nil)
@@ -926,7 +924,7 @@ func TestMarkSpam_SingleMode_UsesMirrorPlatform(t *testing.T) {
 	}
 
 	// Verify PR was marked as spam
-	stored, err := db.Get(db.BucketPRs, "single-spam#66")
+	stored, err := db.Get(db.BucketPRs, "single-spam#github#66")
 	if err != nil {
 		t.Fatalf("PR not found after spam: %v", err)
 	}
@@ -969,7 +967,7 @@ func TestReopenPR_SingleMode_UsesMirrorPlatform(t *testing.T) {
 		SpamFlag:  true,
 	}
 	data, _ := json.Marshal(pr)
-	db.Put(db.BucketPRs, "single-reopen#77", data)
+	db.PutPRWithIndex("single-reopen#github#77", data, "single-reopen-pr-1", "single-reopen", 77)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/v1/repos/single-reopen/prs/77/reopen", nil)
@@ -1008,7 +1006,7 @@ func TestCommentPR_SingleMode_UsesMirrorPlatform(t *testing.T) {
 		State:     "open",
 	}
 	data, _ := json.Marshal(pr)
-	db.Put(db.BucketPRs, "single-comment#88", data)
+	db.PutPRWithIndex("single-comment#github#88", data, "single-comment-pr-1", "single-comment", 88)
 
 	body := `{"body": "Test comment from single mode"}`
 	w := httptest.NewRecorder()
@@ -1261,8 +1259,8 @@ func TestGetStats_WithPRs(t *testing.T) {
 		State:     "open",
 		CreatedAt: now.Add(-12 * time.Hour),
 	}
-	db.Put(db.BucketPRs, "default#github#1", mustMarshal(pr1))
-	db.Put(db.BucketPRs, "default#github#2", mustMarshal(pr2))
+	db.PutPRWithIndex("default#github#1", mustMarshal(pr1), "stats-pr-1", "default", 1)
+	db.PutPRWithIndex("default#github#2", mustMarshal(pr2), "stats-pr-2", "default", 2)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/api/v1/stats", nil)

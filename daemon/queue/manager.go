@@ -321,6 +321,31 @@ func (m *Manager) GetQueueItems(repoGroup string) ([]models.QueueItem, error) {
 	})
 	return items, err
 }
+// ClearQueue removes all queue items for a repo group.
+func (m *Manager) ClearQueue(repoGroup string) (int, error) {
+	var keys []string
+	err := db.ForEach(db.BucketQueueItems, func(key, value []byte) error {
+		var item models.QueueItem
+		if err := json.Unmarshal(value, &item); err != nil {
+			return nil
+		}
+		if item.RepoGroup == repoGroup || strings.HasPrefix(string(key), repoGroup+"#") {
+			keys = append(keys, string(key))
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	for _, k := range keys {
+		if delErr := db.Delete(db.BucketQueueItems, k); delErr != nil {
+			slog.Error("failed to delete queue item", "key", k, "error", delErr)
+		}
+	}
+	slog.Info("queue cleared", "repo_group", repoGroup, "count", len(keys))
+	return len(keys), nil
+}
+
 // Stop signals the periodic checker goroutine to stop.
 func (m *Manager) Stop() {
 	if m.stop != nil {

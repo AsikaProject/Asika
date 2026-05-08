@@ -74,3 +74,30 @@ func RecheckQueue(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "queue recheck triggered"})
 }
+
+// ClearQueue handles DELETE /api/v1/queue/:repo_group (8.3)
+func ClearQueue(c *gin.Context) {
+	repoGroup := c.Param("repo_group")
+
+	cfg := config.Current()
+	group := config.GetRepoGroupByName(cfg, repoGroup)
+	if group == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "repo group not found"})
+		return
+	}
+
+	if queueMgr == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "queue manager not initialized"})
+		return
+	}
+
+	count, err := queueMgr.ClearQueue(repoGroup)
+	if err != nil {
+		slog.Error("failed to clear queue", "repo_group", repoGroup, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear queue"})
+		return
+	}
+
+	slog.Info("queue cleared via API", "repo_group", repoGroup, "count", count)
+	c.JSON(http.StatusOK, gin.H{"message": "queue cleared", "count": count})
+}

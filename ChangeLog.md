@@ -1,6 +1,17 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **WebUI PR list real-time refresh and queue management:**
+  - Add `refresh=1` query param to `ListPRs` handler — triggers `PollOnce()` to sync from platforms before returning data
+  - Add `ClearQueue` method to queue manager and `DELETE /api/v1/queue/:repo_group` API endpoint
+  - Add "Clear Queue" button to WebUI queue page
+  - Fix PR list not auto-refreshing when switching between open/closed states by calling `loadPRs(refresh=true)` on state change
+- **Fix PR write handlers (approve/close/reopen/spam/comment) DB key mismatch:**
+  - All write handlers used incorrect 2-part key (`repoGroup#prID`) but DB stores PRs with 3-part key (`repoGroup#platform#prNumber`)
+  - Replace `db.Get(db.BucketPRs, key)` with `db.GetPRByIndex("", repoGroup, prNumber)` for correct index-based lookup
+  - Add `IsApproved = true` persistence in `ApprovePR` handler
+  - Fix `testutil.NewTestDB` to create missing index buckets (`pr_index_by_id`, `pr_index_by_rg_num`)
+  - Update all handler tests to use `PutPRWithIndex` instead of `Put` for proper index population
 - **PR comment commands (all platforms):**
   - Add `EventPRComment` event type to event bus
   - Add `PRCommentPayload` model for carrying comment data through the event pipeline

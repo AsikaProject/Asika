@@ -174,6 +174,7 @@ func (s *Server) setupRoutes() {
 		prs.Use(RequireRepoGroupAccess())
 		{
 			prs.GET("", handlers.ListPRs)
+			prs.POST("/sync", handlers.ListPRs)
 			prs.GET("/:pr_id", handlers.GetPR)
 			prs.POST("/:pr_id/approve", handlers.ApprovePR)
 			prs.POST("/:pr_id/close", handlers.ClosePR)
@@ -195,6 +196,7 @@ func (s *Server) setupRoutes() {
 			queue.GET("", handlers.GetQueue)
 			queue.POST("/recheck", handlers.RecheckQueue)
 			queue.POST("/rebase", handlers.RebaseQueue)
+			queue.DELETE("", handlers.ClearQueue)
 		}
 
 		// Audit logs (8.2)
