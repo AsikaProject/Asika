@@ -10,6 +10,12 @@
   - Remove duplicate `getPRRecord`/`truncateStr`/`inactivityDays`/`hasLabelStr`/`parseInt` from individual platform files
   - Add `slack_test.go` (no tests existed for Slack bot before)
   - Update `bots.go` and `bootstrap.go` imports to use new sub-package paths
+- **Fix bot internal API authentication (401 on stats/rebase/cherry-pick):**
+  - Bots were sending raw `JWTSecret` as Bearer token, but `AuthMiddleware` validates with `jwt.Parse` which rejects non-JWT strings
+  - Add `auth.GenerateInternalToken()` to generate a long-lived admin JWT for bot-to-server calls
+  - Add `internalToken` field to all bot structs (Telegram/Discord/Feishu)
+  - Replace all `b.cfg.Auth.JWTSecret` usages in bot API calls with `b.internalToken`
+- **Fix: add missing utils.ToFloat64 conversion in telegram handleStats**
 - **Performance optimizations:**
   - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
   - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration

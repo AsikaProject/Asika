@@ -317,6 +317,7 @@ jobs:
           cp pkg-packages/* release-assets/ 2>/dev/null || true
           cp inno-packages/* release-assets/ 2>/dev/null || true
           ls -lh release-assets/
+          wget https://github.com/AsikaProject/asika/raw/main/ChangeLog.md -O release-assets/ChangeLog.md
 
       - uses: softprops/action-gh-release@v2
         with:
