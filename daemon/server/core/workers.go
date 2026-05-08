@@ -2,7 +2,10 @@ package core
 
 import (
 	"log/slog"
+	"os"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
 
 	"asika/common/models"
 	"asika/common/platforms"
@@ -69,6 +72,28 @@ func StartWorkers(
 	}()
 	slog.Info("spam detector started", "enabled", cfg.Spam.Enabled)
 
+	// Spam auto-clean worker
+	if cfg.Spam.AutoCleanEnabled {
+		autoCleanInterval := utils.ParseDuration(cfg.Spam.AutoCleanInterval, 24*time.Hour)
+		go func() {
+			ticker := time.NewTicker(autoCleanInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					slog.Info("spam auto-clean running")
+					cfg.Spam.TriggerOnTitleKw = nil
+					cfg.Spam.TriggerOnAuthor = false
+					persistSpamClean(cfg)
+				case <-spamDetector.StopChan():
+					slog.Info("spam auto-clean worker stopped")
+					return
+				}
+			}
+		}()
+		slog.Info("spam auto-clean worker started", "interval", autoCleanInterval)
+	}
+
 	// Poller
 	poller = polling.NewPoller(cfg, clients)
 	poller.PollOnce() // Initial fetch
@@ -93,6 +118,37 @@ func StartWorkers(
 
 	return
 }
+
+	func persistSpamClean(cfg *models.Config) {
+		configPath := os.Getenv("ASIKA_CONFIG")
+		if configPath == "" {
+			configPath = "/etc/asika_config.toml"
+		}
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			slog.Warn("spam auto-clean: failed to read config", "error", err)
+			return
+		}
+		var existing map[string]interface{}
+		if err := toml.Unmarshal(data, &existing); err != nil {
+			slog.Warn("spam auto-clean: failed to parse config", "error", err)
+			return
+		}
+		if spam, ok := existing["spam"].(map[string]interface{}); ok {
+			spam["trigger_on_title_kw"] = []interface{}{}
+			spam["trigger_on_author"] = false
+		}
+		newData, err := toml.Marshal(&existing)
+		if err != nil {
+			slog.Warn("spam auto-clean: failed to marshal config", "error", err)
+			return
+		}
+		if err := os.WriteFile(configPath, newData, 0600); err != nil {
+			slog.Warn("spam auto-clean: failed to write config", "error", err)
+			return
+		}
+		slog.Info("spam auto-clean: config persisted")
+	}
 
 	func startStaleCheck(cfg *models.Config, mgr *stale.Manager) {
 		if !cfg.Stale.Enabled {

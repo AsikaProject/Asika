@@ -154,6 +154,8 @@ type SpamConfig struct {
 	Threshold             int      `json:"threshold" toml:"threshold"`
 	TriggerOnAuthor      bool     `json:"trigger_on_author" toml:"trigger_on_author"`
 	TriggerOnTitleKw     []string `json:"trigger_on_title_kw" toml:"trigger_on_title_kw"`
+	AutoCleanEnabled     bool     `json:"auto_clean_enabled" toml:"auto_clean_enabled"`
+	AutoCleanInterval    string   `json:"auto_clean_interval" toml:"auto_clean_interval"`
 }
 
 // NotifyConfig represents notification configuration

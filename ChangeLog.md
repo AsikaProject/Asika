@@ -1,6 +1,12 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Spam keyword batch delete & auto-clean:**
+  - Spam keywords: add per-keyword checkboxes + "Select All" + "Delete Selected" batch delete
+  - Add spam auto-clean: new config `auto_clean_enabled` (default false) + `auto_clean_interval`
+  - Auto-clean worker in `workers.go`: periodically clears `trigger_on_title_kw` and resets `trigger_on_author` to false, persists to disk
+  - Config validation: require valid `auto_clean_interval` when auto-clean is enabled
+  - Add i18n keys: `settings.auto_clean`, `settings.auto_clean_interval`
 - **WebUI settings enhancements — individual & batch delete for label rules and spam keywords:**
   - Label rules: add per-row checkboxes + "Select All" + "Delete Selected" batch delete button
   - Spam keywords: replace textarea with individual tag chips (each with ✕ remove) + input with Enter-to-add

@@ -146,10 +146,18 @@ func validate(cfg *models.Config) error {
 		if _, err := time.ParseDuration(cfg.Spam.TimeWindow); err != nil {
 			return fmt.Errorf("invalid spam.time_window: %w", err)
 		}
-		if !cfg.Spam.TriggerOnAuthor && len(cfg.Spam.TriggerOnTitleKw) == 0 {
-			return fmt.Errorf("spam requires at least one trigger: trigger_on_author or trigger_on_title_kw")
-		}
-	}
+ 		if !cfg.Spam.TriggerOnAuthor && len(cfg.Spam.TriggerOnTitleKw) == 0 {
+ 			return fmt.Errorf("spam requires at least one trigger: trigger_on_author or trigger_on_title_kw")
+ 		}
+ 		if cfg.Spam.AutoCleanEnabled {
+ 			if cfg.Spam.AutoCleanInterval == "" {
+ 				return fmt.Errorf("spam.auto_clean_interval is required when auto_clean_enabled is true")
+ 			}
+ 			if _, err := time.ParseDuration(cfg.Spam.AutoCleanInterval); err != nil {
+ 				return fmt.Errorf("invalid spam.auto_clean_interval: %w", err)
+ 			}
+ 		}
+ 	}
 
 	return nil
 }
