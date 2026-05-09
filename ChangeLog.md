@@ -1,6 +1,15 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Refactor: event consumer Actor-model architecture with goroutine pools:**
+  - Split single-threaded event consumer into dispatcher + worker pool pattern
+  - Add `daemon/consumer/pool.go` — fixed worker pool (4 goroutines, buffered channel) for concurrent event processing
+  - Add `daemon/consumer/writer.go` — dedicated writer goroutine serializing all bbolt writes via channel (buffer=256), eliminating write contention
+  - Event bus `Publish()` now uses blocking send with backpressure instead of silently dropping events when channel full
+  - `handlePRMerged`/`handlePRReopened` syncer calls run in independent goroutines (non-blocking)
+  - `handlePROpened` labeler/reviewer calls run in parallel goroutines
+  - Update `TestPublishBufferFull` → `TestPublishBackpressure` to verify blocking semantics
+  - All 27 existing tests pass; new architecture enables parallel processing while maintaining write ordering
 - **Refactor: split daemon/platform monolithic files into sub-packages:**
   - Split `daemon/platform/telegram.go` (1581 lines) into `telegram/bot.go`, `telegram/commands.go`, `telegram/callbacks.go`, `telegram/helpers.go`
   - Split `daemon/platform/feishu.go` (1006 lines) into `feishu/bot.go`, `feishu/commands.go`

@@ -59,15 +59,14 @@ func Subscribe() <-chan Event {
 	return ch
 }
 
-// Publish publishes an event to all subscribers
+// Publish publishes an event to all subscribers.
+// Blocks if a subscriber's channel is full (backpressure).
+// If a subscriber is slow, this will block the publisher.
 func Publish(e Event) {
 	globalBus.mu.RLock()
 	defer globalBus.mu.RUnlock()
 	for _, ch := range globalBus.subscribers {
-		select {
-		case ch <- e:
-		default:
-		}
+		ch <- e
 	}
 }
 

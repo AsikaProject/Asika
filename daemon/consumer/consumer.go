@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 
 	"asika/common/config"
-	"asika/common/db"
 	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
@@ -22,7 +21,7 @@ import (
 	"asika/daemon/syncer"
 )
 
-// Consumer consumes events and processes them
+// Consumer consumes events and dispatches them to subsystem goroutine pools.
 type Consumer struct {
 	cfg          *models.Config
 	clients      map[platforms.PlatformType]platforms.PlatformClient
@@ -33,12 +32,18 @@ type Consumer struct {
 	queue        *queue.Manager
 	staleMgr     *stale.Manager
 	stop         chan struct{}
+
+	// Actor subsystems
+	writer  *writerActor
+	workers *workerPool
 }
 
 // NewConsumer creates a new event consumer (basic, no wiring)
 func NewConsumer() *Consumer {
 	return &Consumer{
-		stop: make(chan struct{}),
+		stop:    make(chan struct{}),
+		writer:  newWriterActor(256),
+		workers: newWorkerPool(4),
 	}
 }
 
@@ -58,17 +63,21 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 		spamDetector: sd,
 		queue:        q,
 		stop:         make(chan struct{}),
+		writer:       newWriterActor(256),
+		workers:      newWorkerPool(4),
 	}
 }
 
-// Start starts consuming events
+// Start starts consuming events and dispatching to subsystem goroutine pools
 func (c *Consumer) Start() {
+	c.writer = newWriterActor(256)
+	c.workers = newWorkerPool(4)
 	ch := events.Subscribe()
 	go func() {
 		for {
 			select {
 			case event := <-ch:
-				c.handleEvent(event)
+				c.dispatch(event)
 			case <-c.stop:
 				slog.Info("event consumer stopped")
 				return
@@ -77,9 +86,15 @@ func (c *Consumer) Start() {
 	}()
 }
 
-// Stop stops the consumer
+// Stop stops the consumer and all subsystem goroutines
 func (c *Consumer) Stop() {
 	close(c.stop)
+	if c.workers != nil {
+		c.workers.Stop()
+	}
+	if c.writer != nil {
+		c.writer.Stop()
+	}
 }
 
 // SetStaleManager sets the stale manager for activity detection
@@ -87,28 +102,29 @@ func (c *Consumer) SetStaleManager(mgr *stale.Manager) {
 	c.staleMgr = mgr
 }
 
-func (c *Consumer) handleEvent(event events.Event) {
+// dispatch routes events to subsystem goroutine pools
+func (c *Consumer) dispatch(event events.Event) {
 	slog.Info("received event", "type", event.Type, "repo_group", event.RepoGroup, "platform", event.Platform)
 
 	switch event.Type {
 	case events.EventPROpened:
-		c.handlePROpened(event)
+		c.workers.Submit(func() { c.handlePROpened(event) })
 	case events.EventPRClosed:
-		c.handlePRClosed(event)
+		c.workers.Submit(func() { c.handlePRClosed(event) })
 	case events.EventPRMerged:
-		c.handlePRMerged(event)
+		c.workers.Submit(func() { c.handlePRMerged(event) })
 	case events.EventPRApproved:
-		c.handlePRApproved(event)
+		c.workers.Submit(func() { c.handlePRApproved(event) })
 	case events.EventPRReopened:
-		c.handlePRReopened(event)
+		c.workers.Submit(func() { c.handlePRReopened(event) })
 	case events.EventSpamDetected:
-		c.handleSpamDetected(event)
+		c.workers.Submit(func() { c.handleSpamDetected(event) })
 	case events.EventPRComment:
-		c.handlePRComment(event)
+		c.workers.Submit(func() { c.handlePRComment(event) })
 	case events.EventPRLabeled:
 		slog.Info("PR labeled", "repo_group", event.RepoGroup)
 	case events.EventBranchDeleted:
-		c.handleBranchDeleted(event)
+		c.workers.Submit(func() { c.handleBranchDeleted(event) })
 	case events.EventSyncCompleted:
 		slog.Info("sync completed", "repo_group", event.RepoGroup)
 	case events.EventSyncFailed:
@@ -124,7 +140,6 @@ func (c *Consumer) handlePROpened(event events.Event) {
 
 	slog.Info("PR opened", "title", pr.Title, "author", pr.Author)
 
-	// 1. Store in bbolt
 	if pr.ID == "" {
 		pr.ID = uuid.New().String()
 	}
@@ -132,19 +147,20 @@ func (c *Consumer) handlePROpened(event events.Event) {
 	pr.UpdatedAt = time.Now()
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
-	db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
 
-	// 2. Trigger label rule engine
+	// Use writer actor for bbolt writes
+	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
+		slog.Error("failed to store PR", "error", err)
+		return
+	}
+
+	// These can run in parallel via separate goroutines
 	if c.labeler != nil {
-		c.labeler.HandlePROpened(pr, event.RepoGroup)
+		go c.labeler.HandlePROpened(pr, event.RepoGroup)
 	}
-
-	// 3. Trigger reviewer assignment
 	if c.reviewer != nil {
-		c.reviewer.HandlePROpened(pr, event.RepoGroup)
+		go c.reviewer.HandlePROpened(pr, event.RepoGroup)
 	}
-
-	// 4. Check for stale activity (remove stale label on new activity)
 	if c.staleMgr != nil {
 		c.staleMgr.HandleActivity(pr, event.RepoGroup)
 	}
@@ -158,12 +174,13 @@ func (c *Consumer) handlePRClosed(event events.Event) {
 
 	slog.Info("PR closed", "title", pr.Title)
 
-	// Update state in bbolt
 	pr.State = "closed"
 	pr.UpdatedAt = time.Now()
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
-	db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
+	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
+		slog.Error("failed to update PR", "error", err)
+	}
 }
 
 func (c *Consumer) handlePRMerged(event events.Event) {
@@ -174,19 +191,22 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 
 	slog.Info("PR merged", "title", pr.Title)
 
-	// Update state in bbolt
 	pr.State = "merged"
 	pr.UpdatedAt = time.Now()
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
-	db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
+	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
+		slog.Error("failed to update PR", "error", err)
+	}
 
-	// Trigger code sync (multi mode only)
+	// Trigger code sync in background
 	if c.syncer != nil {
-		ctx := context.Background()
-		if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
-			slog.Error("sync failed", "error", err, "repo_group", event.RepoGroup)
-		}
+		go func() {
+			ctx := context.Background()
+			if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
+				slog.Error("sync failed", "error", err, "repo_group", event.RepoGroup)
+			}
+		}()
 	}
 }
 
@@ -198,7 +218,6 @@ func (c *Consumer) handlePRApproved(event events.Event) {
 
 	slog.Info("PR approved", "title", pr.Title)
 
-	// Add to merge queue if not already there
 	if c.queue != nil {
 		if err := c.queue.AddToQueue(pr); err != nil {
 			slog.Error("failed to add PR to queue", "error", err, "pr_id", pr.ID)
@@ -229,28 +248,26 @@ func (c *Consumer) handlePRReopened(event events.Event) {
 
 	slog.Info("PR reopened (spam recovery)", "title", pr.Title, "repo_group", pr.RepoGroup)
 
-	// Update state in bbolt - set to open, spam flag cleared
 	pr.State = "open"
 	pr.SpamFlag = false
 	pr.UpdatedAt = time.Now()
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
-	db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
+	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
+		slog.Error("failed to update PR", "error", err)
+	}
 
-	// Check for stale activity (remove stale label on re-open)
 	if c.staleMgr != nil {
 		c.staleMgr.HandleActivity(pr, event.RepoGroup)
 	}
 
-	// Spam reopen: bypass queue, use git cherry-pick to push to target branches
-	// This is per tasks.md 7.4: use common Git tools to cherry-pick PR commits
 	if c.syncer != nil {
-		ctx := context.Background()
-		// For spam reopen, we cherry-pick directly without going through merge queue
-		// The syncer.SyncOnMerge will handle the cherry-pick for single/multi mode
-		if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
-			slog.Error("failed to sync spam-reopened PR", "error", err, "pr_id", pr.ID)
-		}
+		go func() {
+			ctx := context.Background()
+			if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
+				slog.Error("failed to sync spam-reopened PR", "error", err, "pr_id", pr.ID)
+			}
+		}()
 	}
 }
 
@@ -409,7 +426,6 @@ func (c *Consumer) cmdRecheck(pr *models.PRRecord, author string) string {
 }
 
 func (c *Consumer) handleBranchDeleted(event events.Event) {
-	// Payload should contain branch name
 	branch, ok := event.Payload.(string)
 	if !ok || branch == "" {
 		slog.Warn("branch deleted event missing branch name")
@@ -418,8 +434,7 @@ func (c *Consumer) handleBranchDeleted(event events.Event) {
 
 	slog.Info("branch deleted", "branch", branch, "repo_group", event.RepoGroup)
 
-	// Sync branch deletion to other platforms (multi mode only)
 	if c.syncer != nil {
-		c.syncer.SyncBranchDeletion(event.RepoGroup, event.Platform, branch)
+		go c.syncer.SyncBranchDeletion(event.RepoGroup, event.Platform, branch)
 	}
 }

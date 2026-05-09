@@ -45,7 +45,7 @@ func TestStartStop(t *testing.T) {
 
 	c := NewConsumer()
 
-	go c.Start()
+	c.Start()
 	c.Stop()
 }
 
@@ -54,7 +54,7 @@ func TestSetStaleManager(t *testing.T) {
 	c.SetStaleManager(nil)
 }
 
-func TestHandleEvent_NilPR(t *testing.T) {
+func TestDispatch_NilPR(t *testing.T) {
 	c := NewConsumer()
 
 	event := events.Event{
@@ -64,10 +64,10 @@ func TestHandleEvent_NilPR(t *testing.T) {
 		PR:        nil,
 	}
 
-	c.handleEvent(event)
+	c.dispatch(event)
 }
 
-func TestHandleEvent_InvalidType(t *testing.T) {
+func TestDispatch_InvalidType(t *testing.T) {
 	c := NewConsumer()
 
 	event := events.Event{
@@ -77,7 +77,7 @@ func TestHandleEvent_InvalidType(t *testing.T) {
 		PR:        nil,
 	}
 
-	c.handleEvent(event)
+	c.dispatch(event)
 }
 
 func TestHandlePROpened(t *testing.T) {
@@ -390,7 +390,7 @@ func TestHandleBranchDeleted_MissingPayload(t *testing.T) {
 	})
 }
 
-func TestHandleEvent_AllTypes(t *testing.T) {
+func TestDispatch_AllTypes(t *testing.T) {
 	dir := t.TempDir()
 	db.Init(dir + "/test.db")
 	t.Cleanup(func() { db.Close() })
@@ -409,7 +409,7 @@ func TestHandleEvent_AllTypes(t *testing.T) {
 
 	for _, et := range eventTypes {
 		t.Run(string(et), func(t *testing.T) {
-			c.handleEvent(events.Event{
+			c.dispatch(events.Event{
 				Type:      et,
 				RepoGroup: "test-group",
 				Platform:  "github",

@@ -104,7 +104,7 @@ func StartWorkers(
 
 	// Event consumer
 	eventConsumer = consumer.NewConsumerWithClients(cfg, clients)
-	go eventConsumer.Start()
+	eventConsumer.Start()
 	slog.Info("event consumer started")
 
 	// Webhook retry worker

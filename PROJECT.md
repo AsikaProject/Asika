@@ -25,7 +25,6 @@ graph TB
         subgraph Core["Core"]
             QC[Queue Manager]
             SY[Syncer]
-            EC[Event Consumer]
             LB[Labeler]
             SD[Spam Detector]
         end
@@ -40,6 +39,12 @@ graph TB
 
         subgraph Events["Event Bus"]
             EB[Event Publisher/Subscriber]
+        end
+
+        subgraph Actors["Actor System (goroutine pools)"]
+            DP[Event Dispatcher]
+            WP[Worker Pool]
+            WA[Writer Actor]
         end
 
         subgraph Notify["Notifications"]
@@ -71,16 +76,17 @@ graph TB
     MW --> RO
     RO --> QC
     RO --> SY
-    RO --> EC
     RO --> SD
 
     QC --> EB
     SY --> EB
-    EB --> EC
-    EC --> LB
-    EC --> QC
-    EC --> SD
-    SD --> BDB
+    EB --> DP
+    DP --> WP
+    WP --> WA
+    WA --> BDB
+    WP --> LB
+    WP --> QC
+    WP --> SD
 
     PC_GH --> SY
     PC_GL --> SY
@@ -144,9 +150,30 @@ Non-admin users can be assigned to specific repo groups. Empty `AllowedRepoGroup
 - **Spam Detector** — Scans for spam PRs based on author frequency and title keywords
 - **Spam Auto-Clean** — Periodically clears spam keywords and resets author trigger (configurable interval)
 - **Poller** — Fetches PRs from platforms at configured intervals (polling mode)
-- **Event Consumer** — Processes events from the event bus (PR state changes, comments, etc.)
+- **Event Consumer** — Dispatches events from the event bus to the worker pool
 - **Stale Checker** — Periodically checks for and handles stale PRs
 - **Webhook Retry Worker** — Retries failed webhook deliveries with exponential backoff
+
+### Actor System (Goroutine Pools)
+
+The event consumer uses an Actor-model architecture with goroutine pools for concurrent processing:
+
+- **Event Dispatcher** — Single goroutine reads from the event bus and dispatches events to the worker pool
+- **Worker Pool** — Fixed pool of 4 goroutines processing events concurrently (configurable via `workerPool.Size`)
+- **Writer Actor** — Dedicated goroutine serializing all bbolt writes through a channel (buffer=256). Eliminates write contention since bbolt requires serialized transactions
+- **Event Bus** — Blocking publish with backpressure (no silent event drops)
+
+```
+Publisher → [100 buffer] → Event Dispatcher → Worker Pool (4 goroutines)
+                                                  ↓
+                                            Writer Actor (bbolt)
+```
+
+This architecture provides:
+- Parallel event processing (up to 4 events concurrently)
+- Ordered, contention-free bbolt writes via single writer goroutine
+- Backpressure instead of silent event drops
+- Independent goroutine for slow operations (labeler API calls, syncer operations)
 
 ### Storage (bbolt)
 

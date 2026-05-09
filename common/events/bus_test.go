@@ -160,7 +160,7 @@ func TestEventTypeConstants(t *testing.T) {
 	}
 }
 
-func TestPublishBufferFull(t *testing.T) {
+func TestPublishBackpressure(t *testing.T) {
 	Init()
 
 	// Create a channel but don't read from it to fill the buffer
@@ -177,7 +177,8 @@ func TestPublishBufferFull(t *testing.T) {
 		PublishPR(EventPROpened, "main", "github", pr, nil)
 	}
 
-	// Publish the 101st event, should not block (will be dropped)
+	// Publish the 101st event should block until consumer reads.
+	// Use a goroutine with a timeout to verify backpressure works.
 	pr := &models.PRRecord{
 		ID:        "pr-overflow",
 		RepoGroup: "main",
@@ -185,9 +186,34 @@ func TestPublishBufferFull(t *testing.T) {
 		PRNumber:  101,
 		State:     "open",
 	}
-	PublishPR(EventPROpened, "main", "github", pr, nil)
 
-	// Verify no panic or block
-	time.Sleep(10 * time.Millisecond)
+	done := make(chan struct{})
+	go func() {
+		PublishPR(EventPROpened, "main", "github", pr, nil)
+		close(done)
+	}()
+
+	// Give the goroutine time to attempt the publish
+	time.Sleep(50 * time.Millisecond)
+
+	// The publish should still be blocked (channel full)
+	select {
+	case <-done:
+		t.Fatal("Publish should have been blocked on full channel")
+	default:
+		// Expected: still blocked
+	}
+
+	// Drain one slot to unblock the publisher
+	<-ch
+
+	// Now the publish should complete
+	select {
+	case <-done:
+		// Expected: unblocked after drain
+	case <-time.After(time.Second):
+		t.Fatal("Publish should have completed after draining one slot")
+	}
+
 	_ = ch
 }
