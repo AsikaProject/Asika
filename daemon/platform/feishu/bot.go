@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strings"
+	"time"
 
 	"asika/common/auth"
 	"asika/common/models"
@@ -142,6 +144,10 @@ func (b *Bot) handleMessageEvent(ctx context.Context, raw json.RawMessage) (inte
 	slog.Info("feishu bot: received message", "sender", senderID, "text", text)
 	reply := b.processCommand(senderID, text)
 	if reply != "" {
+		// Auto-delete API key messages after 2 minutes
+		if strings.Contains(reply, "ak_") {
+			go b.scheduleDelete(msg.Message.MessageID, 2*time.Minute)
+		}
 		return map[string]interface{}{
 			"msg_type": "text",
 			"content":  map[string]interface{}{"text": reply},
@@ -197,4 +203,46 @@ func (b *Bot) getUserRole(userID string) string {
 		return "operator"
 	}
 	return "viewer"
+}
+
+// scheduleDelete deletes a Feishu message after the given delay.
+// Uses the Feishu recall API: DELETE /open-apis/im/v1/messages/:message_id
+func (b *Bot) scheduleDelete(messageID string, delay time.Duration) {
+	time.Sleep(delay)
+
+	// Step 1: Get tenant_access_token
+	tokenReq, _ := http.NewRequest("POST",
+		"https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", strings.NewReader(
+			fmt.Sprintf(`{"app_id":"%s","app_secret":"%s"}`, b.feishuCfg.AppID, b.feishuCfg.AppSecret)))
+	tokenReq.Header.Set("Content-Type", "application/json")
+	tokenResp, err := http.DefaultClient.Do(tokenReq)
+	if err != nil {
+		slog.Warn("feishu: failed to get tenant_access_token", "error", err)
+		return
+	}
+	defer tokenResp.Body.Close()
+
+	var tokenResult struct {
+		Code              int    `json:"code"`
+		Msg               string `json:"msg"`
+		TenantAccessToken string `json:"tenant_access_token"`
+	}
+	json.NewDecoder(tokenResp.Body).Decode(&tokenResult)
+	if tokenResult.TenantAccessToken == "" {
+		slog.Warn("feishu: empty tenant_access_token", "code", tokenResult.Code, "msg", tokenResult.Msg)
+		return
+	}
+
+	// Step 2: Delete the message
+	delURL := fmt.Sprintf("https://open.feishu.cn/open-apis/im/v1/messages/%s", messageID)
+	delReq, _ := http.NewRequest("DELETE", delURL, nil)
+	delReq.Header.Set("Authorization", "Bearer "+tokenResult.TenantAccessToken)
+	delReq.Header.Set("Content-Type", "application/json")
+	delResp, err := http.DefaultClient.Do(delReq)
+	if err != nil {
+		slog.Warn("feishu: failed to delete message", "error", err)
+		return
+	}
+	defer delResp.Body.Close()
+	slog.Info("feishu: auto-deleted API key message", "message_id", messageID)
 }

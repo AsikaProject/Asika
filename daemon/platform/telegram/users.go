@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"gopkg.in/telebot.v3"
 )
@@ -219,8 +220,13 @@ func (b *Bot) doAPIKeyAPI(c telebot.Context, method, path string, bodyData inter
 	}
 	if method == "POST" {
 		if key, ok := result["key"].(string); ok {
-			return c.Send(successMsg + "\n\n<code>" + key + "</code>\n\n⚠️ Copy it now, it won't be shown again!",
+			err := c.Send(successMsg+"\n\n<code>"+key+"</code>\n\n⚠️ Copy it now, it won't be shown again!",
 				&telebot.SendOptions{ParseMode: telebot.ModeHTML})
+			go func() {
+				time.Sleep(2 * time.Minute)
+				b.bot.Delete(c.Message())
+			}()
+			return err
 		}
 	}
 	return c.Send(successMsg)

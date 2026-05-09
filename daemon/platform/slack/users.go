@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
@@ -146,6 +147,11 @@ func (b *Bot) handleAPIKeyCreate(ev *slack.MessageEvent, client *socketmode.Clie
 	}
 	body := map[string]interface{}{"name": name, "role": role}
 	b.doAPIKeyAPI(client, ev.Channel, "POST", "/api/v1/apikeys", body, "API key created")
+	// Schedule deletion of the command message
+	go func() {
+		time.Sleep(2 * time.Minute)
+		b.deleteSlackMessage(ev.Channel, ev.Timestamp)
+	}()
 }
 
 func (b *Bot) handleAPIKeyList(ev *slack.MessageEvent, client *socketmode.Client) {
@@ -191,6 +197,10 @@ func (b *Bot) handleAPIKeyRevoke(ev *slack.MessageEvent, client *socketmode.Clie
 		return
 	}
 	b.doAPIKeyAPI(client, ev.Channel, "DELETE", fmt.Sprintf("/api/v1/apikeys/%s", parts[1]), nil, "✅ API key revoked")
+	go func() {
+		time.Sleep(2 * time.Minute)
+		b.deleteSlackMessage(ev.Channel, ev.Timestamp)
+	}()
 }
 
 func (b *Bot) doAPIKeyAPI(client *socketmode.Client, channel, method, path string, bodyData interface{}, successMsg string) {
@@ -240,4 +250,13 @@ func (b *Bot) doAPIKeyAPI(client *socketmode.Client, channel, method, path strin
 		}
 	}
 	b.postMessage(client, channel, successMsg)
+}
+
+// deleteSlackMessage deletes a message using the Slack Web API.
+func (b *Bot) deleteSlackMessage(channel, timestamp string) error {
+	if b.client == nil {
+		return fmt.Errorf("no slack client")
+	}
+	_, _, err := b.client.DeleteMessage(channel, timestamp)
+	return err
 }

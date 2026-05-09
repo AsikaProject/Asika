@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -235,6 +236,10 @@ func (b *Bot) doAPIKeyAPI(s *discordgo.Session, m *discordgo.MessageCreate, meth
 	if method == "POST" {
 		if key, ok := result["key"].(string); ok {
 			s.ChannelMessageSend(m.ChannelID, successMsg+"\n\n`"+key+"`\n\n⚠️ Copy it now!")
+			go func() {
+				time.Sleep(2 * time.Minute)
+				s.ChannelMessageDelete(m.ChannelID, m.ID)
+			}()
 			return
 		}
 	}
