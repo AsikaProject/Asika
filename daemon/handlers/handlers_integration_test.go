@@ -23,8 +23,7 @@ func setupQueueHandlerTest(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	mock := testutil.NewMockPlatformClient()
 	clients := map[platforms.PlatformType]platforms.PlatformClient{
@@ -109,8 +108,7 @@ func TestRecheckQueue_NotConfigured(t *testing.T) {
 
 func TestPRHandlers_SingleMode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	defer db.Close()
 
 	cfg := &models.Config{
@@ -248,8 +246,7 @@ func TestPRHandlers_SingleMode(t *testing.T) {
 func TestAuthHandlers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	defer db.Close()
 
 	engine := gin.New()

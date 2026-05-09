@@ -119,11 +119,11 @@ func TestWorkerPool_UpdateConfig(t *testing.T) {
 
 func TestWorkerPool_DynamicScaleUp(t *testing.T) {
 	p := testPool(models.WorkerPoolConfig{
-		MinWorkers:   1,
-		MaxWorkers:   4,
-		ScaleUpPct:   25,
-		ScaleDownPct: 10,
-		CooldownSecs: 0,
+		MinWorkers:    1,
+		MaxWorkers:    4,
+		ScaleUpPct:    25,
+		ScaleDownPct:  10,
+		CooldownSecs:  0,
 		StatsInterval: "50ms",
 	})
 	defer p.Stop()
@@ -153,11 +153,11 @@ func TestWorkerPool_DynamicScaleUp(t *testing.T) {
 
 func TestWorkerPool_DynamicScaleDown(t *testing.T) {
 	p := testPool(models.WorkerPoolConfig{
-		MinWorkers:   1,
-		MaxWorkers:   4,
-		ScaleUpPct:   50,
-		ScaleDownPct: 10,
-		CooldownSecs: 0,
+		MinWorkers:    1,
+		MaxWorkers:    4,
+		ScaleUpPct:    50,
+		ScaleDownPct:  10,
+		CooldownSecs:  0,
 		StatsInterval: "50ms",
 	})
 	defer p.Stop()
@@ -173,11 +173,11 @@ func TestWorkerPool_DynamicScaleDown(t *testing.T) {
 
 func TestWorkerPool_CooldownPreventsFlapping(t *testing.T) {
 	p := testPool(models.WorkerPoolConfig{
-		MinWorkers:   1,
-		MaxWorkers:   4,
-		ScaleUpPct:   50,
-		ScaleDownPct: 10,
-		CooldownSecs: 60,
+		MinWorkers:    1,
+		MaxWorkers:    4,
+		ScaleUpPct:    50,
+		ScaleDownPct:  10,
+		CooldownSecs:  60,
 		StatsInterval: "50ms",
 	})
 	defer p.Stop()

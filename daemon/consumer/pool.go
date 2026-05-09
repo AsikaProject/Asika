@@ -12,11 +12,11 @@ import (
 )
 
 type poolMetrics struct {
-	workers        atomic.Int32
-	totalTasks     atomic.Uint64
-	activeTasks    atomic.Int32
-	utilization    atomic.Int32
-	scaleUpEvents  atomic.Uint64
+	workers         atomic.Int32
+	totalTasks      atomic.Uint64
+	activeTasks     atomic.Int32
+	utilization     atomic.Int32
+	scaleUpEvents   atomic.Uint64
 	scaleDownEvents atomic.Uint64
 }
 
@@ -42,25 +42,25 @@ type workerPool struct {
 	minWorkers   int
 	maxWorkers   int
 	scaleUpPct   int
-	scaleDownPct  int
+	scaleDownPct int
 	cooldown     time.Duration
 	nextID       atomic.Int32
 
-	mu          sync.Mutex
-	cancels     []context.CancelFunc
-	lastScaled  time.Time
+	mu         sync.Mutex
+	cancels    []context.CancelFunc
+	lastScaled time.Time
 }
 
 func newWorkerPool(cfg models.WorkerPoolConfig) *workerPool {
 	w := &workerPool{
-		tasks:         make(chan func(), cfg.MaxWorkers*4),
-		stop:          make(chan struct{}),
-		metrics:       &poolMetrics{},
-		minWorkers:    cfg.MinWorkers,
-		maxWorkers:    cfg.MaxWorkers,
-		scaleUpPct:    cfg.ScaleUpPct,
+		tasks:        make(chan func(), cfg.MaxWorkers*4),
+		stop:         make(chan struct{}),
+		metrics:      &poolMetrics{},
+		minWorkers:   cfg.MinWorkers,
+		maxWorkers:   cfg.MaxWorkers,
+		scaleUpPct:   cfg.ScaleUpPct,
 		scaleDownPct: cfg.ScaleDownPct,
-		cooldown:      time.Duration(cfg.CooldownSecs) * time.Second,
+		cooldown:     time.Duration(cfg.CooldownSecs) * time.Second,
 	}
 	w.cfg.Store(cfg)
 

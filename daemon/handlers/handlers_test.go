@@ -23,8 +23,7 @@ func setupHandlerTest(t *testing.T) (*gin.Engine, func()) {
 
 	gin.SetMode(gin.TestMode)
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	auth.Init("test-secret-for-unit-tests", 72*time.Hour)
 
@@ -118,8 +117,7 @@ func setupWebhookTest(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	mock := testutil.NewMockPlatformClient()
 	clients = map[platforms.PlatformType]platforms.PlatformClient{
@@ -1292,8 +1290,7 @@ func TestGetStats_WithPRs(t *testing.T) {
 
 func TestRebaseSinglePR_MissingAllowEdit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	auth.Init("test-secret-for-unit-tests", 72*time.Hour)
 
@@ -1356,8 +1353,7 @@ func TestRebaseSinglePR_MissingAllowEdit(t *testing.T) {
 
 func TestRebaseSinglePR_PRNotOpen(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	auth.Init("test-secret-for-unit-tests", 72*time.Hour)
 
@@ -1413,8 +1409,7 @@ func TestRebaseSinglePR_PRNotOpen(t *testing.T) {
 
 func TestRebaseQueue_NoConflictedPRs(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	auth.Init("test-secret-for-unit-tests", 72*time.Hour)
 

@@ -16,8 +16,7 @@ import (
 func setupLabelerTest(t *testing.T) (*Labeler, *testutil.MockPlatformClient) {
 	t.Helper()
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	mock := testutil.NewMockPlatformClient()
 	clients := map[platforms.PlatformType]platforms.PlatformClient{

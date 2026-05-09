@@ -23,8 +23,7 @@ func setupBackupTest(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	auth.Init("backup-test-secret", 72*time.Hour)
 

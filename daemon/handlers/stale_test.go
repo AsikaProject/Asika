@@ -21,8 +21,7 @@ func setupStaleTest(t *testing.T, mgr *stale.Manager) (*gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	auth.Init("stale-test-secret", 72*time.Hour)
 
@@ -68,8 +67,7 @@ func setupStaleTest(t *testing.T, mgr *stale.Manager) (*gin.Engine, func()) {
 
 func TestHandleStaleCheck_NoManager(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	t.Cleanup(func() { db.Close() })
 
 	auth.Init("stale-nomanager", 72*time.Hour)
@@ -91,8 +89,7 @@ func TestHandleStaleCheck_NoManager(t *testing.T) {
 
 func TestHandleStaleCheck_NoConfig(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	t.Cleanup(func() { db.Close() })
 
 	auth.Init("stale-noconfig", 72*time.Hour)
@@ -182,8 +179,7 @@ func TestHandleStaleUnmark_NoManager(t *testing.T) {
 
 func TestHandleStaleUnmark_MissingParams(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	t.Cleanup(func() { db.Close() })
 
 	auth.Init("stale-params", 72*time.Hour)

@@ -22,8 +22,7 @@ func setupAuthHandlerTest(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	auth.Init("auth-handler-test-secret", 72*time.Hour)
 
@@ -159,8 +158,7 @@ func TestLogin_InvalidJSON(t *testing.T) {
 
 func TestLogin_ConfigNotLoaded(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	t.Cleanup(func() { db.Close() })
 
 	auth.Init("no-config-test", 72*time.Hour)

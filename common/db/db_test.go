@@ -19,24 +19,22 @@ func initTestDB(t *testing.T) {
 func TestInitAndClose(t *testing.T) {
 	initTestDB(t)
 
-	if DB == nil {
-		t.Fatal("DB should be initialized")
+	if defaultStorage == nil {
+		t.Fatal("defaultStorage should be initialized")
 	}
 }
 
 func TestBucketsCreated(t *testing.T) {
 	initTestDB(t)
 
-	// Verify bucket is created
-	err := DB.View(func(tx *bbolt.Tx) error {
+	s, ok := defaultStorage.(*bboltStorage)
+	if !ok {
+		t.Skip("not bbolt storage")
+	}
+	err := s.db.View(func(tx *bbolt.Tx) error {
 		buckets := []string{
-			BucketConfig,
-			BucketRepos,
-			BucketPRs,
-			BucketLogs,
-			BucketQueueItems,
-			BucketUsers,
-			BucketSyncHistory,
+			BucketConfig, BucketRepos, BucketPRs, BucketLogs,
+			BucketQueueItems, BucketUsers, BucketSyncHistory,
 		}
 		for _, bucketName := range buckets {
 			b := tx.Bucket([]byte(bucketName))
@@ -54,7 +52,6 @@ func TestBucketsCreated(t *testing.T) {
 func TestPutAndGet(t *testing.T) {
 	initTestDB(t)
 
-	// Test Put and Get
 	err := Put("prs", "pr-123", []byte(`{"id":"pr-123","state":"open"}`))
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
@@ -77,7 +74,6 @@ func TestGet_NonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
 	}
-
 	if val != nil {
 		t.Errorf("Get() for non-existent key should return nil, got %q", string(val))
 	}
@@ -86,25 +82,21 @@ func TestGet_NonExistent(t *testing.T) {
 func TestDelete(t *testing.T) {
 	initTestDB(t)
 
-	// Insert first
 	err := Put("prs", "pr-123", []byte("test-data"))
 	if err != nil {
 		t.Fatalf("Put failed: %v", err)
 	}
 
-	// Verify exists
 	val, _ := Get("prs", "pr-123")
 	if val == nil {
 		t.Fatal("key should exist before delete")
 	}
 
-	// Delete
 	err = Delete("prs", "pr-123")
 	if err != nil {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
-	// Verify deleted
 	val, _ = Get("prs", "pr-123")
 	if val != nil {
 		t.Errorf("key should not exist after delete, got %q", string(val))
@@ -123,7 +115,6 @@ func TestDelete_NonExistent(t *testing.T) {
 func TestForEach(t *testing.T) {
 	initTestDB(t)
 
-	// Insert multiple data
 	testData := map[string]string{
 		"pr-1": "data-1",
 		"pr-2": "data-2",
@@ -137,7 +128,6 @@ func TestForEach(t *testing.T) {
 		}
 	}
 
-	// Use ForEach to iterate
 	count := 0
 	found := make(map[string]bool)
 	err := ForEach("prs", func(key, value []byte) error {
@@ -171,55 +161,50 @@ func TestForEach_EmptyBucket(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ForEach failed: %v", err)
 	}
-
 	if count != 0 {
 		t.Errorf("ForEach on empty bucket should visit 0 items, got %d", count)
 	}
 }
 
-func TestUpdate(t *testing.T) {
+func TestPing_Success(t *testing.T) {
 	initTestDB(t)
 
-	err := Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte("prs"))
-		if b == nil {
-			return bbolt.ErrBucketNotFound
-		}
-		return b.Put([]byte("test-key"), []byte("test-value"))
-	})
+	err := Ping()
 	if err != nil {
-		t.Fatalf("Update failed: %v", err)
-	}
-
-	// Verify write succeeded
-	val, _ := Get("prs", "test-key")
-	if string(val) != "test-value" {
-		t.Errorf("Get() = %q, want test-value", string(val))
+		t.Errorf("Ping() = %v, want nil", err)
 	}
 }
 
-func TestView(t *testing.T) {
-	initTestDB(t)
+func TestPing_NotInitialized(t *testing.T) {
+	orig := defaultStorage
+	defer func() {
+		defaultStorage = orig
+		if r := recover(); r == nil {
+			t.Error("Ping() should panic when storage is nil")
+		}
+	}()
 
-	// Write data first
-	err := Put("prs", "view-test", []byte("view-value"))
+	defaultStorage = nil
+
+	Ping()
+}
+
+func TestPing_AfterClose(t *testing.T) {
+	dir := t.TempDir()
+	err := Init(dir + "/ping_test.db")
 	if err != nil {
-		t.Fatalf("Put failed: %v", err)
+		t.Fatalf("Init failed: %v", err)
 	}
 
-	err = View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte("prs"))
-		if b == nil {
-			return bbolt.ErrBucketNotFound
-		}
-		val := b.Get([]byte("view-test"))
-		if string(val) != "view-value" {
-			t.Errorf("in View: val = %q, want view-value", string(val))
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("View failed: %v", err)
+	if err := Ping(); err != nil {
+		t.Errorf("Ping() before close = %v, want nil", err)
+	}
+
+	Close()
+
+	err = Ping()
+	if err == nil {
+		t.Error("Ping() should return error after Close()")
 	}
 }
 
@@ -258,48 +243,5 @@ func TestForEach_InvalidBucket(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("ForEach on invalid bucket should return error")
-	}
-}
-
-func TestPing_Success(t *testing.T) {
-	initTestDB(t)
-
-	err := Ping()
-	if err != nil {
-		t.Errorf("Ping() = %v, want nil", err)
-	}
-}
-
-func TestPing_NotInitialized(t *testing.T) {
-	// Save and restore DB
-	origDB := DB
-	defer func() { DB = origDB }()
-
-	DB = nil
-
-	err := Ping()
-	if err == nil {
-		t.Error("Ping() should return error when DB is nil")
-	}
-}
-
-func TestPing_AfterClose(t *testing.T) {
-	dir := t.TempDir()
-	err := Init(dir + "/ping_test.db")
-	if err != nil {
-		t.Fatalf("Init failed: %v", err)
-	}
-
-	// Ping should work before close
-	if err := Ping(); err != nil {
-		t.Errorf("Ping() before close = %v, want nil", err)
-	}
-
-	// Close and verify Ping fails
-	Close()
-
-	err = Ping()
-	if err == nil {
-		t.Error("Ping() should return error after Close()")
 	}
 }

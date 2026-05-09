@@ -14,8 +14,7 @@ import (
 func setupSyncerTest(t *testing.T) (*Syncer, *testutil.MockPlatformClient, func()) {
 	t.Helper()
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	cfg := &models.Config{
 		RepoGroups: []models.RepoGroupConfig{

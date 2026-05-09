@@ -12,9 +12,7 @@ import (
 
 func setupSharedTest(t *testing.T) {
 	t.Helper()
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
-	t.Cleanup(func() { db.Close() })
+	testutil.NewTestDB(t)
 }
 
 func TestTruncate(t *testing.T) {

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"go.etcd.io/bbolt"
 
 	"asika/common/db"
 	"asika/common/events"
@@ -201,29 +200,14 @@ func (p *Poller) pollPlatform(client platforms.PlatformClient, repoGroup, platfo
 	}
 
 	if len(toWrite) > 0 {
-		err := db.Update(func(tx *bbolt.Tx) error {
-			b := tx.Bucket([]byte(db.BucketPRs))
-			if b == nil {
-				return bbolt.ErrBucketNotFound
+		batchErr := error(nil)
+		for _, item := range toWrite {
+			if err := db.PutPRWithIndex(item.key, item.data, item.pr.ID, item.pr.RepoGroup, item.pr.PRNumber); err != nil {
+				batchErr = err
+				slog.Error("failed to save PR", "platform", platform, "repo", repo, "pr", item.pr.PRNumber, "error", err)
 			}
-			idxByID := tx.Bucket([]byte(db.BucketPRIndexByID))
-			idxByRG := tx.Bucket([]byte(db.BucketPRIndexByRG))
-			for _, item := range toWrite {
-				if err := b.Put([]byte(item.key), item.data); err != nil {
-					return err
-				}
-				if idxByID != nil && item.pr.ID != "" {
-					idxByID.Put([]byte(item.pr.ID), []byte(item.key))
-				}
-				if idxByRG != nil && item.pr.RepoGroup != "" {
-					rgKey := fmt.Sprintf("%s:%d", item.pr.RepoGroup, item.pr.PRNumber)
-					idxByRG.Put([]byte(rgKey), []byte(item.key))
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			slog.Error("failed to batch save PRs", "platform", platform, "repo", repo, "error", err)
+		}
+		if batchErr != nil {
 			failed += len(toWrite)
 		} else {
 			success += len(toWrite)

@@ -21,8 +21,7 @@ func setupRulesTest(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	auth.Init("rules-test-secret", 72*time.Hour)
 
@@ -110,8 +109,7 @@ func TestGetLabelRules_FromDB(t *testing.T) {
 
 func TestGetLabelRules_NoConfig(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	t.Cleanup(func() { db.Close() })
 
 	auth.Init("rules-noconfig-test", 72*time.Hour)

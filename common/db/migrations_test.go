@@ -22,9 +22,13 @@ func TestRunMigrations_FreshDB(t *testing.T) {
 		t.Fatalf("RunMigrations failed: %v", err)
 	}
 
-	// Verify migration version was set
+	s, ok := defaultStorage.(*bboltStorage)
+	if !ok {
+		t.Skip("not bbolt storage")
+	}
+
 	var version int
-	err = DB.View(func(tx *bbolt.Tx) error {
+	err = s.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(BucketConfig))
 		if b == nil {
 			return fmt.Errorf("config bucket not found")
@@ -53,7 +57,6 @@ func TestRunMigrations_Idempotent(t *testing.T) {
 	}
 	defer Close()
 
-	// Run migrations twice — should be idempotent
 	err = RunMigrations()
 	if err != nil {
 		t.Fatalf("first RunMigrations failed: %v", err)
@@ -64,9 +67,13 @@ func TestRunMigrations_Idempotent(t *testing.T) {
 		t.Fatalf("second RunMigrations failed: %v", err)
 	}
 
-	// Version should still be correct
+	s, ok := defaultStorage.(*bboltStorage)
+	if !ok {
+		t.Skip("not bbolt storage")
+	}
+
 	var version int
-	err = DB.View(func(tx *bbolt.Tx) error {
+	err = s.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte(BucketConfig))
 		val := b.Get([]byte(migrationVersionKey))
 		_, err := fmt.Sscanf(string(val), "%d", &version)
@@ -89,14 +96,16 @@ func TestMigrationV2_SpamFlagDefaults(t *testing.T) {
 	}
 	defer Close()
 
-	// Run migrations first to get to v2
 	err = RunMigrations()
 	if err != nil {
 		t.Fatalf("RunMigrations failed: %v", err)
 	}
 
-	// Insert a PR with state=spam but SpamFlag=false AFTER migrations
-	// This simulates data that was in the DB before the migration was added
+	s, ok := defaultStorage.(*bboltStorage)
+	if !ok {
+		t.Skip("not bbolt storage")
+	}
+
 	pr := models.PRRecord{
 		ID:        "spam-pr",
 		RepoGroup: "test",
@@ -113,21 +122,18 @@ func TestMigrationV2_SpamFlagDefaults(t *testing.T) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
-	// Manually downgrade the migration version so v2 runs again
-	err = DB.Update(func(tx *bbolt.Tx) error {
+	err = s.db.Update(func(tx *bbolt.Tx) error {
 		return setVersion(tx, 1)
 	})
 	if err != nil {
 		t.Fatalf("setVersion failed: %v", err)
 	}
 
-	// Re-run migrations — v2 should fix the SpamFlag
 	err = RunMigrations()
 	if err != nil {
 		t.Fatalf("RunMigrations failed: %v", err)
 	}
 
-	// Verify SpamFlag was corrected
 	stored, err := Get(BucketPRs, "test#1")
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
@@ -156,7 +162,6 @@ func TestMigrationV2_NonSpamUnchanged(t *testing.T) {
 		t.Fatalf("RunMigrations failed: %v", err)
 	}
 
-	// Insert a normal PR (not spam)
 	pr := models.PRRecord{
 		ID:        "normal-pr",
 		RepoGroup: "test",
@@ -173,13 +178,11 @@ func TestMigrationV2_NonSpamUnchanged(t *testing.T) {
 		t.Fatalf("Put failed: %v", err)
 	}
 
-	// Re-run migrations
 	err = RunMigrations()
 	if err != nil {
 		t.Fatalf("RunMigrations failed: %v", err)
 	}
 
-	// Verify SpamFlag is still false
 	stored, err := Get(BucketPRs, "test#2")
 	if err != nil {
 		t.Fatalf("Get failed: %v", err)
@@ -203,9 +206,13 @@ func TestGetCurrentVersion(t *testing.T) {
 	}
 	defer Close()
 
-	// Before migrations, version should be 0
+	s, ok := defaultStorage.(*bboltStorage)
+	if !ok {
+		t.Skip("not bbolt storage")
+	}
+
 	var version int
-	err = DB.View(func(tx *bbolt.Tx) error {
+	err = s.db.View(func(tx *bbolt.Tx) error {
 		version = getCurrentVersion(tx)
 		return nil
 	})
@@ -216,14 +223,12 @@ func TestGetCurrentVersion(t *testing.T) {
 		t.Errorf("initial version = %d, want 0", version)
 	}
 
-	// Run migrations
 	err = RunMigrations()
 	if err != nil {
 		t.Fatalf("RunMigrations failed: %v", err)
 	}
 
-	// After migrations, version should be up to date
-	err = DB.View(func(tx *bbolt.Tx) error {
+	err = s.db.View(func(tx *bbolt.Tx) error {
 		version = getCurrentVersion(tx)
 		return nil
 	})

@@ -11,14 +11,12 @@ import (
 
 const migrationVersionKey = "__migration_version__"
 
-// migration represents a single database migration step.
 type migration struct {
 	Version int
 	Name    string
 	Apply   func(tx *bbolt.Tx) error
 }
 
-// migrationRegistry holds all migrations in order.
 var migrationRegistry = []migration{
 	{
 		Version: 1,
@@ -68,6 +66,37 @@ var migrationRegistry = []migration{
 	},
 }
 
+func (s *bboltStorage) runMigrations() error {
+	currentVersion := 0
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		currentVersion = getCurrentVersion(tx)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to check migration version: %w", err)
+	}
+	if currentVersion >= len(migrationRegistry) {
+		return nil
+	}
+	slog.Info("running database migrations", "current_version", currentVersion, "target_version", len(migrationRegistry))
+	for _, m := range migrationRegistry {
+		if m.Version <= currentVersion {
+			continue
+		}
+		slog.Info("applying migration", "version", m.Version, "name", m.Name)
+		if err := s.db.Update(m.Apply); err != nil {
+			return fmt.Errorf("migration %d (%s) failed: %w", m.Version, m.Name, err)
+		}
+		if err := s.db.Update(func(tx *bbolt.Tx) error {
+			return setVersion(tx, m.Version)
+		}); err != nil {
+			return fmt.Errorf("failed to update migration version: %w", err)
+		}
+	}
+	slog.Info("database migrations complete", "version", len(migrationRegistry))
+	return nil
+}
+
 func getCurrentVersion(tx *bbolt.Tx) int {
 	b := tx.Bucket([]byte(BucketConfig))
 	if b == nil {
@@ -88,40 +117,4 @@ func setVersion(tx *bbolt.Tx, version int) error {
 		return fmt.Errorf("config bucket not found")
 	}
 	return b.Put([]byte(migrationVersionKey), []byte(fmt.Sprintf("%d", version)))
-}
-
-// RunMigrations runs all pending database migrations.
-func RunMigrations() error {
-	currentVersion := 0
-	err := DB.View(func(tx *bbolt.Tx) error {
-		currentVersion = getCurrentVersion(tx)
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to check migration version: %w", err)
-	}
-
-	if currentVersion >= len(migrationRegistry) {
-		return nil
-	}
-
-	slog.Info("running database migrations", "current_version", currentVersion, "target_version", len(migrationRegistry))
-
-	for _, m := range migrationRegistry {
-		if m.Version <= currentVersion {
-			continue
-		}
-		slog.Info("applying migration", "version", m.Version, "name", m.Name)
-		if err := DB.Update(m.Apply); err != nil {
-			return fmt.Errorf("migration %d (%s) failed: %w", m.Version, m.Name, err)
-		}
-		if err := DB.Update(func(tx *bbolt.Tx) error {
-			return setVersion(tx, m.Version)
-		}); err != nil {
-			return fmt.Errorf("failed to update migration version: %w", err)
-		}
-	}
-
-	slog.Info("database migrations complete", "version", len(migrationRegistry))
-	return nil
 }

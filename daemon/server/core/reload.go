@@ -11,8 +11,6 @@ import (
 	"asika/common/platforms"
 )
 
-
-
 // SetupConfigReload sets up SIGHUP signal handler for hot config reload.
 func SetupConfigReload() {
 	sigChan := make(chan os.Signal, 1)

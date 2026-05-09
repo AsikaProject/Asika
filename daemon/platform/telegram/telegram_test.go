@@ -16,8 +16,7 @@ import (
 
 func setupBotTest(t *testing.T) (*Bot, func()) {
 	t.Helper()
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	mock := testutil.NewMockPlatformClient()
 	clients := map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: mock,

@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+
+	"asika/common/db"
 )
 
 func TestMetricsHandler(t *testing.T) {
@@ -170,6 +172,12 @@ func TestMetricsMiddleware_IncrementsCounter(t *testing.T) {
 
 func TestHealthHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+
+	dir := t.TempDir()
+	if err := db.Init(dir + "/health_test.db"); err != nil {
+		t.Fatalf("db.Init failed: %v", err)
+	}
+	defer db.Close()
 
 	engine := gin.New()
 	engine.GET("/health", healthHandler)

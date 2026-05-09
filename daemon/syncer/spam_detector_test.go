@@ -18,8 +18,7 @@ import (
 func setupSpamTest(t *testing.T) (*SpamDetector, *testutil.MockPlatformClient, func()) {
 	t.Helper()
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	cfg := &models.Config{
 		Spam: models.SpamConfig{

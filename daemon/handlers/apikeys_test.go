@@ -21,8 +21,7 @@ func setupAPIKeyTest(t *testing.T) (*gin.Engine, func()) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 
 	auth.Init("apikey-test-secret", 72*time.Hour)
 
@@ -282,8 +281,7 @@ func TestRevokeAPIKey_MissingID(t *testing.T) {
 }
 
 func TestValidateAPIKey(t *testing.T) {
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	t.Cleanup(func() { db.Close() })
 
 	// Store a known key
@@ -326,8 +324,7 @@ func TestValidateAPIKey(t *testing.T) {
 }
 
 func TestAPIKeyAuth_Middleware(t *testing.T) {
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	t.Cleanup(func() { db.Close() })
 
 	auth.Init("apikey-middleware-test", 72*time.Hour)
@@ -445,8 +442,7 @@ func TestGenerateAPIKeyID(t *testing.T) {
 
 func TestCreateAPIKey_Unauthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tdb := testutil.NewTestDB(t)
-	db.DB = tdb
+	testutil.NewTestDB(t)
 	t.Cleanup(func() { db.Close() })
 
 	auth.Init("unauth-test", 72*time.Hour)

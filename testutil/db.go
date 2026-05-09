@@ -3,29 +3,20 @@ package testutil
 import (
 	"testing"
 
-	"go.etcd.io/bbolt"
+	"asika/common/db"
 )
 
-// NewTestDB creates a temporary bbolt database for testing
-func NewTestDB(t *testing.T) *bbolt.DB {
+// NewTestDB creates a temporary bbolt database for testing and injects it
+// as the default db.Storage via db.InitWithStorage.
+func NewTestDB(t *testing.T) db.Storage {
 	t.Helper()
-	db, err := bbolt.Open(t.TempDir()+"/test.db", 0600, nil)
+	s, err := db.NewBboltStorage(t.TempDir() + "/test.db")
 	if err != nil {
 		t.Fatalf("failed to create test db: %v", err)
 	}
-
-	// Create buckets
-	db.Update(func(tx *bbolt.Tx) error {
-		buckets := []string{"config", "repos", "prs", "logs", "queue_items", "users", "sync_history", "pr_index_by_id", "pr_index_by_rg_num", "webhook_retries", "config_history", "api_keys"}
-		for _, b := range buckets {
-			tx.CreateBucketIfNotExists([]byte(b))
-		}
-		return nil
-	})
-
+	db.InitWithStorage(s)
 	t.Cleanup(func() {
-		db.Close()
+		s.Close()
 	})
-
-	return db
+	return s
 }
