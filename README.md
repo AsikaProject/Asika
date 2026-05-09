@@ -28,6 +28,9 @@ Approve, close, or check PRs directly from chat via Telegram, Feishu (Lark), Dis
 ### 🔹 Fine-grained access control
 Three roles (viewer/operator/admin) plus six granular permissions (approve, merge, close, reopen, spam, queue) with per-user repo group isolation.
 
+### 🔹 API Key authentication
+Long-lived API keys for CI/CD and external integrations. Keys are bound to a role (admin/operator/viewer) with optional granular permissions. Create and manage keys via WebUI (`/apikeys`), bot commands (`/apikey new/list/revoke`), or CLI (`asika apikey`). Keys are delivered via DM and auto-deleted after 2 minutes.
+
 ### 🔹 Simple to run
 Single binary. No Node.js. No external dependencies. Embedded bbolt database.
 
@@ -213,6 +216,12 @@ asika queue recheck [group]    # Trigger recheck
 asika queue clear [group]      # Clear all queue items
 asika queue remove <group> <id>  # Remove specific PR
 
+# API Key management
+asika apikey create <name> <role>   # Create API key (admin only)
+asika apikey list                   # List all API keys (admin only)
+asika apikey revoke <key_id>        # Revoke an API key (admin only)
+asika login --api-key <key>         # Save API key for CLI use
+
 # User management
 asika user list                # List all users
 asika user add <username> --password <pwd> --role <role> [--groups <g1,g2>] [--permissions <p1,p2>]
@@ -304,6 +313,34 @@ can_spam = false
 
 Roles: `admin` (full access), `operator` (inherits viewer + operations), `viewer` (read-only).
 Admins bypass all permission and repo group checks.
+
+### Bot UID Permissions (TOML-based)
+
+For platforms where users don't have DB accounts (e.g., Telegram numeric IDs), you can grant bot-level permissions directly in TOML:
+
+```toml
+[telegram]
+admin_ids    = [123456789]
+operator_ids = [987654321]
+viewer_ids   = [111222333]
+
+[discord]
+admin_ids    = ["discord_user_id_1"]
+operator_ids = ["discord_user_id_2"]
+
+[feishu]
+admin_ids    = ["ou_admin_open_id"]
+operator_ids = ["ou_operator_open_id"]
+
+[slack]
+admin_ids    = ["U_ADMIN_SLACK_ID"]
+operator_ids = ["U_OPERATOR_SLACK_ID"]
+```
+
+When all three lists are empty, the bot is open to everyone (backward compatible).
+When only `admin_ids` is set, only those users are admins — everyone else is rejected.
+Users in `operator_ids` can use operator-level commands (PR operations, list users).
+Users in `viewer_ids` can only use read-only commands.
 
 ### Label Rules
 
@@ -428,8 +465,10 @@ config = { webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
 - **Dashboard** — DORA metrics, overview stats, PR breakdowns by repo group/platform, recent activity
 - **PR Management** — List, detail view, approve, close, reopen, spam/mark, comment, rebase, cherry-pick
 - **Merge Queue** — View queue status, recheck, clear, remove individual items
+- **System Usage** — Real-time CPU/memory monitoring with auto-refresh, GOMEMLIMIT tracking, color-coded progress bar
 - **User Management** — Create, edit, delete users with role and permission assignment, repo group access control
 - **Settings** — Merge queue config, spam detection (keyword tags with batch operations), stale PR management, label rules editor, config history with rollback
+- **API Keys** — Create, list, revoke API keys with role and permission config; keys delivered via DM with 2-minute auto-delete
 - **Config** — Raw TOML editor, system info, self-update, stale PR check
 - **i18n** — English/Chinese language switcher (cookie-based, instant apply)
 - **PWA** — Installable, works offline with service worker

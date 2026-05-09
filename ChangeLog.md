@@ -55,10 +55,15 @@
   - `RequirePermission` middleware: supports API Key permissions (not just DB user)
   - API key format: `ak_<64 hex chars>`, stored as bcrypt hash
   - WebUI: `/apikeys` page — create, list, revoke keys with role/permission config
-  - Bot commands (all 4 platforms): apikey_create, apikey_list, apikey_revoke (admin only)
+  - Bot commands (all 4 platforms): unified `/apikey new/list/revoke` format (admin only)
   - CLI: `asika apikey create <name> <role>`, `asika apikey list`, `asika apikey revoke <id>`
   - `asika login --api-key <key>` — save API key directly
   - All CLI commands support API key via `setAuthHeader` helper
+  - **Security: API key delivered via DM** (Telegram/Discord/Feishu), bot auto-deletes its own message after 2 minutes
+  - Telegram: `c.Bot().Send(user, text)` → DM, `c.Bot().Delete(reply)` after 2min
+  - Discord: `UserChannelCreate` + `ChannelMessageSend` → DM, `ChannelMessageDelete` after 2min
+  - Feishu: `sendDM()` via tenant_access_token, `DELETE /im/v1/messages/:id` after 2min
+  - Slack: sends in channel (socket mode PostMessage returns no timestamp for deletion)
 - **Performance optimizations:**
   - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
   - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration
