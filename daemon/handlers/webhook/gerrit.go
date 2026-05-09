@@ -51,8 +51,11 @@ func parseGerritWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 	}
 
 	switch event.Change.Status {
-	case "NEW", "DRAFT":
+	case "NEW":
 		pr.State = "open"
+	case "DRAFT":
+		pr.State = "open"
+		pr.IsDraft = true
 	case "MERGED":
 		pr.State = "merged"
 	case "ABANDONED":

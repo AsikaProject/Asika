@@ -48,7 +48,7 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 	if len(title) >= 4 && (title[:4] == "WIP:" || title[:4] == "wip:") {
 		isDraft = true
 	}
-	if len(title) >= 7 && (title[:7] == "Draft:" || title[:7] == "draft:") {
+	if len(title) >= 6 && (title[:6] == "Draft:" || title[:6] == "draft:") {
 		isDraft = true
 	}
 

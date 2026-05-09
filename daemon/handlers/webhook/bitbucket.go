@@ -2,6 +2,7 @@ package webhook
 
 import (
 	"encoding/json"
+	"strings"
 
 	"asika/common/events"
 	"asika/common/models"
@@ -42,12 +43,13 @@ func parseBitbucketWebhook(body []byte, repoGroup string) (string, *models.PRRec
 		return "", nil, nil
 	}
 
+	state := strings.ToLower(payload.PullRequest.State)
 	pr := &models.PRRecord{
 		Platform:  "bitbucket",
 		PRNumber:  payload.PullRequest.ID,
 		Title:     payload.PullRequest.Title,
 		Author:    payload.PullRequest.Author.DisplayName,
-		State:     payload.PullRequest.State,
+		State:     state,
 		RepoGroup: repoGroup,
 	}
 
