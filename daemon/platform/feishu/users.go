@@ -113,3 +113,103 @@ func (b *Bot) doUserAPI(method, path string, bodyData interface{}, successMsg st
 	}
 	return successMsg
 }
+
+func (b *Bot) handleAPIKeyCreate(senderID string, parts []string) string {
+	if !b.isAdmin(senderID) {
+		return "Access denied. Admin only."
+	}
+	if len(parts) < 3 {
+		return "Usage: apikey_create <name> <role>\nRole: admin, operator, viewer"
+	}
+	name := parts[1]
+	role := parts[2]
+	validRoles := map[string]bool{"admin": true, "operator": true, "viewer": true}
+	if !validRoles[role] {
+		return fmt.Sprintf("Invalid role: %s", role)
+	}
+	body := map[string]interface{}{"name": name, "role": role}
+	return b.doAPIKeyAPI("POST", "/api/v1/apikeys", body, "API key created")
+}
+
+func (b *Bot) handleAPIKeyList(senderID string) string {
+	if !b.isAdmin(senderID) {
+		return "Access denied. Admin only."
+	}
+	url := fmt.Sprintf("http://localhost%s/api/v1/apikeys", b.cfg.Server.Listen)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf("Failed: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var keys []map[string]interface{}
+	if json.Unmarshal(body, &keys) != nil {
+		return "Error parsing response"
+	}
+	if len(keys) == 0 {
+		return "No API keys."
+	}
+	var lines []string
+	lines = append(lines, "API Keys:")
+	for _, k := range keys {
+		name, _ := k["name"].(string)
+		role, _ := k["role"].(string)
+		id, _ := k["id"].(string)
+		lines = append(lines, fmt.Sprintf("  %s (%s) %s", name, role, id))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (b *Bot) handleAPIKeyRevoke(senderID string, parts []string) string {
+	if !b.isAdmin(senderID) {
+		return "Access denied. Admin only."
+	}
+	if len(parts) < 2 {
+		return "Usage: apikey_revoke <key_id>"
+	}
+	return b.doAPIKeyAPI("DELETE", fmt.Sprintf("/api/v1/apikeys/%s", parts[1]), nil, "API key revoked")
+}
+
+func (b *Bot) doAPIKeyAPI(method, path string, bodyData interface{}, successMsg string) string {
+	url := fmt.Sprintf("http://localhost%s%s", b.cfg.Server.Listen, path)
+	var reqBody io.Reader
+	if bodyData != nil {
+		data, err := json.Marshal(bodyData)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		reqBody = strings.NewReader(string(data))
+	}
+	req, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	if bodyData != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf("Failed: %v", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(respBody, &result) != nil {
+		return "Error parsing response"
+	}
+	if resp.StatusCode >= 400 {
+		if errMsg, ok := result["error"].(string); ok {
+			return "Error: " + errMsg
+		}
+		return fmt.Sprintf("Request failed (HTTP %d)", resp.StatusCode)
+	}
+	if method == "POST" {
+		if key, ok := result["key"].(string); ok {
+			return successMsg + "\n\n" + key + "\n\nCopy it now, it won't be shown again!"
+		}
+	}
+	return successMsg
+}

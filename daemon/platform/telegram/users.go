@@ -122,3 +122,106 @@ func (b *Bot) doUserAPI(c telebot.Context, method, path string, bodyData interfa
 	}
 	return c.Send(successMsg)
 }
+
+func (b *Bot) handleAPIKeyCreate(c telebot.Context) error {
+	if !b.requireAdmin(c) {
+		return nil
+	}
+	args := strings.Fields(c.Text())
+	if len(args) < 3 {
+		return c.Send("Usage: /apikey_create <name> <role>\nRole: admin, operator, viewer")
+	}
+	name := args[1]
+	role := args[2]
+	validRoles := map[string]bool{"admin": true, "operator": true, "viewer": true}
+	if !validRoles[role] {
+		return c.Send(fmt.Sprintf("Invalid role: %s", role))
+	}
+	body := map[string]interface{}{"name": name, "role": role}
+	return b.doAPIKeyAPI(c, "POST", "/api/v1/apikeys", body, "API key created")
+}
+
+func (b *Bot) handleAPIKeyList(c telebot.Context) error {
+	if !b.requireAdmin(c) {
+		return nil
+	}
+	url := fmt.Sprintf("http://localhost%s/api/v1/apikeys", b.cfg.Server.Listen)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return c.Send(fmt.Sprintf("Failed: %v", err))
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var keys []map[string]interface{}
+	if json.Unmarshal(body, &keys) != nil {
+		return c.Send("Error parsing response")
+	}
+	if len(keys) == 0 {
+		return c.Send("No API keys.")
+	}
+	var sb strings.Builder
+	sb.WriteString("<b>🔑 API Keys</b>\n\n")
+	for _, k := range keys {
+		name, _ := k["name"].(string)
+		role, _ := k["role"].(string)
+		id, _ := k["id"].(string)
+		sb.WriteString(fmt.Sprintf("• <b>%s</b> (%s) <code>%s</code>\n", name, role, id))
+	}
+	return c.Send(sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeHTML})
+}
+
+func (b *Bot) handleAPIKeyRevoke(c telebot.Context) error {
+	if !b.requireAdmin(c) {
+		return nil
+	}
+	args := strings.Fields(c.Text())
+	if len(args) < 2 {
+		return c.Send("Usage: /apikey_revoke <key_id>")
+	}
+	return b.doAPIKeyAPI(c, "DELETE", fmt.Sprintf("/api/v1/apikeys/%s", args[1]), nil, "API key revoked")
+}
+
+func (b *Bot) doAPIKeyAPI(c telebot.Context, method, path string, bodyData interface{}, successMsg string) error {
+	url := fmt.Sprintf("http://localhost%s%s", b.cfg.Server.Listen, path)
+	var reqBody io.Reader
+	if bodyData != nil {
+		data, err := json.Marshal(bodyData)
+		if err != nil {
+			return c.Send(fmt.Sprintf("Error: %v", err))
+		}
+		reqBody = strings.NewReader(string(data))
+	}
+	req, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		return c.Send(fmt.Sprintf("Error: %v", err))
+	}
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	if bodyData != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return c.Send(fmt.Sprintf("Failed: %v", err))
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(respBody, &result) != nil {
+		return c.Send("Error parsing response")
+	}
+	if resp.StatusCode >= 400 {
+		if errMsg, ok := result["error"].(string); ok {
+			return c.Send("Error: " + errMsg)
+		}
+		return c.Send(fmt.Sprintf("Request failed (HTTP %d)", resp.StatusCode))
+	}
+	if method == "POST" {
+		if key, ok := result["key"].(string); ok {
+			return c.Send(successMsg + "\n\n<code>" + key + "</code>\n\n⚠️ Copy it now, it won't be shown again!",
+				&telebot.SendOptions{ParseMode: telebot.ModeHTML})
+		}
+	}
+	return c.Send(successMsg)
+}

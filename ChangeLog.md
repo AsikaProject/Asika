@@ -53,9 +53,12 @@
   - `DELETE /api/v1/apikeys/:id` — Revoke API key (admin only)
   - Auth middleware: JWT first, then fallback to `X-API-Key` header
   - `RequirePermission` middleware: supports API Key permissions (not just DB user)
-  - `asika login --api-key <key>` — Save API key directly
-  - All CLI commands support API key via `setAuthHeader` helper
   - API key format: `ak_<64 hex chars>`, stored as bcrypt hash
+  - WebUI: `/apikeys` page — create, list, revoke keys with role/permission config
+  - Bot commands (all 4 platforms): apikey_create, apikey_list, apikey_revoke (admin only)
+  - CLI: `asika apikey create <name> <role>`, `asika apikey list`, `asika apikey revoke <id>`
+  - `asika login --api-key <key>` — save API key directly
+  - All CLI commands support API key via `setAuthHeader` helper
 - **Performance optimizations:**
   - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
   - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration

@@ -387,6 +387,14 @@ func (s *Server) setupRoutes() {
 			})
 		})
 
+		ssr.GET("/apikeys", func(c *gin.Context) {
+			user := c.GetString("username")
+			c.HTML(http.StatusOK, "apikeys.html", gin.H{
+				"title":    "API Keys - Asika",
+				"username": user,
+			})
+		})
+
 		ssr.GET("/settings", func(c *gin.Context) {
 			user := c.GetString("username")
 			c.HTML(http.StatusOK, "settings.html", gin.H{

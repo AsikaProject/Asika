@@ -210,6 +210,12 @@ func (b *Bot) handleMessage(ev *slack.MessageEvent, client *socketmode.Client) {
 		b.handleDelUser(ev, client, parts)
 	case "listusers":
 		b.handleListUsers(ev, client)
+	case "apikey_create":
+		b.handleAPIKeyCreate(ev, client, parts)
+	case "apikey_list":
+		b.handleAPIKeyList(ev, client)
+	case "apikey_revoke":
+		b.handleAPIKeyRevoke(ev, client, parts)
 	case "version":
 		b.handleVersion(ev, client)
 	}

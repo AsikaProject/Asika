@@ -113,6 +113,9 @@ func (b *Bot) registerCommands() {
 	b.bot.Handle("/adduser", b.handleAddUser)
 	b.bot.Handle("/deluser", b.handleDelUser)
 	b.bot.Handle("/listusers", b.handleListUsers)
+	b.bot.Handle("/apikey_create", b.handleAPIKeyCreate)
+	b.bot.Handle("/apikey_list", b.handleAPIKeyList)
+	b.bot.Handle("/apikey_revoke", b.handleAPIKeyRevoke)
 	b.bot.Handle("/version", b.handleVersion)
 	b.bot.Handle(telebot.OnCallback, b.handleCallback)
 	b.bot.Handle(telebot.OnText, b.handleText)
@@ -140,6 +143,9 @@ func (b *Bot) registerBotMenu() {
 		{Text: "adduser", Description: "Add a new user (admin)"},
 		{Text: "deluser", Description: "Delete a user (admin)"},
 		{Text: "listusers", Description: "List all users"},
+		{Text: "apikey_create", Description: "Create API key (admin)"},
+		{Text: "apikey_list", Description: "List API keys (admin)"},
+		{Text: "apikey_revoke", Description: "Revoke API key (admin)"},
 		{Text: "version", Description: "Show version info"},
 	}
 	if err := b.bot.SetCommands(commands); err != nil {

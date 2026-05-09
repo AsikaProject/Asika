@@ -191,6 +191,12 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 		b.handleDelUser(s, m, parts)
 	case "!listusers":
 		b.handleListUsers(s, m)
+	case "!apikey_create":
+		b.handleAPIKeyCreate(s, m, parts)
+	case "!apikey_list":
+		b.handleAPIKeyList(s, m)
+	case "!apikey_revoke":
+		b.handleAPIKeyRevoke(s, m, parts)
 	case "!version":
 		b.handleVersion(s, m)
 	default:

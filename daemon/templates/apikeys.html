@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="{{currentLang}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{template "pwa"}}
+    {{template "styles"}}
+    <title>{{t "apikeys.title"}}</title>
+    <style>
+        .key-display { font-family: monospace; font-size: 13px; background: #f0f0f0; padding: 8px 12px; border-radius: 4px; word-break: break-all; }
+        .key-hidden { color: #999; }
+        .role-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .role-admin { background: #dc3545; color: white; }
+        .role-operator { background: #0066cc; color: white; }
+        .role-viewer { background: #28a745; color: white; }
+        .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
+        .modal-overlay.open { display:flex; }
+        .modal { background:#fff; border-radius:8px; padding:24px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; box-shadow:0 4px 20px rgba(0,0,0,0.2); }
+        .modal h3 { margin:0 0 16px; }
+        .modal .form-group { margin-bottom:12px; }
+        .modal .form-group label { display:block; font-weight:500; font-size:13px; margin-bottom:4px; }
+        .modal .form-group select, .modal .form-group input { width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:4px; font-size:14px; }
+        .modal .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+        .modal .section-title { font-size:14px; font-weight:600; color:#333; margin:16px 0 8px; padding-bottom:4px; border-bottom:1px solid #eee; }
+        .modal .perm-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:6px; }
+        .modal .perm-item { display:flex; align-items:center; gap:6px; font-size:13px; }
+        .modal .perm-item input { margin:0; }
+        .toast { position:fixed; top:20px; right:20px; padding:12px 20px; border-radius:4px; color:white; font-size:14px; z-index:2000; display:none; }
+        .toast.success { background:#28a745; }
+        .toast.error { background:#dc3545; }
+        .toast.show { display:block; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+    </style>
+</head>
+<body>
+{{template "header" .}}
+<div class="container">
+<h1>{{t "apikeys.title"}}</h1>
+
+<div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h2 style="margin:0">{{t "apikeys.api_keys"}}</h2>
+        <button class="btn btn-primary" onclick="openCreateModal()">+ {{t "apikeys.create"}}</button>
+    </div>
+    <div id="keysList">{{t "common.loading"}}</div>
+</div>
+</div>
+
+<!-- Create Modal -->
+<div id="createModal" class="modal-overlay">
+    <div class="modal">
+        <h3>{{t "apikeys.create_api_key"}}</h3>
+        <div class="form-group">
+            <label>{{t "apikeys.name"}}</label>
+            <input type="text" id="newKeyName" placeholder="e.g. ci-cd-operator">
+        </div>
+        <div class="form-group">
+            <label>{{t "apikeys.role"}}</label>
+            <select id="newKeyRole" onchange="toggleNewPerms()">
+                <option value="viewer">{{t "users.role.viewer"}}</option>
+                <option value="operator" selected>{{t "users.role.operator"}}</option>
+                <option value="admin">{{t "users.role.admin"}}</option>
+            </select>
+        </div>
+        <div id="newPermsSection" class="section-title" style="margin:12px 0 8px;">{{t "users.permissions"}}</div>
+        <div id="newPerms" class="perm-grid"></div>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeCreateModal()">{{t "common.cancel"}}</button>
+            <button class="btn btn-primary" onclick="createKey()">{{t "common.create"}}</button>
+        </div>
+        <div id="createMsg" style="margin-top:10px;"></div>
+    </div>
+</div>
+
+<!-- Show Key Modal (display raw key after creation) -->
+<div id="showKeyModal" class="modal-overlay">
+    <div class="modal">
+        <h3>{{t "apikeys.key_created"}}</h3>
+        <p style="font-size:13px;color:#dc3545;">{{t "apikeys.key_warning"}}</p>
+        <div class="key-display" id="rawKeyDisplay"></div>
+        <div class="modal-actions">
+            <button class="btn btn-primary" onclick="copyKey()">{{t "apikeys.copy"}}</button>
+            <button class="btn btn-secondary" onclick="closeShowKeyModal()">{{t "common.close"}}</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+{{template "scripts"}}
+<script>
+    var allKeys = [];
+
+    function loadKeys() {
+        apiRequest('/api/v1/apikeys')
+            .then(r => r.json())
+            .then(keys => {
+                allKeys = keys;
+                renderKeys();
+            })
+            .catch(() => {
+                document.getElementById('keysList').innerHTML = '<p style="color:#999">{{t "apikeys.load_error"}}</p>';
+            });
+    }
+
+    function renderKeys() {
+        var el = document.getElementById('keysList');
+        if (allKeys.length === 0) {
+            el.innerHTML = '<p style="color:#999">{{t "apikeys.no_keys"}}</p>';
+            return;
+        }
+        var html = '<table><tr>' +
+            '<th>{{t "apikeys.th.name"}}</th>' +
+            '<th>{{t "apikeys.th.role"}}</th>' +
+            '<th>{{t "apikeys.th.key_id"}}</th>' +
+            '<th>{{t "apikeys.th.created"}}</th>' +
+            '<th>{{t "apikeys.th.last_used"}}</th>' +
+            '<th>{{t "apikeys.th.actions"}}</th>' +
+            '</tr>';
+        allKeys.forEach(k => {
+            var roleClass = 'role-' + k.role;
+            var lastUsed = k.last_used_at && k.last_used_at !== '0001-01-01T00:00:00Z'
+                ? k.last_used_at.substring(0, 16) : '-';
+            html += '<tr>' +
+                '<td>' + escapeHtml(k.name) + '</td>' +
+                '<td><span class="role-badge ' + roleClass + '">' + k.role + '</span></td>' +
+                '<td style="font-size:12px;font-family:monospace;">' + k.id + '</td>' +
+                '<td style="font-size:12px;">' + (k.created_at ? k.created_at.substring(0,16) : '-') + '</td>' +
+                '<td style="font-size:12px;">' + lastUsed + '</td>' +
+                '<td><button class="btn btn-danger btn-sm" onclick="revokeKey(\'' + k.id + '\',\'' + escapeHtml(k.name) + '\')">{{t "apikeys.revoke"}}</button></td>' +
+                '</tr>';
+        });
+        html += '</table>';
+        el.innerHTML = html;
+    }
+
+    function openCreateModal() {
+        document.getElementById('newKeyName').value = '';
+        document.getElementById('newKeyRole').value = 'operator';
+        document.getElementById('createMsg').innerHTML = '';
+        renderPermCheckboxes('newPerms', {});
+        toggleNewPerms();
+        document.getElementById('createModal').classList.add('open');
+    }
+
+    function closeCreateModal() {
+        document.getElementById('createModal').classList.remove('open');
+    }
+
+    function toggleNewPerms() {
+        var role = document.getElementById('newKeyRole').value;
+        var section = document.getElementById('newPermsSection');
+        var grid = document.getElementById('newPerms');
+        if (role === 'operator') {
+            section.style.display = '';
+            grid.style.display = '';
+        } else {
+            section.style.display = 'none';
+            grid.style.display = 'none';
+        }
+    }
+
+    function renderPermCheckboxes(containerId, perms) {
+        var container = document.getElementById(containerId);
+        container.innerHTML = '';
+        var items = [
+            {key:'can_approve', label:'{{t "users.perm.approve"}}'},
+            {key:'can_merge', label:'{{t "users.perm.merge"}}'},
+            {key:'can_close', label:'{{t "users.perm.close"}}'},
+            {key:'can_reopen', label:'{{t "users.perm.reopen"}}'},
+            {key:'can_spam', label:'{{t "users.perm.spam"}}'},
+            {key:'can_manage_queue', label:'{{t "users.perm.queue"}}'},
+        ];
+        items.forEach(item => {
+            var label = document.createElement('label');
+            label.className = 'perm-item';
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.id = containerId + '_' + item.key;
+            cb.checked = perms[item.key] || false;
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(item.label));
+            container.appendChild(label);
+        });
+    }
+
+    function getPermsFromContainer(containerId) {
+        return {
+            can_approve: document.getElementById(containerId + '_can_approve')?.checked || false,
+            can_merge: document.getElementById(containerId + '_can_merge')?.checked || false,
+            can_close: document.getElementById(containerId + '_can_close')?.checked || false,
+            can_reopen: document.getElementById(containerId + '_can_reopen')?.checked || false,
+            can_spam: document.getElementById(containerId + '_can_spam')?.checked || false,
+            can_manage_queue: document.getElementById(containerId + '_can_manage_queue')?.checked || false,
+        };
+    }
+
+    function createKey() {
+        var name = document.getElementById('newKeyName').value.trim();
+        var role = document.getElementById('newKeyRole').value;
+        if (!name) {
+            document.getElementById('createMsg').innerHTML = '<span class="error">{{t "apikeys.name_required"}}</span>';
+            return;
+        }
+        var body = { name: name, role: role };
+        if (role === 'operator') {
+            body.permissions = getPermsFromContainer('newPerms');
+        }
+        apiRequest('/api/v1/apikeys', {
+            method: 'POST',
+            body: JSON.stringify(body)
+        })
+        .then(r => r.json())
+        .then(data => {
+            closeCreateModal();
+            document.getElementById('rawKeyDisplay').textContent = data.key;
+            document.getElementById('showKeyModal').classList.add('open');
+            loadKeys();
+        })
+        .catch(e => {
+            document.getElementById('createMsg').innerHTML = '<span class="error">' + e.message + '</span>';
+        });
+    }
+
+    function closeShowKeyModal() {
+        document.getElementById('showKeyModal').classList.remove('open');
+    }
+
+    function copyKey() {
+        var key = document.getElementById('rawKeyDisplay').textContent;
+        navigator.clipboard.writeText(key).then(() => {
+            showToast('{{t "apikeys.copied"}}', 'success');
+        });
+    }
+
+    function revokeKey(id, name) {
+        if (!confirm('{{t "apikeys.confirm_revoke"}} "' + name + '"?')) return;
+        apiRequest('/api/v1/apikeys/' + id, { method: 'DELETE' })
+            .then(() => {
+                showToast('{{t "apikeys.revoked"}}', 'success');
+                loadKeys();
+            })
+            .catch(e => {
+                showToast(e.message, 'error');
+            });
+    }
+
+    function showToast(msg, type) {
+        var t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast ' + type + ' show';
+        setTimeout(() => t.className = 'toast', 3000);
+    }
+
+    // Close modals on overlay click
+    document.getElementById('createModal').addEventListener('click', function(e) {
+        if (e.target === this) closeCreateModal();
+    });
+    document.getElementById('showKeyModal').addEventListener('click', function(e) {
+        if (e.target === this) closeShowKeyModal();
+    });
+
+    loadKeys();
+</script>
+{{template "pwa_sw"}}
+{{template "client_auth"}}
+</body>
+</html>
