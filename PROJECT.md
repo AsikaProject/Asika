@@ -45,7 +45,7 @@ graph TB
 
         subgraph Actors["Actor System (goroutine pools)"]
             DP[Event Dispatcher]
-            WP[Worker Pool]
+            WP[Worker Pool (dynamic)]
             WA[Writer Actor]
         end
 
@@ -171,21 +171,23 @@ Non-admin users can be assigned to specific repo groups. Empty `AllowedRepoGroup
 The event consumer uses an Actor-model architecture with goroutine pools for concurrent processing:
 
 - **Event Dispatcher** — Single goroutine reads from the event bus and dispatches events to the worker pool
-- **Worker Pool** — Fixed pool of 4 goroutines processing events concurrently (configurable via `workerPool.Size`)
+- **Worker Pool** — Dynamic pool of goroutines processing events concurrently. Scales between `min_workers` (default 2) and `max_workers` (default 8) based on channel utilization. Scale up when >= `scale_up_pct` (default 75%), scale down when <= `scale_down_pct` (default 25%), with cooldown (default 30s) to prevent thrashing. Configurable via `[worker_pool]` TOML section, hot-reloadable at runtime.
 - **Writer Actor** — Dedicated goroutine serializing all bbolt writes through a channel (buffer=256). Eliminates write contention since bbolt requires serialized transactions
 - **Event Bus** — Blocking publish with backpressure (no silent event drops)
+- **Pool Metrics** — Tracks worker count, total/active tasks, utilization%, scale up/down event counts, goroutine count. Exposed via `poolMetrics.snapshot()`.
 
 ```
-Publisher → [100 buffer] → Event Dispatcher → Worker Pool (4 goroutines)
-                                                  ↓
-                                            Writer Actor (bbolt)
+Publisher → [100 buffer] → Event Dispatcher → Worker Pool (min..max goroutines, dynamic)
+                                                   ↓
+                                             Writer Actor (bbolt)
 ```
 
 This architecture provides:
-- Parallel event processing (up to 4 events concurrently)
+- Adaptive parallel event processing (scales with load)
 - Ordered, contention-free bbolt writes via single writer goroutine
 - Backpressure instead of silent event drops
 - Independent goroutine for slow operations (labeler API calls, syncer operations)
+- Runtime config updates via `PUT /api/v1/config` and SIGHUP signal
 
 ### Storage (bbolt)
 
