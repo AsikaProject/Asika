@@ -130,34 +130,51 @@ func (b *Bot) doUserAPI(client *socketmode.Client, channel, method, path string,
 	b.postMessage(client, channel, successMsg)
 }
 
-func (b *Bot) handleAPIKeyCreate(ev *slack.MessageEvent, client *socketmode.Client, parts []string) {
+func (b *Bot) handleAPIKey(ev *slack.MessageEvent, client *socketmode.Client, parts []string) {
 	if !b.isAdmin(ev.User) {
 		return
 	}
-	if len(parts) < 3 {
-		b.postMessage(client, ev.Channel, "Usage: `apikey_create <name> <role>`\nRole: admin, operator, viewer")
+	if len(parts) < 2 {
+		b.postMessage(client, ev.Channel, "Usage:\n`apikey new <name> <role>`\n`apikey list`\n`apikey revoke <key_id>`")
 		return
 	}
-	name := parts[1]
-	role := parts[2]
-	validRoles := map[string]bool{"admin": true, "operator": true, "viewer": true}
-	if !validRoles[role] {
-		b.postMessage(client, ev.Channel, fmt.Sprintf("Invalid role: %s", role))
-		return
+	switch strings.ToLower(parts[1]) {
+	case "new":
+		if len(parts) < 4 {
+			b.postMessage(client, ev.Channel, "Usage: `apikey new <name> <role>`\nRole: admin, operator, viewer")
+			return
+		}
+		name := parts[2]
+		role := parts[3]
+		validRoles := map[string]bool{"admin": true, "operator": true, "viewer": true}
+		if !validRoles[role] {
+			b.postMessage(client, ev.Channel, fmt.Sprintf("Invalid role: %s", role))
+			return
+		}
+		body := map[string]interface{}{"name": name, "role": role}
+		b.doAPIKeyAPI(client, ev.Channel, "POST", "/api/v1/apikeys", body, "API key created")
+		go func() {
+			time.Sleep(2 * time.Minute)
+			b.deleteSlackMessage(ev.Channel, ev.Timestamp)
+		}()
+	case "list":
+		b.handleAPIKeyList(ev, client)
+	case "revoke":
+		if len(parts) < 3 {
+			b.postMessage(client, ev.Channel, "Usage: `apikey revoke <key_id>`")
+			return
+		}
+		b.doAPIKeyAPI(client, ev.Channel, "DELETE", fmt.Sprintf("/api/v1/apikeys/%s", parts[2]), nil, "✅ API key revoked")
+		go func() {
+			time.Sleep(2 * time.Minute)
+			b.deleteSlackMessage(ev.Channel, ev.Timestamp)
+		}()
+	default:
+		b.postMessage(client, ev.Channel, "Unknown subcommand. Use: new, list, revoke")
 	}
-	body := map[string]interface{}{"name": name, "role": role}
-	b.doAPIKeyAPI(client, ev.Channel, "POST", "/api/v1/apikeys", body, "API key created")
-	// Schedule deletion of the command message
-	go func() {
-		time.Sleep(2 * time.Minute)
-		b.deleteSlackMessage(ev.Channel, ev.Timestamp)
-	}()
 }
 
 func (b *Bot) handleAPIKeyList(ev *slack.MessageEvent, client *socketmode.Client) {
-	if !b.isAdmin(ev.User) {
-		return
-	}
 	url := fmt.Sprintf("http://localhost%s/api/v1/apikeys", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+b.internalToken)
@@ -186,21 +203,6 @@ func (b *Bot) handleAPIKeyList(ev *slack.MessageEvent, client *socketmode.Client
 		sb.WriteString(fmt.Sprintf("• `%s` (%s) `%s`\n", name, role, id))
 	}
 	b.postMessage(client, ev.Channel, sb.String())
-}
-
-func (b *Bot) handleAPIKeyRevoke(ev *slack.MessageEvent, client *socketmode.Client, parts []string) {
-	if !b.isAdmin(ev.User) {
-		return
-	}
-	if len(parts) < 2 {
-		b.postMessage(client, ev.Channel, "Usage: `apikey_revoke <key_id>`")
-		return
-	}
-	b.doAPIKeyAPI(client, ev.Channel, "DELETE", fmt.Sprintf("/api/v1/apikeys/%s", parts[1]), nil, "✅ API key revoked")
-	go func() {
-		time.Sleep(2 * time.Minute)
-		b.deleteSlackMessage(ev.Channel, ev.Timestamp)
-	}()
 }
 
 func (b *Bot) doAPIKeyAPI(client *socketmode.Client, channel, method, path string, bodyData interface{}, successMsg string) {

@@ -124,28 +124,40 @@ func (b *Bot) doUserAPI(c telebot.Context, method, path string, bodyData interfa
 	return c.Send(successMsg)
 }
 
-func (b *Bot) handleAPIKeyCreate(c telebot.Context) error {
+func (b *Bot) handleAPIKey(c telebot.Context) error {
 	if !b.requireAdmin(c) {
 		return nil
 	}
 	args := strings.Fields(c.Text())
-	if len(args) < 3 {
-		return c.Send("Usage: /apikey_create <name> <role>\nRole: admin, operator, viewer")
+	if len(args) < 2 {
+		return c.Send("Usage:\n/apikey new <name> <role>\n/apikey list\n/apikey revoke <key_id>")
 	}
-	name := args[1]
-	role := args[2]
-	validRoles := map[string]bool{"admin": true, "operator": true, "viewer": true}
-	if !validRoles[role] {
-		return c.Send(fmt.Sprintf("Invalid role: %s", role))
+	switch args[1] {
+	case "new":
+		if len(args) < 4 {
+			return c.Send("Usage: /apikey new <name> <role>\nRole: admin, operator, viewer")
+		}
+		name := args[2]
+		role := args[3]
+		validRoles := map[string]bool{"admin": true, "operator": true, "viewer": true}
+		if !validRoles[role] {
+			return c.Send(fmt.Sprintf("Invalid role: %s", role))
+		}
+		body := map[string]interface{}{"name": name, "role": role}
+		return b.doAPIKeyAPI(c, "POST", "/api/v1/apikeys", body, "API key created")
+	case "list":
+		return b.handleAPIKeyList(c)
+	case "revoke":
+		if len(args) < 3 {
+			return c.Send("Usage: /apikey revoke <key_id>")
+		}
+		return b.doAPIKeyAPI(c, "DELETE", fmt.Sprintf("/api/v1/apikeys/%s", args[2]), nil, "API key revoked")
+	default:
+		return c.Send("Unknown subcommand. Use: new, list, revoke")
 	}
-	body := map[string]interface{}{"name": name, "role": role}
-	return b.doAPIKeyAPI(c, "POST", "/api/v1/apikeys", body, "API key created")
 }
 
 func (b *Bot) handleAPIKeyList(c telebot.Context) error {
-	if !b.requireAdmin(c) {
-		return nil
-	}
 	url := fmt.Sprintf("http://localhost%s/api/v1/apikeys", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+b.internalToken)
@@ -171,17 +183,6 @@ func (b *Bot) handleAPIKeyList(c telebot.Context) error {
 		sb.WriteString(fmt.Sprintf("• <b>%s</b> (%s) <code>%s</code>\n", name, role, id))
 	}
 	return c.Send(sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeHTML})
-}
-
-func (b *Bot) handleAPIKeyRevoke(c telebot.Context) error {
-	if !b.requireAdmin(c) {
-		return nil
-	}
-	args := strings.Fields(c.Text())
-	if len(args) < 2 {
-		return c.Send("Usage: /apikey_revoke <key_id>")
-	}
-	return b.doAPIKeyAPI(c, "DELETE", fmt.Sprintf("/api/v1/apikeys/%s", args[1]), nil, "API key revoked")
 }
 
 func (b *Bot) doAPIKeyAPI(c telebot.Context, method, path string, bodyData interface{}, successMsg string) error {

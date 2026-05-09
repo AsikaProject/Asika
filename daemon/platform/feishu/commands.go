@@ -136,12 +136,10 @@ func (b *Bot) processCommand(senderID, text string) string {
 		return b.handleDelUser(senderID, parts)
 	case lower == "listusers" || lower == "/listusers":
 		return b.handleListUsers(senderID)
-	case lower == "apikey_create" || lower == "/apikey_create":
-		return b.handleAPIKeyCreate(senderID, parts)
-	case lower == "apikey_list" || lower == "/apikey_list":
-		return b.handleAPIKeyList(senderID)
-	case lower == "apikey_revoke" || lower == "/apikey_revoke":
-		return b.handleAPIKeyRevoke(senderID, parts)
+	case strings.HasPrefix(lower, "apikey ") || strings.HasPrefix(lower, "/apikey "):
+		return b.handleAPIKey(senderID, parts)
+	case lower == "apikey" || lower == "/apikey":
+		return "Usage:\napikey new <name> <role>\napikey list\napikey revoke <key_id>"
 	case lower == "version" || lower == "/version":
 		return b.showVersionText()
 	case strings.HasPrefix(lower, "cherry-pick ") || strings.HasPrefix(lower, "/cherry-pick "):
@@ -175,9 +173,9 @@ func (b *Bot) helpText() string {
   adduser <user> <pass> <role> [groups] - Add user (admin)
   deluser <username> - Delete user (admin)
   listusers     - List all users
-  apikey_create <name> <role> - Create API key (admin)
-  apikey_list   - List API keys (admin)
-  apikey_revoke <key_id> - Revoke API key (admin)
+  apikey new <name> <role> - Create API key (admin)
+  apikey list   - List API keys (admin)
+  apikey revoke <key_id> - Revoke API key (admin)
   version       - Show version info`
 }
 
