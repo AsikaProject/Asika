@@ -258,9 +258,9 @@ func (c *BitbucketClient) ListBranches(ctx context.Context, owner, repo string) 
 
 func (c *BitbucketClient) DeleteBranch(ctx context.Context, owner, repo, branch string) error {
 	opts := &bitbucket.RepositoryBranchDeleteOptions{
-		Owner:   owner,
+		Owner:    owner,
 		RepoSlug: repo,
-		RefName: branch,
+		RefName:  branch,
 	}
 	err := c.client.Repositories.Repository.DeleteBranch(opts)
 	if err != nil {

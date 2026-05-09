@@ -269,17 +269,20 @@
         input.value = '';
     }
 
-    async function addUser() {
+    async     function addUser() {
         const u = document.getElementById('newUsername').value.trim();
         const p = document.getElementById('newPassword').value;
         const r = document.getElementById('newRole').value;
         const m = document.getElementById('addMsg');
         if (!u || !p) { m.innerHTML = '<span class="error">{{t "users.required"}}</span>'; return; }
-        const perms = getPermsFromContainer('newUserPerms');
+        const body = {username: u, password: p, role: r, allowed_repo_groups: newUserSelectedGroups};
+        if (r === 'operator') {
+            body.permissions = getPermsFromContainer('newUserPerms');
+        }
         try {
             const resp = await apiRequest('/api/v1/users', {
                 method: 'POST',
-                body: JSON.stringify({username: u, password: p, role: r, allowed_repo_groups: newUserSelectedGroups, permissions: perms})
+                body: JSON.stringify(body)
             });
             const d = await resp.json();
             if (resp.ok) {
@@ -344,14 +347,15 @@
         const username = document.getElementById('editUsername').value;
         const password = document.getElementById('editPassword').value;
         const role = document.getElementById('editRole').value;
-        const perms = getPermsFromContainer('editUserPerms');
         const m = document.getElementById('editMsg');
 
         const body = {
             role: role,
             allowed_repo_groups: editUserSelectedGroups,
-            permissions: perms,
         };
+        if (role === 'operator') {
+            body.permissions = getPermsFromContainer('editUserPerms');
+        }
         if (password) {
             body.password = password;
         }
