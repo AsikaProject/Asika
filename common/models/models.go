@@ -312,21 +312,25 @@ type ScheduleConfig struct {
 
 // TelegramConfig represents Telegram bot configuration
 type TelegramConfig struct {
-	Enabled   bool   `toml:"enabled" json:"enabled"`
-	Token     string `toml:"token" json:"token"`
-	AdminIDs  []int64 `toml:"admin_ids" json:"admin_ids"`
-	ChatIDs   []string `toml:"chat_ids" json:"chat_ids"`
+	Enabled     bool     `toml:"enabled" json:"enabled"`
+	Token       string   `toml:"token" json:"token"`
+	AdminIDs    []int64  `toml:"admin_ids" json:"admin_ids"`
+	OperatorIDs []int64  `toml:"operator_ids" json:"operator_ids"`
+	ViewerIDs   []int64  `toml:"viewer_ids" json:"viewer_ids"`
+	ChatIDs     []string `toml:"chat_ids" json:"chat_ids"`
 }
 
 // FeishuConfig represents Feishu/Lark bot configuration
 type FeishuConfig struct {
-	Enabled      bool   `toml:"enabled" json:"enabled"`
-	AppID        string `toml:"app_id" json:"app_id"`
-	AppSecret    string `toml:"app_secret" json:"app_secret"`
-	WebhookURL   string `toml:"webhook_url" json:"webhook_url"`
-	VerificationToken string `toml:"verification_token" json:"verification_token"`
-	EncryptKey   string `toml:"encrypt_key" json:"encrypt_key"`
-	AdminIDs     []string `toml:"admin_ids" json:"admin_ids"`
+	Enabled           bool     `toml:"enabled" json:"enabled"`
+	AppID             string   `toml:"app_id" json:"app_id"`
+	AppSecret         string   `toml:"app_secret" json:"app_secret"`
+	WebhookURL        string   `toml:"webhook_url" json:"webhook_url"`
+	VerificationToken string   `toml:"verification_token" json:"verification_token"`
+	EncryptKey        string   `toml:"encrypt_key" json:"encrypt_key"`
+	AdminIDs          []string `toml:"admin_ids" json:"admin_ids"`
+	OperatorIDs       []string `toml:"operator_ids" json:"operator_ids"`
+	ViewerIDs         []string `toml:"viewer_ids" json:"viewer_ids"`
 }
 
 // WebhookRetry represents a failed webhook that needs retry
@@ -343,16 +347,20 @@ type WebhookRetry struct {
 
 // DiscordConfig represents Discord bot configuration
 type DiscordConfig struct {
-	Enabled   bool     `toml:"enabled" json:"enabled"`
-	Token     string   `toml:"token" json:"token"`
-	AdminIDs  []string `toml:"admin_ids" json:"admin_ids"`
-	ChannelID string   `toml:"channel_id" json:"channel_id"`
+	Enabled     bool     `toml:"enabled" json:"enabled"`
+	Token       string   `toml:"token" json:"token"`
+	AdminIDs    []string `toml:"admin_ids" json:"admin_ids"`
+	OperatorIDs []string `toml:"operator_ids" json:"operator_ids"`
+	ViewerIDs   []string `toml:"viewer_ids" json:"viewer_ids"`
+	ChannelID   string   `toml:"channel_id" json:"channel_id"`
 }
 
 // SlackConfig represents Slack bot configuration
 type SlackConfig struct {
-	Enabled  bool     `toml:"enabled" json:"enabled"`
-	Token    string   `toml:"token" json:"token"`       // Bot User OAuth Token (xoxb-...)
-	AppToken string   `toml:"app_token" json:"app_token"` // App-Level Token (xapp-...) for Socket Mode
-	AdminIDs []string `toml:"admin_ids" json:"admin_ids"`
+	Enabled     bool     `toml:"enabled" json:"enabled"`
+	Token       string   `toml:"token" json:"token"`       // Bot User OAuth Token (xoxb-...)
+	AppToken    string   `toml:"app_token" json:"app_token"` // App-Level Token (xapp-...) for Socket Mode
+	AdminIDs    []string `toml:"admin_ids" json:"admin_ids"`
+	OperatorIDs []string `toml:"operator_ids" json:"operator_ids"`
+	ViewerIDs   []string `toml:"viewer_ids" json:"viewer_ids"`
 }

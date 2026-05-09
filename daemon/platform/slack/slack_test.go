@@ -32,7 +32,7 @@ func setupSlackTest(t *testing.T) (*Bot, func()) {
 	qm := queue.NewManager(cfg, clients)
 	s := syncer.NewSyncer(cfg, clients)
 	sd := syncer.NewSpamDetectorWithClients(cfg, clients)
-	bot := NewBot(cfg, clients, qm, s, sd, nil, []string{"U_ADMIN1"})
+	bot := NewBot(cfg, clients, qm, s, sd, nil, []string{"U_ADMIN1"}, nil, nil)
 	return bot, func() { db.Close() }
 }
 

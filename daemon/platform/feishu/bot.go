@@ -24,6 +24,8 @@ type Bot struct {
 	spamDetector  *syncer.SpamDetector
 	notifier      *notifier.FeishuNotifier
 	adminIDs      map[string]bool
+	operatorIDs   map[string]bool
+	viewerIDs     map[string]bool
 	stop          chan struct{}
 	feishuCfg     models.FeishuConfig
 	internalToken string
@@ -47,12 +49,20 @@ func NewBot(
 		spamDetector:  spamDetector,
 		notifier:      n,
 		adminIDs:      make(map[string]bool),
+		operatorIDs:   make(map[string]bool),
+		viewerIDs:     make(map[string]bool),
 		stop:          make(chan struct{}),
 		feishuCfg:     cfg.Feishu,
 		internalToken: token,
 	}
 	for _, id := range cfg.Feishu.AdminIDs {
 		b.adminIDs[id] = true
+	}
+	for _, id := range cfg.Feishu.OperatorIDs {
+		b.operatorIDs[id] = true
+	}
+	for _, id := range cfg.Feishu.ViewerIDs {
+		b.viewerIDs[id] = true
 	}
 	return b
 }
@@ -161,8 +171,29 @@ func (b *Bot) getClient(platform string) platforms.PlatformClient {
 }
 
 func (b *Bot) isAdmin(userID string) bool {
-	if len(b.adminIDs) == 0 {
+	if len(b.adminIDs) == 0 && len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
 		return true
 	}
 	return b.adminIDs[userID]
+}
+
+func (b *Bot) isOperator(userID string) bool {
+	if b.isAdmin(userID) {
+		return true
+	}
+	if len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
+		return true
+	}
+	return b.operatorIDs[userID]
+}
+
+// getUserRole returns the role name for the user: "admin", "operator", or "viewer"
+func (b *Bot) getUserRole(userID string) string {
+	if b.isAdmin(userID) {
+		return "admin"
+	}
+	if b.isOperator(userID) {
+		return "operator"
+	}
+	return "viewer"
 }

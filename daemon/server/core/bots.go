@@ -51,7 +51,7 @@ func StartTelegram(
 
 	tgBot := telegram.NewBot(
 		bot, cfg, clients, queueMgr, syncr, spamDetector,
-		telegramNotifier, cfg.Telegram.AdminIDs,
+		telegramNotifier, cfg.Telegram.AdminIDs, cfg.Telegram.OperatorIDs, cfg.Telegram.ViewerIDs,
 	)
 
 	go tgBot.Start()
@@ -110,7 +110,7 @@ func StartDiscord(
 
 	discordBot := discord.NewBot(
 		cfg, clients, queueMgr, syncr, spamDetector,
-		discordNotifier, cfg.Discord.AdminIDs,
+		discordNotifier, cfg.Discord.AdminIDs, cfg.Discord.OperatorIDs, cfg.Discord.ViewerIDs,
 	)
 
 	if discordNotifier.Session() == nil {
@@ -146,7 +146,7 @@ func StartSlack(
 	}
 	slackNotifier := notifier.NewSlackBotNotifier(cfgMap)
 
-	slackBot := slack.NewBot(cfg, clients, queueMgr, syncr, spamDetector, slackNotifier, cfg.Slack.AdminIDs)
+	slackBot := slack.NewBot(cfg, clients, queueMgr, syncr, spamDetector, slackNotifier, cfg.Slack.AdminIDs, cfg.Slack.OperatorIDs, cfg.Slack.ViewerIDs)
 	slackBot.SetSocketClient(socketClient)
 
 	go func() {

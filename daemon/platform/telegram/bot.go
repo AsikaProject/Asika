@@ -23,8 +23,10 @@ type Bot struct {
 	spamDetector  *syncer.SpamDetector
 	notifier      *notifier.TelegramNotifier
 	adminIDs      map[int64]bool
-	stop          chan struct{}
+	operatorIDs   map[int64]bool
+	viewerIDs     map[int64]bool
 	internalToken string
+	stop          chan struct{}
 }
 
 // NewBot creates a new Telegram bot with interactive decision support.
@@ -37,6 +39,8 @@ func NewBot(
 	spamDetector *syncer.SpamDetector,
 	telegramNotifier *notifier.TelegramNotifier,
 	adminIDs []int64,
+	operatorIDs []int64,
+	viewerIDs []int64,
 ) *Bot {
 	token, _ := auth.GenerateInternalToken()
 	b := &Bot{
@@ -48,11 +52,19 @@ func NewBot(
 		spamDetector:  spamDetector,
 		notifier:      telegramNotifier,
 		adminIDs:      make(map[int64]bool),
+		operatorIDs:   make(map[int64]bool),
+		viewerIDs:     make(map[int64]bool),
 		stop:          make(chan struct{}),
 		internalToken: token,
 	}
 	for _, id := range adminIDs {
 		b.adminIDs[id] = true
+	}
+	for _, id := range operatorIDs {
+		b.operatorIDs[id] = true
+	}
+	for _, id := range viewerIDs {
+		b.viewerIDs[id] = true
 	}
 	return b
 }
@@ -98,6 +110,9 @@ func (b *Bot) registerCommands() {
 	b.bot.Handle("/cherrypick", b.handleCherryPickPR)
 	b.bot.Handle("/stats", b.handleStats)
 	b.bot.Handle("/usage", b.handleUsage)
+	b.bot.Handle("/adduser", b.handleAddUser)
+	b.bot.Handle("/deluser", b.handleDelUser)
+	b.bot.Handle("/listusers", b.handleListUsers)
 	b.bot.Handle("/version", b.handleVersion)
 	b.bot.Handle(telebot.OnCallback, b.handleCallback)
 	b.bot.Handle(telebot.OnText, b.handleText)
@@ -122,6 +137,9 @@ func (b *Bot) registerBotMenu() {
 		{Text: "cherrypick", Description: "Cherry-pick a PR"},
 		{Text: "stats", Description: "Show DORA metrics"},
 		{Text: "usage", Description: "Show CPU & memory usage"},
+		{Text: "adduser", Description: "Add a new user (admin)"},
+		{Text: "deluser", Description: "Delete a user (admin)"},
+		{Text: "listusers", Description: "List all users"},
 		{Text: "version", Description: "Show version info"},
 	}
 	if err := b.bot.SetCommands(commands); err != nil {

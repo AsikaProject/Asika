@@ -24,15 +24,51 @@ import (
 )
 
 func (b *Bot) isAdmin(c telebot.Context) bool {
-	if len(b.adminIDs) == 0 {
+	if len(b.adminIDs) == 0 && len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
 		return true
 	}
 	return b.adminIDs[c.Sender().ID]
 }
 
+func (b *Bot) isOperator(c telebot.Context) bool {
+	if b.isAdmin(c) {
+		return true
+	}
+	if len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
+		return true
+	}
+	return b.operatorIDs[c.Sender().ID]
+}
+
+func (b *Bot) isViewer(c telebot.Context) bool {
+	if b.isOperator(c) {
+		return true
+	}
+	return b.viewerIDs[c.Sender().ID]
+}
+
+// getUserRole returns the role name for the sender: "admin", "operator", or "viewer"
+func (b *Bot) getUserRole(c telebot.Context) string {
+	if b.isAdmin(c) {
+		return "admin"
+	}
+	if b.isOperator(c) {
+		return "operator"
+	}
+	return "viewer"
+}
+
 func (b *Bot) requireAdmin(c telebot.Context) bool {
 	if !b.isAdmin(c) {
-		c.Send("Access denied. This bot is for authorized admins only.")
+		c.Send("Access denied. Admin only.")
+		return false
+	}
+	return true
+}
+
+func (b *Bot) requireOperator(c telebot.Context) bool {
+	if !b.isOperator(c) {
+		c.Send("Access denied. Operator or Admin only.")
 		return false
 	}
 	return true

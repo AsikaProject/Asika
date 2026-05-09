@@ -24,6 +24,8 @@ type Bot struct {
 	spamDetector  *syncer.SpamDetector
 	notifier      *notifier.DiscordNotifier
 	adminIDs      map[string]bool
+	operatorIDs   map[string]bool
+	viewerIDs     map[string]bool
 	stop          chan struct{}
 	internalToken string
 }
@@ -37,6 +39,8 @@ func NewBot(
 	spamDetector *syncer.SpamDetector,
 	discordNotifier *notifier.DiscordNotifier,
 	adminIDs []string,
+	operatorIDs []string,
+	viewerIDs []string,
 ) *Bot {
 	token, _ := auth.GenerateInternalToken()
 	b := &Bot{
@@ -47,11 +51,19 @@ func NewBot(
 		spamDetector:  spamDetector,
 		notifier:      discordNotifier,
 		adminIDs:      make(map[string]bool),
+		operatorIDs:   make(map[string]bool),
+		viewerIDs:     make(map[string]bool),
 		stop:          make(chan struct{}),
 		internalToken: token,
 	}
 	for _, id := range adminIDs {
 		b.adminIDs[id] = true
+	}
+	for _, id := range operatorIDs {
+		b.operatorIDs[id] = true
+	}
+	for _, id := range viewerIDs {
+		b.viewerIDs[id] = true
 	}
 	return b
 }
@@ -82,14 +94,39 @@ func (b *Bot) Stop() {
 }
 
 func (b *Bot) isAdmin(userID string) bool {
-	if len(b.adminIDs) == 0 {
+	if len(b.adminIDs) == 0 && len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
 		return true
 	}
 	return b.adminIDs[userID]
 }
 
+func (b *Bot) isOperator(userID string) bool {
+	if b.isAdmin(userID) {
+		return true
+	}
+	if len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
+		return true
+	}
+	return b.operatorIDs[userID]
+}
+
+// getUserRole returns the role name for the user: "admin", "operator", or "viewer"
+func (b *Bot) getUserRole(userID string) string {
+	if b.isAdmin(userID) {
+		return "admin"
+	}
+	if b.isOperator(userID) {
+		return "operator"
+	}
+	return "viewer"
+}
+
 func (b *Bot) requireAdmin(userID string) bool {
 	return b.isAdmin(userID)
+}
+
+func (b *Bot) requireOperator(userID string) bool {
+	return b.isOperator(userID)
 }
 
 func (b *Bot) getClientForPlatform(platform string) platforms.PlatformClient {
@@ -148,6 +185,12 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 		b.handleStats(s, m)
 	case "!usage":
 		b.handleUsage(s, m)
+	case "!adduser":
+		b.handleAddUser(s, m, parts)
+	case "!deluser":
+		b.handleDelUser(s, m, parts)
+	case "!listusers":
+		b.handleListUsers(s, m)
 	case "!version":
 		b.handleVersion(s, m)
 	default:

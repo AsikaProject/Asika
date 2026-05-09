@@ -18,17 +18,19 @@ import (
 
 // Bot wraps the Slack bot with Asika management functionality.
 type Bot struct {
-	client       *slack.Client
-	socketClient *socketmode.Client
-	cfg          *models.Config
-	clients      map[platforms.PlatformType]platforms.PlatformClient
-	queueMgr     *queue.Manager
-	syncerRef    *syncer.Syncer
-	spamDetector *syncer.SpamDetector
-	notifier     *notifier.SlackBotNotifier
-	adminIDs     map[string]bool
+	client        *slack.Client
+	socketClient  *socketmode.Client
+	cfg           *models.Config
+	clients       map[platforms.PlatformType]platforms.PlatformClient
+	queueMgr      *queue.Manager
+	syncerRef     *syncer.Syncer
+	spamDetector  *syncer.SpamDetector
+	notifier      *notifier.SlackBotNotifier
+	adminIDs      map[string]bool
+	operatorIDs   map[string]bool
+	viewerIDs     map[string]bool
 	internalToken string
-	stop         chan struct{}
+	stop          chan struct{}
 }
 
 // NewBot creates a new Slack bot.
@@ -40,6 +42,8 @@ func NewBot(
 	spamDetector *syncer.SpamDetector,
 	slackNotifier *notifier.SlackBotNotifier,
 	adminIDs []string,
+	operatorIDs []string,
+	viewerIDs []string,
 ) *Bot {
 	b := &Bot{
 		cfg:           cfg,
@@ -49,11 +53,19 @@ func NewBot(
 		spamDetector:  spamDetector,
 		notifier:      slackNotifier,
 		adminIDs:      make(map[string]bool),
+		operatorIDs:   make(map[string]bool),
+		viewerIDs:     make(map[string]bool),
 		internalToken: func() string { tok, _ := auth.GenerateInternalToken(); return tok }(),
 		stop:          make(chan struct{}),
 	}
 	for _, id := range adminIDs {
 		b.adminIDs[id] = true
+	}
+	for _, id := range operatorIDs {
+		b.operatorIDs[id] = true
+	}
+	for _, id := range viewerIDs {
+		b.viewerIDs[id] = true
 	}
 	return b
 }
@@ -147,7 +159,7 @@ func (b *Bot) handleMessage(ev *slack.MessageEvent, client *socketmode.Client) {
 	if ev.User == "" || ev.SubType == "bot_message" {
 		return
 	}
-	if !b.isAdmin(ev.User) {
+	if !b.isOperator(ev.User) {
 		return
 	}
 	content := strings.TrimSpace(ev.Text)
@@ -192,16 +204,43 @@ func (b *Bot) handleMessage(ev *slack.MessageEvent, client *socketmode.Client) {
 		b.handleStats(ev, client)
 	case "usage":
 		b.handleUsage(ev, client)
+	case "adduser":
+		b.handleAddUser(ev, client, parts)
+	case "deluser":
+		b.handleDelUser(ev, client, parts)
+	case "listusers":
+		b.handleListUsers(ev, client)
 	case "version":
 		b.handleVersion(ev, client)
 	}
 }
 
 func (b *Bot) isAdmin(userID string) bool {
-	if len(b.adminIDs) == 0 {
+	if len(b.adminIDs) == 0 && len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
 		return true
 	}
 	return b.adminIDs[userID]
+}
+
+func (b *Bot) isOperator(userID string) bool {
+	if b.isAdmin(userID) {
+		return true
+	}
+	if len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
+		return true
+	}
+	return b.operatorIDs[userID]
+}
+
+// getUserRole returns the role name for the user: "admin", "operator", or "viewer"
+func (b *Bot) getUserRole(userID string) string {
+	if b.isAdmin(userID) {
+		return "admin"
+	}
+	if b.isOperator(userID) {
+		return "operator"
+	}
+	return "viewer"
 }
 
 func (b *Bot) getClientForPlatform(platform string) platforms.PlatformClient {

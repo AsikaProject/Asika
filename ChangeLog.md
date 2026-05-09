@@ -30,6 +30,16 @@
   - Only operator can have granular permissions (can_approve, can_merge, etc.)
   - WebUI: hide permission checkboxes for viewer and admin, show only for operator
   - Backend: clear permissions when role is set to viewer; ignore permissions payload for non-operator roles
+- **Add TOML-based 3-tier bot uid permissions (admin/operator/viewer):**
+  - Per-platform config: `admin_ids`, `operator_ids`, `viewer_ids` in TOML
+  - `TelegramConfig`, `FeishuConfig`, `DiscordConfig`, `SlackConfig` all support the new fields
+  - Bot message handlers: `isAdmin` / `isOperator` / `isViewer` / `getUserRole` on all 4 platforms
+  - Empty config = open-by-default (backward compatible)
+- **Add bot user management commands:**
+  - `/adduser <user> <pass> <role> [groups]` — Create user (admin only)
+  - `/deluser <username>` — Delete user (admin only)
+  - `/listusers` — List all users (operator+)
+  - Supported on all 4 platforms (Telegram/Discord/Feishu/Slack)
 - **Performance optimizations:**
   - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
   - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration

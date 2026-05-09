@@ -34,7 +34,7 @@ func setupDiscordTest(t *testing.T) (*Bot, func()) {
 	qm := queue.NewManager(cfg, clients)
 	s := syncer.NewSyncer(cfg, clients)
 	sd := syncer.NewSpamDetectorWithClients(cfg, clients)
-	bot := NewBot(cfg, clients, qm, s, sd, nil, []string{"admin1", "admin2"})
+	bot := NewBot(cfg, clients, qm, s, sd, nil, []string{"admin1", "admin2"}, nil, nil)
 	return bot, func() { db.Close() }
 }
 
