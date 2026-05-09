@@ -10,9 +10,16 @@ enable_web_update = false   # allow admin to update from WebUI
 # Mode: "multi" for cross-platform sync, "single" for single repo
 mode = "multi"
 
-# Database (bbolt)
+# Database backend: "bbolt" (default) or "mongo"
 [database]
+type = "bbolt"
 path = "/var/lib/asika/asika.db"
+
+# For MongoDB:
+# [database]
+# type = "mongo"
+# path = "mongodb://localhost:27017"
+# name = "asika"
 
 # Authentication
 [auth]

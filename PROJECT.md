@@ -69,7 +69,7 @@ graph TB
         end
 
         subgraph DB["Storage"]
-            BDB[(bbolt Database)]
+            BDB[(Storage bbolt / MongoDB)]
         end
     end
 
@@ -229,7 +229,7 @@ graph TB
 
     subgraph common["common/"]
         CONFIG[config/ → Config]
-        DB[db/ → bbolt]
+        DB[db/ → Storage interface]
         PLAT[platforms/ → API clients]
         MODELS[models/ → Data structures]
         EVENTS[events/ → Event bus]

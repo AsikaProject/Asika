@@ -32,7 +32,7 @@ Three roles (viewer/operator/admin) plus six granular permissions (approve, merg
 Long-lived API keys for CI/CD and external integrations. Keys are bound to a role (admin/operator/viewer) with optional granular permissions. Create and manage keys via WebUI (`/apikeys`), bot commands (`/apikey new/list/revoke`), or CLI (`asika apikey`). Keys are delivered via DM and auto-deleted after 2 minutes.
 
 ### 🔹 Simple to run
-Single binary. No Node.js. No external dependencies. Embedded bbolt database.
+Single binary. No Node.js. No external dependencies. Embedded bbolt database by default, with optional MongoDB support.
 
 ## Quick Start
 
@@ -264,6 +264,23 @@ asika version server           # Show server version
 ```
 
 ## Configuration Highlights
+
+### Database
+
+By default Asika uses an embedded bbolt database. MongoDB is also supported:
+
+```toml
+# bbolt (default)
+[database]
+type = "bbolt"
+path = "/var/lib/asika/asika.db"
+
+# MongoDB
+[database]
+type = "mongo"
+path = "mongodb://localhost:27017"
+name = "asika"
+```
 
 ### Repo Groups
 
