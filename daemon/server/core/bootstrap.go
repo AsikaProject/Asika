@@ -40,24 +40,22 @@ type InitConfig struct {
 }
 
 // InitWithRetry initializes the database with retries for lock conflicts.
-func InitWithRetry(dbPath string, maxRetries int) error {
+func InitWithRetry(cfg *models.Config, maxRetries int) error {
 	for i := 0; i < maxRetries; i++ {
-		err := db.Init(dbPath)
-		if err == nil {
+		if err := db.Init(cfg.Database); err == nil {
 			return nil
-		}
-		if i < maxRetries-1 {
+		} else if i < maxRetries-1 {
 			slog.Warn("db init failed, retrying", "attempt", i+1, "max", maxRetries, "error", err)
 			time.Sleep(2 * time.Second)
 		}
 	}
-	return db.Init(dbPath)
+	return db.Init(cfg.Database)
 }
 
 // Bootstrap initializes all daemon subsystems.
 // Returns InitConfig for orderly shutdown.
 func Bootstrap(cfg *models.Config) (*InitConfig, error) {
-	if err := InitWithRetry(cfg.Database.Path, 5); err != nil {
+	if err := InitWithRetry(cfg, 5); err != nil {
 		return nil, err
 	}
 	slog.Info("database initialized", "path", cfg.Database.Path)

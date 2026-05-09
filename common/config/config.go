@@ -136,8 +136,17 @@ func validate(cfg *models.Config) error {
 		}
 	}
 
+	if cfg.Database.Type == "" {
+		cfg.Database.Type = "bbolt"
+	}
+	if cfg.Database.Type != "bbolt" && cfg.Database.Type != "mongo" {
+		return fmt.Errorf("database.type must be 'bbolt' or 'mongo', got %q", cfg.Database.Type)
+	}
 	if cfg.Database.Path == "" {
 		return fmt.Errorf("database.path is required")
+	}
+	if cfg.Database.Type == "mongo" && cfg.Database.Name == "" {
+		return fmt.Errorf("database.name is required when database.type is 'mongo'")
 	}
 
 	if cfg.Auth.JWTSecret == "" {

@@ -229,9 +229,14 @@ type StaleConfig struct {
 	SkipDraftPRs     bool     `toml:"skip_draft_prs" json:"skip_draft_prs"`
 }
 
-// DatabaseConfig represents database configuration
+// DatabaseConfig represents database configuration.
+// Type can be "bbolt" (default) or "mongo".
+// For bbolt: Path is the file path to the .db file.
+// For mongo: Path is the connection string (e.g. "mongodb://localhost:27017"), Name is the database name.
 type DatabaseConfig struct {
+	Type string `toml:"type"`
 	Path string `toml:"path"`
+	Name string `toml:"name"`
 }
 
 // AuthConfig represents authentication configuration

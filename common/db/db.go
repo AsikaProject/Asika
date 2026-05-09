@@ -1,6 +1,8 @@
 package db
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"asika/common/models"
@@ -43,14 +45,39 @@ type ConfigSnapshotEntry struct {
 
 var defaultStorage Storage
 
-// Init initializes the default bbolt storage.
-func Init(dbPath string) error {
-	s, err := newBboltStorage(dbPath)
-	if err != nil {
-		return err
+// Init initializes the default storage.
+// Usage:
+//
+//	db.Init(cfg.Database)           // with DatabaseConfig (supports bbolt and mongo)
+//	db.Init("path/to/file.db")      // shorthand for bbolt with just a file path
+func Init(args ...interface{}) error {
+	switch v := args[0].(type) {
+	case models.DatabaseConfig:
+		return initFromConfig(v)
+	case string:
+		return initFromConfig(models.DatabaseConfig{Type: "bbolt", Path: v})
+	default:
+		return fmt.Errorf("db.Init: unsupported argument type %T", args[0])
 	}
-	defaultStorage = s
-	return nil
+}
+
+func initFromConfig(cfg models.DatabaseConfig) error {
+	switch cfg.Type {
+	case "mongo":
+		s, err := NewMongoStorage(context.Background(), cfg.Path, cfg.Name)
+		if err != nil {
+			return err
+		}
+		defaultStorage = s
+		return nil
+	default:
+		s, err := newBboltStorage(cfg.Path)
+		if err != nil {
+			return err
+		}
+		defaultStorage = s
+		return nil
+	}
 }
 
 // InitWithStorage injects a custom Storage implementation.

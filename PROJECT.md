@@ -45,7 +45,7 @@ graph TB
 
         subgraph Actors["Actor System (goroutine pools)"]
             DP[Event Dispatcher]
-            WP[Worker Pool (dynamic)]
+            WP[Worker Pool dynamic]
             WA[Writer Actor]
         end
 
