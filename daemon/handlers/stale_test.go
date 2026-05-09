@@ -139,10 +139,10 @@ func TestActivePlatforms(t *testing.T) {
 		{
 			name: "all platforms",
 			group: &models.RepoGroup{
-				GitHub:  "org/repo",
-				GitLab:  "group/repo",
-				Gitea:   "user/repo",
-				Forgejo: "user/repo",
+				GitHub:   "org/repo",
+				GitLab:   "group/repo",
+				Gitea:    "user/repo",
+				Forgejo:  "user/repo",
 				Codeberg: "user/repo",
 			},
 			want: 3, // GitHub, GitLab, Gitea (Forgejo and Codeberg not in activePlatforms)

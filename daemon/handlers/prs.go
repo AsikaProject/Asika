@@ -16,12 +16,18 @@ import (
 	"asika/common/db"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/daemon/handlers/webhook"
 	"asika/daemon/polling"
 	"asika/daemon/syncer"
 )
 
 // clients is a package-level variable to access platform clients
 var clients map[platforms.PlatformType]platforms.PlatformClient
+
+// GetClients returns the platform clients map (used by webhook sub-package).
+func GetClients() map[platforms.PlatformType]platforms.PlatformClient {
+	return clients
+}
 
 // syncerRef is set by InitSyncer from cmd/asikad/main.go
 var syncerRef *syncer.Syncer
@@ -32,7 +38,11 @@ var pollerRef *polling.Poller
 // InitClients initializes the platform clients for handlers
 func InitClients(c map[platforms.PlatformType]platforms.PlatformClient) {
 	clients = c
+	webhook.SetClients(c)
 }
+
+// WebhookHandler is an alias for webhook.WebhookHandler for backward compatibility.
+var WebhookHandler = webhook.WebhookHandler
 
 // InitSyncer initializes the syncer for handlers
 func InitSyncer(s *syncer.Syncer) {

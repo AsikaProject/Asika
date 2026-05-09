@@ -513,13 +513,13 @@ func TestHandleSpamDetected_WithDetector(t *testing.T) {
 
 	cfg := &models.Config{
 		Spam: models.SpamConfig{
-			Enabled:            true,
-			Threshold:          3,
-			TimeWindow:         "10m",
-			TriggerOnAuthor:    true,
-			TriggerOnTitleKw:   []string{"spam"},
-			AutoCleanEnabled:   false,
-			AutoCleanInterval:  "24h",
+			Enabled:           true,
+			Threshold:         3,
+			TimeWindow:        "10m",
+			TriggerOnAuthor:   true,
+			TriggerOnTitleKw:  []string{"spam"},
+			AutoCleanEnabled:  false,
+			AutoCleanInterval: "24h",
 		},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},

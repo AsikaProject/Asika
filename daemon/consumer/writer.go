@@ -8,12 +8,12 @@ import (
 
 // writeRequest is a request to the writer goroutine
 type writeRequest struct {
-	key      string
-	value    []byte
-	prID     string
+	key       string
+	value     []byte
+	prID      string
 	repoGroup string
-	prNumber int
-	result   chan error
+	prNumber  int
+	result    chan error
 }
 
 // writerActor handles all bbolt writes through a single goroutine.

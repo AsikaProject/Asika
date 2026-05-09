@@ -9,10 +9,10 @@ import (
 // Each worker picks tasks from a shared channel, enabling parallel event
 // processing while bounding resource usage.
 type workerPool struct {
-	tasks    chan func()
-	stop     chan struct{}
-	wg       sync.WaitGroup
-	workers  int
+	tasks   chan func()
+	stop    chan struct{}
+	wg      sync.WaitGroup
+	workers int
 }
 
 // newWorkerPool creates and starts a worker pool with the given size and buffer.

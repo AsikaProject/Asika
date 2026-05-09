@@ -35,17 +35,17 @@ func TestCronToInterval(t *testing.T) {
 
 func TestFormatReport_Full(t *testing.T) {
 	stats := map[string]interface{}{
-		"period_days":             float64(7),
-		"deployment_frequency":    float64(2.5),
-		"lead_time_hours":         float64(48.5),
-		"change_failure_rate":     float64(0.15),
-		"mttr_hours":              float64(4.0),
-		"total_prs":               float64(100),
-		"merged_prs":              float64(80),
-		"open_prs":                float64(20),
-		"queue_items":             float64(5),
-		"failed_queue_items":      float64(2),
-		"prs_by_repo_group":       map[string]interface{}{"frontend": float64(60), "backend": float64(40)},
+		"period_days":          float64(7),
+		"deployment_frequency": float64(2.5),
+		"lead_time_hours":      float64(48.5),
+		"change_failure_rate":  float64(0.15),
+		"mttr_hours":           float64(4.0),
+		"total_prs":            float64(100),
+		"merged_prs":           float64(80),
+		"open_prs":             float64(20),
+		"queue_items":          float64(5),
+		"failed_queue_items":   float64(2),
+		"prs_by_repo_group":    map[string]interface{}{"frontend": float64(60), "backend": float64(40)},
 	}
 
 	report := formatReport(stats)

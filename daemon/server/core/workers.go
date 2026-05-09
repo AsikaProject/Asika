@@ -12,6 +12,7 @@ import (
 	"asika/common/utils"
 	"asika/daemon/consumer"
 	"asika/daemon/handlers"
+	"asika/daemon/handlers/webhook"
 	"asika/daemon/polling"
 	"asika/daemon/queue"
 	"asika/daemon/stale"
@@ -108,7 +109,7 @@ func StartWorkers(
 	slog.Info("event consumer started")
 
 	// Webhook retry worker
-	handlers.StartWebhookRetryWorker()
+	webhook.StartWebhookRetryWorker()
 
 	// Stale PR checker
 	staleMgr = stale.NewManager(cfg, clients)

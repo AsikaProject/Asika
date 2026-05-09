@@ -19,10 +19,10 @@ func setupSharedTest(t *testing.T) {
 
 func TestTruncate(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		maxLen  int
-		want    string
+		name   string
+		input  string
+		maxLen int
+		want   string
 	}{
 		{"short string", "hello", 10, "hello"},
 		{"exact length", "hello", 5, "hello"},
@@ -47,10 +47,10 @@ func TestInactivityDays(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name     string
+		name       string
 		lastActive time.Time
-		minDays  int
-		maxDays  int
+		minDays    int
+		maxDays    int
 	}{
 		{"now", now, 0, 0},
 		{"1 day ago", now.Add(-24 * time.Hour), 1, 1},

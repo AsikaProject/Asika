@@ -18,10 +18,10 @@ func TestAPIKeyCreateCmd(t *testing.T) {
 		var body map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&body)
 		resp := map[string]interface{}{
-			"id":      "test-key-id",
-			"name":    body["name"],
-			"role":    body["role"],
-			"key":     "ak_testkey1234567890",
+			"id":   "test-key-id",
+			"name": body["name"],
+			"role": body["role"],
+			"key":  "ak_testkey1234567890",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)

@@ -286,9 +286,9 @@ func TestExtractStructValues(t *testing.T) {
 
 func TestSortedKeys(t *testing.T) {
 	keySet := map[string]bool{
-		"zebra": true,
-		"apple": true,
-		"mango": true,
+		"zebra":  true,
+		"apple":  true,
+		"mango":  true,
 		"banana": true,
 	}
 	keys := sortedKeys(keySet)

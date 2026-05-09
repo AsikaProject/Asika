@@ -255,13 +255,13 @@ type GitConfig struct {
 
 // TokensConfig represents platform token configuration
 type TokensConfig struct {
-	GitHub    string      `toml:"github"`
-	GitLab    string      `toml:"gitlab"`
-	Gitea     string      `toml:"gitea"`
-	Forgejo   string      `toml:"forgejo"`
-	Codeberg  string      `toml:"codeberg"`
-	Bitbucket string      `toml:"bitbucket"`
-	Gerrit    GerritAuth  `toml:"gerrit"`
+	GitHub    string     `toml:"github"`
+	GitLab    string     `toml:"gitlab"`
+	Gitea     string     `toml:"gitea"`
+	Forgejo   string     `toml:"forgejo"`
+	Codeberg  string     `toml:"codeberg"`
+	Bitbucket string     `toml:"bitbucket"`
+	Gerrit    GerritAuth `toml:"gerrit"`
 }
 
 // GerritAuth holds Gerrit authentication credentials

@@ -8,6 +8,7 @@ import (
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
+	"asika/daemon/handlers/webhook"
 )
 
 // notifyFunc is an optional external notification sender (set by core).
@@ -22,6 +23,7 @@ var globalNotifiers []notifier.Notifier
 
 // InitNotifiers initializes the notification senders for handlers.
 func InitNotifiers(cfg *models.Config, clients map[platforms.PlatformType]platforms.PlatformClient) {
+	webhook.SetNotifyFunc(sendNotifications)
 	notifiers := make([]notifier.Notifier, 0, len(cfg.Notify))
 	for _, nc := range cfg.Notify {
 		n := createNotifierFromNotifyConfig(nc)
@@ -31,6 +33,16 @@ func InitNotifiers(cfg *models.Config, clients map[platforms.PlatformType]platfo
 	}
 	notifier.WirePlatformNotifiers(notifiers, clients)
 	globalNotifiers = notifiers
+}
+
+// SendNotifications sends a notification to all configured notifiers.
+func SendNotifications(title, body string) {
+	sendNotifications(title, body)
+}
+
+// SendNotificationSync sends a notification synchronously (used by webhook retry worker).
+func SendNotificationSync(title, body string) {
+	sendNotifications(title, body)
 }
 
 func sendNotifications(title, body string) {
