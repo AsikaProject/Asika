@@ -9,6 +9,9 @@ import (
 	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/daemon/queue"
+	"asika/daemon/syncer"
+	"asika/testutil"
 )
 
 func TestNewConsumer(t *testing.T) {
@@ -479,5 +482,481 @@ func TestConsumerEventFlow_OpenedThenClosed(t *testing.T) {
 	json.Unmarshal(data, &stored)
 	if stored.State != "closed" {
 		t.Errorf("state = %q, want closed", stored.State)
+	}
+}
+
+func TestHandlePRApproved_NilQueue(t *testing.T) {
+	c := NewConsumer()
+	c.queue = nil
+
+	pr := &models.PRRecord{
+		ID:        "pr-nil-queue",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  50,
+		Title:     "Nil queue test",
+		State:     "open",
+	}
+
+	c.handlePRApproved(events.Event{
+		Type:      events.EventPRApproved,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+	})
+}
+
+func TestHandleSpamDetected_WithDetector(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		Spam: models.SpamConfig{
+			Enabled:            true,
+			Threshold:          3,
+			TimeWindow:         "10m",
+			TriggerOnAuthor:    true,
+			TriggerOnTitleKw:   []string{"spam"},
+			AutoCleanEnabled:   false,
+			AutoCleanInterval:  "24h",
+		},
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	sd := syncer.NewSpamDetectorWithClients(cfg, clients)
+
+	c := NewConsumer()
+	c.spamDetector = sd
+
+	pr := &models.PRRecord{
+		ID:        "pr-spam-detected",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  60,
+		Title:     "Spam PR",
+		Author:    "spammer",
+		State:     "open",
+	}
+
+	c.handleSpamDetected(events.Event{
+		Type:      events.EventSpamDetected,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	stored, err := db.Get(db.BucketPRs, "test-group#github#60")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	var result models.PRRecord
+	json.Unmarshal(stored, &result)
+	if !result.SpamFlag {
+		t.Error("SpamFlag should be true after HandleSpam")
+	}
+}
+
+func TestHandlePRComment_NoCommand(t *testing.T) {
+	c := NewConsumer()
+
+	pr := &models.PRRecord{
+		ID:        "pr-comment-nocommand",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  70,
+		Title:     "Comment test",
+		State:     "open",
+	}
+
+	c.handlePRComment(events.Event{
+		Type:      events.EventPRComment,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload: &models.PRCommentPayload{
+			CommentBody:   "This is a normal comment",
+			CommentAuthor: "user1",
+		},
+	})
+}
+
+func TestHandlePRComment_NilPayload(t *testing.T) {
+	c := NewConsumer()
+
+	pr := &models.PRRecord{
+		ID:        "pr-comment-nilpayload",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  71,
+		Title:     "Nil payload test",
+		State:     "open",
+	}
+
+	c.handlePRComment(events.Event{
+		Type:      events.EventPRComment,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload:   nil,
+	})
+}
+
+func TestHandlePRComment_NilPR(t *testing.T) {
+	c := NewConsumer()
+
+	c.handlePRComment(events.Event{
+		Type:      events.EventPRComment,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        nil,
+		Payload: &models.PRCommentPayload{
+			CommentBody:   "/approve",
+			CommentAuthor: "user1",
+		},
+	})
+}
+
+func TestHandlePRComment_UnknownCommand(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-comment-unknown",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  72,
+		Title:     "Unknown command test",
+		State:     "open",
+	}
+
+	c.handlePRComment(events.Event{
+		Type:      events.EventPRComment,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload: &models.PRCommentPayload{
+			CommentBody:   "/unknowncmd",
+			CommentAuthor: "user1",
+		},
+	})
+}
+
+func TestHandlePRComment_WithQueue(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: testutil.NewMockPlatformClient(),
+	}
+	c := NewConsumerWithClients(cfg, clients)
+	c.clients = clients
+
+	pr := &models.PRRecord{
+		ID:        "pr-comment-queue",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  73,
+		Title:     "Queue command test",
+		State:     "open",
+	}
+
+	c.handlePRComment(events.Event{
+		Type:      events.EventPRComment,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload: &models.PRCommentPayload{
+			CommentBody:   "/queue",
+			CommentAuthor: "user1",
+		},
+	})
+
+	items, err := c.queue.GetQueueItems("test-group")
+	if err != nil {
+		t.Fatalf("GetQueueItems failed: %v", err)
+	}
+	if len(items) != 1 {
+		t.Errorf("expected 1 queue item, got %d", len(items))
+	}
+}
+
+func TestHandlePRComment_WithRecheck(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-comment-recheck",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  74,
+		Title:     "Recheck command test",
+		State:     "open",
+	}
+
+	c.handlePRComment(events.Event{
+		Type:      events.EventPRComment,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload: &models.PRCommentPayload{
+			CommentBody:   "/recheck",
+			CommentAuthor: "user1",
+		},
+	})
+}
+
+func TestHandlePRComment_MissingClient(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-comment-noclient",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  75,
+		Title:     "No client test",
+		State:     "open",
+	}
+
+	c.handlePRComment(events.Event{
+		Type:      events.EventPRComment,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload: &models.PRCommentPayload{
+			CommentBody:   "/approve",
+			CommentAuthor: "user1",
+		},
+	})
+}
+
+func TestHandlePRComment_HelpCommand(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-comment-help",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  76,
+		Title:     "Help command test",
+		State:     "open",
+	}
+
+	c.handlePRComment(events.Event{
+		Type:      events.EventPRComment,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload: &models.PRCommentPayload{
+			CommentBody:   "/help",
+			CommentAuthor: "user1",
+		},
+	})
+}
+
+func TestDispatch_AllEventTypes(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "dispatch-all", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	allTypes := []events.EventType{
+		events.EventPROpened,
+		events.EventPRClosed,
+		events.EventPRMerged,
+		events.EventPRApproved,
+		events.EventPRReopened,
+		events.EventSpamDetected,
+		events.EventPRComment,
+		events.EventPRLabeled,
+		events.EventBranchDeleted,
+		events.EventSyncCompleted,
+		events.EventSyncFailed,
+	}
+
+	for _, et := range allTypes {
+		t.Run(string(et), func(t *testing.T) {
+			c.dispatch(events.Event{
+				Type:      et,
+				RepoGroup: "dispatch-all",
+				Platform:  "github",
+				PR:        nil,
+			})
+		})
+	}
+}
+
+func TestHandlePRComment_CherryPickNoArgs(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-comment-cp",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  77,
+		Title:     "Cherry-pick test",
+		State:     "open",
+	}
+
+	c.handlePRComment(events.Event{
+		Type:      events.EventPRComment,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload: &models.PRCommentPayload{
+			CommentBody:   "/cherry-pick",
+			CommentAuthor: "user1",
+		},
+	})
+}
+
+func TestCmdRebase(t *testing.T) {
+	c := NewConsumer()
+	pr := &models.PRRecord{
+		PRNumber: 80,
+		Title:    "Rebase test",
+	}
+
+	result := c.cmdRebase(nil, nil, pr, "", "", "author1")
+	if result == "" {
+		t.Error("cmdRebase should return a message")
+	}
+}
+
+func TestNewConsumerWithQueue(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "queue-test-1",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  90,
+		Title:     "Queue test",
+		State:     "open",
+	}
+
+	c.handlePRApproved(events.Event{
+		Type:      events.EventPRApproved,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	items, err := c.queue.GetQueueItems("test-group")
+	if err != nil {
+		t.Fatalf("GetQueueItems failed: %v", err)
+	}
+	if len(items) != 1 {
+		t.Errorf("expected 1 queue item, got %d", len(items))
+	}
+}
+
+func TestQueueManager_AddToQueue(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "qtest", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	q := queue.NewManager(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "qm-test-1",
+		RepoGroup: "qtest",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Queue manager test",
+		State:     "open",
+	}
+
+	err := q.AddToQueue(pr)
+	if err != nil {
+		t.Fatalf("AddToQueue failed: %v", err)
+	}
+
+	items, err := q.GetQueueItems("qtest")
+	if err != nil {
+		t.Fatalf("GetQueueItems failed: %v", err)
+	}
+	if len(items) != 1 {
+		t.Errorf("expected 1 item, got %d", len(items))
+	}
+	if items[0].PRID != "qm-test-1" {
+		t.Errorf("PRID = %q, want qm-test-1", items[0].PRID)
 	}
 }

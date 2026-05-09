@@ -34,11 +34,23 @@ func (w *workerPool) worker(id int) {
 	defer w.wg.Done()
 	for {
 		select {
-		case task := <-w.tasks:
+		case task, ok := <-w.tasks:
+			if !ok {
+				return
+			}
 			task()
 		case <-w.stop:
-			slog.Debug("worker stopped", "id", id)
-			return
+			for {
+				select {
+				case task, ok := <-w.tasks:
+					if !ok {
+						return
+					}
+					task()
+				default:
+					return
+				}
+			}
 		}
 	}
 }
@@ -50,6 +62,7 @@ func (w *workerPool) Submit(task func()) {
 }
 
 // Stop gracefully shuts down the worker pool.
+// Waits for all in-flight tasks to complete before returning.
 func (w *workerPool) Stop() {
 	close(w.stop)
 	w.wg.Wait()
