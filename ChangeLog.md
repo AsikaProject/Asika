@@ -1,6 +1,18 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Feature: dynamic worker pool with config-driven hot reload and metrics:**
+  - Replace fixed 4-worker pool with dynamic sizing (`min_workers` to `max_workers`)
+  - Scale up when channel utilization >= `scale_up_pct` (default 75%), scale down when <= `scale_down_pct` (default 25%)
+  - Cooldown period (default 30s) prevents thrashing
+  - Add `poolMetrics` tracking: workers, total/active tasks, utilization%, scale up/down event counts, goroutine count
+  - Add `WorkerPoolConfig` struct with 6 fields to `Config` (`[worker_pool]` TOML section)
+  - Add `UpdateConfig()` on pool for runtime config propagation
+  - Wire config reload: `PUT /api/v1/config` + SIGHUP → callback → consumer pool update
+  - Avoid import cycle via `handlers.OnWorkerPoolConfigReload` callback pattern
+  - Default: min=2, max=8, scale_up=75%, scale_down=25%, cooldown=30s, stats_interval=30s
+  - Add 5 new tests: Metrics, UpdateConfig, DynamicScaleUp, DynamicScaleDown, CooldownPreventsFlapping
+  - All existing tests updated to pass `WorkerPoolConfig` instead of raw int
 - **Refactor: split handlers/webhook.go into webhook/ sub-package:**
   - Split `daemon/handlers/webhook.go` (877 lines) into 8 files under `daemon/handlers/webhook/`
   - `webhook/webhook.go`: core handler, `ProcessWebhook`, signature verification, event dispatch

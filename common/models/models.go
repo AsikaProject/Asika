@@ -298,6 +298,16 @@ type SingleRepoConfig struct {
 	CIProvider    string `toml:"ci_provider"`
 }
 
+// WorkerPoolConfig controls the dynamic worker pool sizing.
+type WorkerPoolConfig struct {
+	MinWorkers    int    `toml:"min_workers" json:"min_workers"`
+	MaxWorkers    int    `toml:"max_workers" json:"max_workers"`
+	ScaleUpPct    int    `toml:"scale_up_pct" json:"scale_up_pct"`
+	ScaleDownPct  int    `toml:"scale_down_pct" json:"scale_down_pct"`
+	CooldownSecs  int    `toml:"cooldown_secs" json:"cooldown_secs"`
+	StatsInterval string `toml:"stats_interval" json:"stats_interval"`
+}
+
 // Config represents the main configuration structure
 type Config struct {
 	Server         ServerConfig      `toml:"server" json:"server"`
@@ -325,6 +335,7 @@ type Config struct {
 	Updates        UpdatesConfig     `toml:"updates" json:"updates"`
 	Stale          StaleConfig       `toml:"stale" json:"stale"`
 	Reports        ScheduleConfig    `toml:"reports" json:"reports"`
+	WorkerPool     WorkerPoolConfig  `toml:"worker_pool" json:"worker_pool"`
 }
 
 // ScheduleConfig defines scheduled report configuration.

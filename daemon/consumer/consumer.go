@@ -43,7 +43,7 @@ func NewConsumer() *Consumer {
 	return &Consumer{
 		stop:    make(chan struct{}),
 		writer:  newWriterActor(256),
-		workers: newWorkerPool(4),
+		workers: newWorkerPool(models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}),
 	}
 }
 
@@ -54,6 +54,10 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 	s := syncer.NewSyncer(cfg, clients)
 	sd := syncer.NewSpamDetectorWithClients(cfg, clients)
 	q := queue.NewManager(cfg, clients)
+	poolCfg := cfg.WorkerPool
+	if poolCfg.MinWorkers <= 0 {
+		poolCfg = models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}
+	}
 	return &Consumer{
 		cfg:          cfg,
 		clients:      clients,
@@ -64,14 +68,18 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 		queue:        q,
 		stop:         make(chan struct{}),
 		writer:       newWriterActor(256),
-		workers:      newWorkerPool(4),
+		workers:      newWorkerPool(poolCfg),
 	}
 }
 
 // Start starts consuming events and dispatching to subsystem goroutine pools
 func (c *Consumer) Start() {
 	c.writer = newWriterActor(256)
-	c.workers = newWorkerPool(4)
+	poolCfg := models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}
+	if c.cfg != nil && c.cfg.WorkerPool.MinWorkers > 0 {
+		poolCfg = c.cfg.WorkerPool
+	}
+	c.workers = newWorkerPool(poolCfg)
 	ch := events.Subscribe()
 	go func() {
 		for {
@@ -94,6 +102,13 @@ func (c *Consumer) Stop() {
 	}
 	if c.writer != nil {
 		c.writer.Stop()
+	}
+}
+
+// UpdateWorkerPoolConfig updates the worker pool configuration at runtime
+func (c *Consumer) UpdateWorkerPoolConfig(cfg models.WorkerPoolConfig) {
+	if c.workers != nil {
+		c.workers.UpdateConfig(cfg)
 	}
 }
 

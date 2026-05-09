@@ -76,6 +76,14 @@ func Load(path string) (*models.Config, error) {
 			RemoveOnActivity: true,
 			SkipDraftPRs:     true,
 		},
+		WorkerPool: models.WorkerPoolConfig{
+			MinWorkers:    2,
+			MaxWorkers:    8,
+			ScaleUpPct:    75,
+			ScaleDownPct:  25,
+			CooldownSecs:  30,
+			StatsInterval: "30s",
+		},
 	}
 
 	if err := toml.Unmarshal(data, cfg); err != nil {

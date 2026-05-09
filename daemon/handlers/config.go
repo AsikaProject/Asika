@@ -15,6 +15,23 @@ import (
 	"asika/common/models"
 )
 
+var workerPoolConfigReloadFuncs []func(models.WorkerPoolConfig)
+
+// OnWorkerPoolConfigReload registers a callback invoked when worker_pool config changes.
+func OnWorkerPoolConfigReload(fn func(models.WorkerPoolConfig)) {
+	workerPoolConfigReloadFuncs = append(workerPoolConfigReloadFuncs, fn)
+}
+
+func notifyWorkerPoolConfig() {
+	cfg := config.Current()
+	if cfg == nil {
+		return
+	}
+	for _, fn := range workerPoolConfigReloadFuncs {
+		fn(cfg.WorkerPool)
+	}
+}
+
 // GetConfig handles GET /api/v1/config (8.4)
 // Returns current config with sensitive data masked
 func GetConfig(c *gin.Context) {
@@ -106,6 +123,9 @@ func UpdateConfig(c *gin.Context) {
 	if reviewRules, ok := patch["review_rules"]; ok {
 		existing["review_rules"] = reviewRules
 	}
+	if workerPool, ok := patch["worker_pool"]; ok {
+		existing["worker_pool"] = workerPool
+	}
 	if hookpath, ok := patch["hookpath"]; ok {
 		hp, ok := hookpath.(string)
 		if !ok {
@@ -131,7 +151,6 @@ func UpdateConfig(c *gin.Context) {
 		return
 	}
 
-	// Trigger hot reload - reload from disk to pick up the written changes
 	reloadedCfg, err := config.Load(configPath)
 	if err != nil {
 		slog.Error("config saved but reload failed", "error", err)
@@ -139,6 +158,7 @@ func UpdateConfig(c *gin.Context) {
 		return
 	}
 	config.Store(reloadedCfg)
+	notifyWorkerPoolConfig()
 
 	slog.Info("config updated", "path", configPath)
 	c.JSON(http.StatusOK, gin.H{"message": "config updated successfully"})

@@ -38,6 +38,9 @@ gitea    = ""
 forgejo   = ""
 codeberg  = ""
 bitbucket = ""
+gerrit.url      = "https://gerrit.example.com"
+gerrit.username = ""
+gerrit.password = ""
 
 # Merge queue defaults (overridable per repo group)
 [merge_queue]
@@ -168,6 +171,7 @@ gitea          = "my-org/my-repo"
 forgejo        = "my-org/my-repo"   # optional: Forgejo instance
 codeberg       = "my-org/my-repo"   # optional: Codeberg (https://codeberg.org)
 bitbucket      = "my-org/my-repo"   # optional: Bitbucket Cloud (https://bitbucket.org)
+gerrit         = "my-project"         # optional: Gerrit project name
 default_branch = "main"
 hookpath       = ""
 ci_provider    = "github_actions"  # "github_actions" | "gitlab_ci" | "gitea_actions" | "none"
@@ -190,10 +194,20 @@ core_contributors  = ["senior-dev1", "senior-dev2"]
 # gitea_base_url   = "https://gitea.example.com"
 # forgejo_base_url = "https://forgejo.example.com"  # falls back to gitea_base_url if empty
 # github_base_url  = "https://github.example.com/api/v3"  # GitHub Enterprise Server; empty = github.com
+# gerrit_base_url  = "https://gerrit.example.com"          # Gerrit server URL; empty = use per-group gerrit.url from tokens
 # Codeberg uses gitea_base_url by default (or https://codeberg.org if empty)
 
 # Custom hook path (global)
 hookpath = ""
+
+# Worker pool dynamic sizing
+[worker_pool]
+min_workers    = 2
+max_workers    = 8
+scale_up_pct   = 75
+scale_down_pct = 25
+cooldown_secs  = 30
+stats_interval = "30s"
 
 # Self-update configuration
 [updates]
@@ -259,6 +273,15 @@ app_token    = "xapp-your-app-token"        # App-Level Token (for Socket Mode)
 admin_ids    = ["U0123456789"]
 operator_ids = ["U0987654321"]
 viewer_ids   = ["U0555566666"]
+
+# Gerrit bot configuration (webhook events only; no bot commands)
+# Gerrit sends webhooks via HTTP POST; configure webhook URL in Gerrit admin UI
+# [gerrit]
+# enabled       = false
+# admin_ids     = ["account_id_1"]     # Gerrit account IDs (numeric) or usernames
+# operator_ids  = ["account_id_2"]
+# viewer_ids    = ["account_id_3"]
+# webhook_secret = "change-me-gerrit-webhook-secret"  # for X-Gerrit-Signature verification
 
 # Bot UID Permission Model
 # -------------------------

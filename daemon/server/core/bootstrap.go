@@ -130,6 +130,11 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	SyncPRStates(cfg, clients)
 
 	ic.QueueMgr, ic.SpamDetector, ic.Poller, ic.EventConsumer, _ = StartWorkers(cfg, clients)
+	handlers.OnWorkerPoolConfigReload(func(cfg models.WorkerPoolConfig) {
+		if ic.EventConsumer != nil {
+			ic.EventConsumer.UpdateWorkerPoolConfig(cfg)
+		}
+	})
 	handlers.InitPoller(ic.Poller)
 
 	InitNotifiers(cfg, clients)
