@@ -8,6 +8,7 @@ graph TB
         GT[Gitea API]
         FJ[Forgejo / Codeberg API]
         BB[Bitbucket API]
+        GR[Gerrit API]
         WH[Webhooks]
     end
 
@@ -35,6 +36,7 @@ graph TB
             PC_GT[Gitea Client]
             PC_FJ[Forgejo / Codeberg Client]
             PC_BB[Bitbucket Client]
+            PC_GR[Gerrit Client]
         end
 
         subgraph Events["Event Bus"]
@@ -49,6 +51,14 @@ graph TB
 
         subgraph Notify["Notifications"]
             SMTP[SMTP]
+            WCN[WeCom]
+            DT[DingTalk]
+            TG_N[Telegram]
+            FS_N[Feishu]
+            DC_N[Discord]
+            SL_N[Slack]
+            MST[MS Teams]
+            WH_N[Webhook]
         end
 
         subgraph Bots["Platform Bots"]
@@ -68,6 +78,7 @@ graph TB
     GT --> PC_GT
     FJ --> PC_FJ
     BB --> PC_BB
+    GR --> PC_GR
     WH --> MW
 
     CM --> RO
@@ -93,6 +104,7 @@ graph TB
     PC_GT --> SY
     PC_FJ --> SY
     PC_BB --> SY
+    PC_GR --> SY
 
      QC --> SMTP
      SRV --> TG
@@ -231,6 +243,7 @@ graph TB
     subgraph daemon["daemon/"]
         SRV[server/ → HTTP/bootstrap]
         HAND[handlers/ → API routes]
+        HOOK[handlers/webhook/ → Webhook parsing]
         QUEUE[queue/ → Merge queue]
         SYNC[syncer/ → Cross-sync]
         CONS[consumer/ → Events]
@@ -241,7 +254,7 @@ graph TB
         FS[feishu/ → Feishu bot]
         DC[discord/ → Discord bot]
         SL[slack/ → Slack bot]
-        HOOKS[hooks/ → Git hooks]
+        GHOK[hooks/ → Git hooks]
         STALE[stale/ → Stale PRs]
         SPAM[spam/ → Spam detect]
     end
@@ -251,6 +264,7 @@ graph TB
     LIB_CMD --> common
     SRV --> common
     SRV --> HAND
+    HAND --> HOOK
     SRV --> QUEUE
     SRV --> TG
     SRV --> FS

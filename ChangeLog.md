@@ -1,6 +1,25 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Refactor: split handlers/webhook.go into webhook/ sub-package:**
+  - Split `daemon/handlers/webhook.go` (877 lines) into 8 files under `daemon/handlers/webhook/`
+  - `webhook/webhook.go`: core handler, `ProcessWebhook`, signature verification, event dispatch
+  - `webhook/github.go`: GitHub webhook parsing
+  - `webhook/gitlab.go`: GitLab webhook parsing
+  - `webhook/gitea.go`: Gitea/Forgejo webhook parsing
+  - `webhook/bitbucket.go`: Bitbucket webhook parsing
+  - `webhook/gerrit.go`: Gerrit webhook parsing (patchset-created, change-merged, change-abandoned, change-restored, comment-added)
+  - `webhook/comment.go`: `extractCommentPayload` for all platforms
+  - `webhook/retry.go`: `StartWebhookRetryWorker`, `notifyWebhookPermanentFailure`
+  - Break import cycle: `webhook` package owns clients via `SetClients()`, notification via `SetNotifyFunc()`
+  - `handlers.WebhookHandler` is now a variable alias for backward compatibility
+  - `notifier.go`: add `SendNotifications`/`SendNotificationSync` exports and `webhook.SetNotifyFunc()` wiring
+- **Add Gerrit platform support:**
+  - `common/platforms/gerrit.go`: full `PlatformClient` implementation using `go-gerrit` SDK (github.com/andygrunwald/go-gerrit v1.1.1)
+  - Add `PlatformGerrit` constant, `GerritAuth` model, Gerrit fields to `RepoGroup`/`RepoGroupConfig`/`TokensConfig`
+  - Gerrit integration in `config.go`, `bootstrap.go`, `syncer.go`, `merge_checker.go`, `helpers.go`
+  - Gerrit webhook parsing (5 event types) and signature verification
+  - Change ID format: `project~number`
 - **Refactor: event consumer Actor-model architecture with goroutine pools:**
   - Split single-threaded event consumer into dispatcher + worker pool pattern
   - Add `daemon/consumer/pool.go` — fixed worker pool (4 goroutines, buffered channel) for concurrent event processing
