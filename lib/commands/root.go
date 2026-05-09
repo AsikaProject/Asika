@@ -70,7 +70,7 @@ func setAuthHeader(req *http.Request, token string) {
 	if isAPIKey(token) {
 		req.Header.Set("X-API-Key", token)
 	} else {
-		setAuthHeader(req, token)
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 }
 

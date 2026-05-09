@@ -16,7 +16,7 @@ func NewTestDB(t *testing.T) *bbolt.DB {
 
 	// Create buckets
 	db.Update(func(tx *bbolt.Tx) error {
-		buckets := []string{"config", "repos", "prs", "logs", "queue_items", "users", "sync_history", "pr_index_by_id", "pr_index_by_rg_num", "webhook_retries", "config_history"}
+		buckets := []string{"config", "repos", "prs", "logs", "queue_items", "users", "sync_history", "pr_index_by_id", "pr_index_by_rg_num", "webhook_retries", "config_history", "api_keys"}
 		for _, b := range buckets {
 			tx.CreateBucketIfNotExists([]byte(b))
 		}
