@@ -1,157 +1,108 @@
 package platforms
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
+
+	bitbucket "github.com/ktrysmt/go-bitbucket"
 
 	"asika/common/models"
 )
 
 // BitbucketClient implements PlatformClient for Bitbucket Cloud (api.bitbucket.org/2.0)
 type BitbucketClient struct {
-	httpClient    *http.Client
-	token         string
+	client        *bitbucket.Client
 	webhookSecret string
 }
 
 // NewBitbucketClient creates a new Bitbucket Cloud client
 func NewBitbucketClient(token string, webhookSecret string) *BitbucketClient {
+	c, err := bitbucket.NewAPITokenAuth("", token)
+	if err != nil {
+		return &BitbucketClient{webhookSecret: webhookSecret}
+	}
 	return &BitbucketClient{
-		httpClient:    &http.Client{Timeout: 30 * time.Second},
-		token:         token,
+		client:        c,
 		webhookSecret: webhookSecret,
 	}
 }
 
-func (c *BitbucketClient) apiURL(owner, repo string) string {
-	return fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s", owner, repo)
+func prOptions(owner, repo, id string) *bitbucket.PullRequestsOptions {
+	return &bitbucket.PullRequestsOptions{
+		Owner:    owner,
+		RepoSlug: repo,
+		ID:       id,
+	}
 }
 
-func (c *BitbucketClient) doRequest(ctx context.Context, method, url string, body io.Reader) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+func (c *BitbucketClient) prToRecord(pr interface{}, owner, repo string) *models.PRRecord {
+	m, ok := pr.(map[string]interface{})
+	if !ok {
+		return &models.PRRecord{Platform: "bitbucket"}
 	}
 
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("bitbucket API error %d: %s", resp.StatusCode, string(data))
-	}
-	return data, nil
-}
-
-// bbPullRequest represents a Bitbucket pull request response
-type bbPullRequest struct {
-	ID           int             `json:"id"`
-	Title        string          `json:"title"`
-	State        string          `json:"state"`
-	Description  string          `json:"description"`
-	Links        bbLinks         `json:"links"`
-	Author       *bbUser         `json:"author"`
-	Source       *bbBranch       `json:"source"`
-	Destination  *bbBranch       `json:"destination"`
-	CreatedOn    string          `json:"created_on"`
-	UpdatedOn    string          `json:"updated_on"`
-	Participants []bbParticipant `json:"participants"`
-}
-
-type bbLinks struct {
-	HTML bbLink `json:"html"`
-}
-
-type bbLink struct {
-	Href string `json:"href"`
-}
-
-type bbUser struct {
-	DisplayName string `json:"display_name"`
-	Username    string `json:"username"`
-}
-
-type bbBranch struct {
-	Branch bbRef    `json:"branch"`
-	Commit bbCommit `json:"commit"`
-}
-
-type bbRef struct {
-	Name string `json:"name"`
-}
-
-type bbCommit struct {
-	Hash string `json:"hash"`
-}
-
-type bbParticipant struct {
-	Approved bool    `json:"approved"`
-	User     *bbUser `json:"user"`
-}
-
-type bbPullRequestList struct {
-	Values []bbPullRequest `json:"values"`
-}
-
-func (c *BitbucketClient) bbToRecord(pr *bbPullRequest, owner, repo string) *models.PRRecord {
 	record := &models.PRRecord{
-		ID:       fmt.Sprintf("%d", pr.ID),
 		Platform: "bitbucket",
-		PRNumber: pr.ID,
-		Title:    pr.Title,
-		State:    bbStateToPRState(pr.State),
-		HTMLURL:  pr.Links.HTML.Href,
 		Events:   []models.PREvent{},
 	}
 
-	if pr.Author != nil {
-		record.Author = pr.Author.DisplayName
-		if pr.Author.Username != "" {
-			record.Author = pr.Author.Username
+	if id, ok := m["id"].(float64); ok {
+		record.ID = fmt.Sprintf("%d", int(id))
+		record.PRNumber = int(id)
+	}
+	if title, ok := m["title"].(string); ok {
+		record.Title = title
+	}
+	if state, ok := m["state"].(string); ok {
+		record.State = bbStateToPRState(state)
+	}
+	if links, ok := m["links"].(map[string]interface{}); ok {
+		if html, ok := links["html"].(map[string]interface{}); ok {
+			if href, ok := html["href"].(string); ok {
+				record.HTMLURL = href
+			}
 		}
 	}
-
-	if pr.Source != nil {
-		record.BranchInfo = &models.PRBranchInfo{
-			MaintainerCanModify: true,
+	if author, ok := m["author"].(map[string]interface{}); ok {
+		if dn, ok := author["display_name"].(string); ok {
+			record.Author = dn
 		}
-		if pr.Source.Branch.Name != "" {
-			record.BranchInfo.HeadBranch = pr.Source.Branch.Name
-		}
-		if pr.Source.Commit.Hash != "" {
-			record.BranchInfo.HeadSHA = pr.Source.Commit.Hash
-		}
-		if pr.Destination != nil && pr.Destination.Branch.Name != "" {
-			record.BranchInfo.BaseBranch = pr.Destination.Branch.Name
+		if username, ok := author["username"].(string); ok && username != "" {
+			record.Author = username
 		}
 	}
-
-	if pr.CreatedOn != "" {
-		if t, err := time.Parse(time.RFC3339, pr.CreatedOn); err == nil {
+	if src, ok := m["source"].(map[string]interface{}); ok {
+		record.BranchInfo = &models.PRBranchInfo{MaintainerCanModify: true}
+		if branch, ok := src["branch"].(map[string]interface{}); ok {
+			if name, ok := branch["name"].(string); ok {
+				record.BranchInfo.HeadBranch = name
+			}
+		}
+		if commit, ok := src["commit"].(map[string]interface{}); ok {
+			if hash, ok := commit["hash"].(string); ok {
+				record.BranchInfo.HeadSHA = hash
+			}
+		}
+		if dst, ok := m["destination"].(map[string]interface{}); ok {
+			if branch, ok := dst["branch"].(map[string]interface{}); ok {
+				if name, ok := branch["name"].(string); ok {
+					record.BranchInfo.BaseBranch = name
+				}
+			}
+		}
+	}
+	if createdOn, ok := m["created_on"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, createdOn); err == nil {
 			record.CreatedAt = t
 		}
 	}
-	if pr.UpdatedOn != "" {
-		if t, err := time.Parse(time.RFC3339, pr.UpdatedOn); err == nil {
+	if updatedOn, ok := m["updated_on"].(string); ok {
+		if t, err := time.Parse(time.RFC3339, updatedOn); err == nil {
 			record.UpdatedAt = t
 		}
 	}
@@ -172,118 +123,113 @@ func bbStateToPRState(state string) string {
 	}
 }
 
-// GetPR retrieves a pull request
 func (c *BitbucketClient) GetPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
-	url := fmt.Sprintf("%s/pullrequests/%d", c.apiURL(owner, repo), number)
-	data, err := c.doRequest(ctx, "GET", url, nil)
+	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
+	result, err := c.client.Repositories.PullRequests.Get(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR: %w", err)
 	}
-
-	var pr bbPullRequest
-	if err := json.Unmarshal(data, &pr); err != nil {
-		return nil, fmt.Errorf("failed to parse PR: %w", err)
-	}
-	return c.bbToRecord(&pr, owner, repo), nil
+	return c.prToRecord(result, owner, repo), nil
 }
 
-// ListPRs lists pull requests
 func (c *BitbucketClient) ListPRs(ctx context.Context, owner, repo string, state string) ([]*models.PRRecord, error) {
-	url := fmt.Sprintf("%s/pullrequests", c.apiURL(owner, repo))
-	if state != "" {
-		stateParam := strings.ToLower(state)
-		if stateParam == "closed" {
-			stateParam = "declined"
-		}
-		url += "?state=" + stateParam
+	opts := &bitbucket.PullRequestsOptions{
+		Owner:    owner,
+		RepoSlug: repo,
 	}
-
-	data, err := c.doRequest(ctx, "GET", url, nil)
+	if state != "" {
+		opts.States = []string{strings.ToUpper(state)}
+	}
+	result, err := c.client.Repositories.PullRequests.List(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list PRs: %w", err)
 	}
-
-	var list bbPullRequestList
-	if err := json.Unmarshal(data, &list); err != nil {
-		return nil, fmt.Errorf("failed to parse PR list: %w", err)
-	}
-
-	var result []*models.PRRecord
-	for i := range list.Values {
-		result = append(result, c.bbToRecord(&list.Values[i], owner, repo))
-	}
-	return result, nil
+	return c.prListToRecords(result, owner, repo), nil
 }
 
-// ApprovePR approves a pull request
+func (c *BitbucketClient) prListToRecords(result interface{}, owner, repo string) []*models.PRRecord {
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	values, ok := m["values"].([]interface{})
+	if !ok {
+		return nil
+	}
+	var records []*models.PRRecord
+	for _, v := range values {
+		records = append(records, c.prToRecord(v, owner, repo))
+	}
+	return records
+}
+
 func (c *BitbucketClient) ApprovePR(ctx context.Context, owner, repo string, number int) error {
-	url := fmt.Sprintf("%s/pullrequests/%d/approve", c.apiURL(owner, repo), number)
-	_, err := c.doRequest(ctx, "POST", url, nil)
+	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
+	_, err := c.client.Repositories.PullRequests.Approve(opts)
 	if err != nil {
 		return fmt.Errorf("failed to approve PR: %w", err)
 	}
 	return nil
 }
 
-// MergePR merges a pull request
 func (c *BitbucketClient) MergePR(ctx context.Context, owner, repo string, number int, method string) error {
-	url := fmt.Sprintf("%s/pullrequests/%d/merge", c.apiURL(owner, repo), number)
-	body := `{}`
+	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
 	if method != "" {
-		body = fmt.Sprintf(`{"merge_strategy": "%s"}`, method)
+		opts.MergeStrategy = bitbucket.PullRequestsMergeStrategy(method)
 	}
-	_, err := c.doRequest(ctx, "POST", url, strings.NewReader(body))
+	_, err := c.client.Repositories.PullRequests.Merge(opts)
 	if err != nil {
 		return fmt.Errorf("failed to merge PR: %w", err)
 	}
 	return nil
 }
 
-// ClosePR declines a pull request
 func (c *BitbucketClient) ClosePR(ctx context.Context, owner, repo string, number int) error {
-	url := fmt.Sprintf("%s/pullrequests/%d/decline", c.apiURL(owner, repo), number)
-	_, err := c.doRequest(ctx, "POST", url, nil)
+	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
+	_, err := c.client.Repositories.PullRequests.Decline(opts)
 	if err != nil {
 		return fmt.Errorf("failed to decline PR: %w", err)
 	}
 	return nil
 }
 
-// ReopenPR reopens a pull request (Bitbucket doesn't support reopen via API)
 func (c *BitbucketClient) ReopenPR(ctx context.Context, owner, repo string, number int) error {
 	return fmt.Errorf("bitbucket does not support reopening PRs via API")
 }
 
-// CommentPR adds a comment to a pull request
 func (c *BitbucketClient) CommentPR(ctx context.Context, owner, repo string, number int, body string) error {
-	url := fmt.Sprintf("%s/pullrequests/%d/comments", c.apiURL(owner, repo), number)
-	payload := fmt.Sprintf(`{"content": {"raw": %q}}`, body)
-	_, err := c.doRequest(ctx, "POST", url, strings.NewReader(payload))
+	opts := &bitbucket.PullRequestCommentOptions{
+		Owner:         owner,
+		RepoSlug:      repo,
+		PullRequestID: fmt.Sprintf("%d", number),
+		Content:       body,
+	}
+	_, err := c.client.Repositories.PullRequests.AddComment(opts)
 	if err != nil {
 		return fmt.Errorf("failed to comment on PR: %w", err)
 	}
 	return nil
 }
 
-// AddLabel — Bitbucket doesn't support labels on PRs
 func (c *BitbucketClient) AddLabel(ctx context.Context, owner, repo string, number int, label string, color string) error {
 	return fmt.Errorf("bitbucket does not support labels on PRs")
 }
 
-// RemoveLabel — Bitbucket doesn't support labels on PRs
 func (c *BitbucketClient) RemoveLabel(ctx context.Context, owner, repo string, number int, label string) error {
 	return fmt.Errorf("bitbucket does not support labels on PRs")
 }
 
-// CreateLabel — no-op for Bitbucket
 func (c *BitbucketClient) CreateLabel(ctx context.Context, owner, repo, name, color, description string) error {
 	return nil
 }
 
-// GetBranch checks if a branch exists
 func (c *BitbucketClient) GetBranch(ctx context.Context, owner, repo, branch string) (bool, error) {
-	url := fmt.Sprintf("%s/refs/branches/%s", c.apiURL(owner, repo), branch)
-	_, err := c.doRequest(ctx, "GET", url, nil)
+	opts := &bitbucket.RepositoryBranchOptions{
+		Owner:      owner,
+		RepoSlug:   repo,
+		BranchName: branch,
+	}
+	_, err := c.client.Repositories.Repository.GetBranch(opts)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			return false, nil
@@ -293,211 +239,250 @@ func (c *BitbucketClient) GetBranch(ctx context.Context, owner, repo, branch str
 	return true, nil
 }
 
-// ListBranches lists all branches
 func (c *BitbucketClient) ListBranches(ctx context.Context, owner, repo string) ([]string, error) {
-	url := fmt.Sprintf("%s/refs/branches", c.apiURL(owner, repo))
-	data, err := c.doRequest(ctx, "GET", url, nil)
+	opts := &bitbucket.RepositoryBranchOptions{
+		Owner:    owner,
+		RepoSlug: repo,
+		Pagelen:  100,
+	}
+	result, err := c.client.Repositories.Repository.ListBranches(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list branches: %w", err)
 	}
-
-	var result struct {
-		Values []struct {
-			Name string `json:"name"`
-		} `json:"values"`
-	}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse branches: %w", err)
-	}
-
 	var branches []string
-	for _, b := range result.Values {
+	for _, b := range result.Branches {
 		branches = append(branches, b.Name)
 	}
 	return branches, nil
 }
 
-// DeleteBranch deletes a branch
 func (c *BitbucketClient) DeleteBranch(ctx context.Context, owner, repo, branch string) error {
-	url := fmt.Sprintf("%s/refs/branches/%s", c.apiURL(owner, repo), branch)
-	_, err := c.doRequest(ctx, "DELETE", url, nil)
+	opts := &bitbucket.RepositoryBranchDeleteOptions{
+		Owner:   owner,
+		RepoSlug: repo,
+		RefName: branch,
+	}
+	err := c.client.Repositories.Repository.DeleteBranch(opts)
 	if err != nil {
 		return fmt.Errorf("failed to delete branch: %w", err)
 	}
 	return nil
 }
 
-// GetDefaultBranch gets the default branch
 func (c *BitbucketClient) GetDefaultBranch(ctx context.Context, owner, repo string) (string, error) {
-	url := c.apiURL(owner, repo)
-	data, err := c.doRequest(ctx, "GET", url, nil)
+	opts := &bitbucket.RepositoryOptions{
+		Owner:    owner,
+		RepoSlug: repo,
+	}
+	result, err := c.client.Repositories.Repository.Get(opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to get repo: %w", err)
 	}
-
-	var result struct {
-		Mainbranch *struct {
-			Name string `json:"name"`
-		} `json:"mainbranch"`
-	}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return "", fmt.Errorf("failed to parse repo: %w", err)
-	}
-	if result.Mainbranch != nil && result.Mainbranch.Name != "" {
+	if result.Mainbranch.Name != "" {
 		return result.Mainbranch.Name, nil
 	}
 	return "main", nil
 }
 
-// GetCIStatus gets CI status from Bitbucket Pipelines
 func (c *BitbucketClient) GetCIStatus(ctx context.Context, owner, repo string, commitSHA string) (string, error) {
-	url := fmt.Sprintf("%s/commit/%s/statuses", c.apiURL(owner, repo), commitSHA)
-	data, err := c.doRequest(ctx, "GET", url, nil)
+	opts := &bitbucket.PipelinesOptions{
+		Owner:    owner,
+		RepoSlug: repo,
+		Sort:     "-created_on",
+	}
+	result, err := c.client.Repositories.Pipelines.List(opts)
 	if err != nil {
 		return "none", nil
 	}
-
-	var result struct {
-		Values []struct {
-			State string `json:"state"`
-		} `json:"values"`
-	}
-	if err := json.Unmarshal(data, &result); err != nil {
+	m, ok := result.(map[string]interface{})
+	if !ok {
 		return "none", nil
 	}
-
-	for _, s := range result.Values {
-		switch strings.ToUpper(s.State) {
-		case "SUCCESSFUL", "COMPLETED":
-			return "success", nil
-		case "FAILED", "ERROR":
-			return "failure", nil
-		case "IN_PROGRESS", "PENDING", "RUNNING":
-			return "pending", nil
+	values, ok := m["values"].([]interface{})
+	if !ok || len(values) == 0 {
+		return "none", nil
+	}
+	for _, v := range values {
+		pipeline, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		target, ok := pipeline["target"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if refType, ok := target["type"].(string); ok && refType == "commit" {
+			commit, ok := target["commit"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if hash, ok := commit["hash"].(string); ok && hash == commitSHA {
+				if state, ok := pipeline["state"].(map[string]interface{}); ok {
+					if name, ok := state["name"].(string); ok {
+						switch strings.ToUpper(name) {
+						case "COMPLETED":
+							if result, ok := state["result"].(map[string]interface{}); ok {
+								if resultName, ok := result["name"].(string); ok {
+									switch strings.ToUpper(resultName) {
+									case "SUCCESSFUL":
+										return "success", nil
+									case "FAILED":
+										return "failure", nil
+									}
+								}
+							}
+							return "success", nil
+						case "IN_PROGRESS", "PENDING":
+							return "pending", nil
+						}
+					}
+				}
+			}
 		}
 	}
 	return "none", nil
 }
 
-// GetDefaultMergeMethod returns the default merge method
 func (c *BitbucketClient) GetDefaultMergeMethod(ctx context.Context, owner, repo string) (string, error) {
 	return "merge", nil
 }
 
-// HasMultipleMergeMethods checks if multiple merge methods are available
 func (c *BitbucketClient) HasMultipleMergeMethods(ctx context.Context, owner, repo string) (bool, error) {
 	return false, nil
 }
 
-// GetApprovals gets the list of approvers
 func (c *BitbucketClient) GetApprovals(ctx context.Context, owner, repo string, number int) ([]string, error) {
-	url := fmt.Sprintf("%s/pullrequests/%d", c.apiURL(owner, repo), number)
-	data, err := c.doRequest(ctx, "GET", url, nil)
+	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
+	result, err := c.client.Repositories.PullRequests.Get(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR: %w", err)
 	}
-
-	var pr bbPullRequest
-	if err := json.Unmarshal(data, &pr); err != nil {
-		return nil, fmt.Errorf("failed to parse PR: %w", err)
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		return nil, nil
 	}
-
+	participants, ok := m["participants"].([]interface{})
+	if !ok {
+		return nil, nil
+	}
 	var approvers []string
-	for _, p := range pr.Participants {
-		if p.Approved && p.User != nil {
-			approvers = append(approvers, p.User.DisplayName)
+	for _, p := range participants {
+		pm, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if approved, ok := pm["approved"].(bool); ok && approved {
+			if user, ok := pm["user"].(map[string]interface{}); ok {
+				if dn, ok := user["display_name"].(string); ok {
+					approvers = append(approvers, dn)
+				}
+			}
 		}
 	}
 	return approvers, nil
 }
 
-// VerifyWebhookSignature verifies the webhook signature using HMAC-SHA256
-// Bitbucket Cloud sends X-Hub-Signature header: sha256=<hex_hmac>
 func (c *BitbucketClient) VerifyWebhookSignature(body []byte, signature string) bool {
 	if c.webhookSecret == "" {
 		return false
 	}
-
 	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
 	mac.Write(body)
 	expectedMAC := hex.EncodeToString(mac.Sum(nil))
-
 	if strings.HasPrefix(signature, "sha256=") {
 		signature = strings.TrimPrefix(signature, "sha256=")
 	}
-
 	return hmac.Equal([]byte(signature), []byte(expectedMAC))
 }
 
-// GetPRCommits gets the commits in a PR
 func (c *BitbucketClient) GetPRCommits(ctx context.Context, owner, repo string, number int) ([]string, error) {
-	url := fmt.Sprintf("%s/pullrequests/%d/commits", c.apiURL(owner, repo), number)
-	data, err := c.doRequest(ctx, "GET", url, nil)
+	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
+	result, err := c.client.Repositories.PullRequests.GetCommits(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list PR commits: %w", err)
 	}
-
-	var result struct {
-		Values []struct {
-			Hash string `json:"hash"`
-		} `json:"values"`
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		return nil, nil
 	}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse commits: %w", err)
+	values, ok := m["values"].([]interface{})
+	if !ok {
+		return nil, nil
 	}
-
 	var shas []string
-	for _, c := range result.Values {
-		shas = append(shas, c.Hash)
+	for _, v := range values {
+		vm, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if hash, ok := vm["hash"].(string); ok {
+			shas = append(shas, hash)
+		}
 	}
 	return shas, nil
 }
 
-// GetDiffFiles gets the changed files in a PR
 func (c *BitbucketClient) GetDiffFiles(ctx context.Context, owner, repo string, number int) ([]string, error) {
-	url := fmt.Sprintf("%s/pullrequests/%d/diff", c.apiURL(owner, repo), number)
-	data, err := c.doRequest(ctx, "GET", url, nil)
+	opts := &bitbucket.DiffStatOptions{
+		Owner:             owner,
+		RepoSlug:          repo,
+		Spec:              fmt.Sprintf("..%d", number),
+		FromPullRequestID: number,
+	}
+	result, err := c.client.Repositories.Diff.GetDiffStat(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR diff: %w", err)
 	}
-	return parseDiffFiles(string(data)), nil
+	var files []string
+	for _, ds := range result.DiffStats {
+		if old, ok := ds.Old["path"].(string); ok {
+			files = append(files, old)
+		}
+		if nw, ok := ds.New["path"].(string); ok && nw != "" {
+			files = append(files, nw)
+		}
+	}
+	return files, nil
 }
 
-// GetPRBranchInfo gets branch metadata for rebase operations
 func (c *BitbucketClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
-	url := fmt.Sprintf("%s/pullrequests/%d", c.apiURL(owner, repo), number)
-	data, err := c.doRequest(ctx, "GET", url, nil)
+	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
+	result, err := c.client.Repositories.PullRequests.Get(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR: %w", err)
 	}
-
-	var pr bbPullRequest
-	if err := json.Unmarshal(data, &pr); err != nil {
-		return nil, fmt.Errorf("failed to parse PR: %w", err)
+	m, ok := result.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("unexpected PR response type")
 	}
-
-	info := &models.PRBranchInfo{
-		MaintainerCanModify: true,
+	info := &models.PRBranchInfo{MaintainerCanModify: true}
+	if src, ok := m["source"].(map[string]interface{}); ok {
+		if branch, ok := src["branch"].(map[string]interface{}); ok {
+			if name, ok := branch["name"].(string); ok {
+				info.HeadBranch = name
+			}
+		}
+		if commit, ok := src["commit"].(map[string]interface{}); ok {
+			if hash, ok := commit["hash"].(string); ok {
+				info.HeadSHA = hash
+			}
+		}
 	}
-	if pr.Source != nil {
-		info.HeadBranch = pr.Source.Branch.Name
-		info.HeadSHA = pr.Source.Commit.Hash
-	}
-	if pr.Destination != nil {
-		info.BaseBranch = pr.Destination.Branch.Name
+	if dst, ok := m["destination"].(map[string]interface{}); ok {
+		if branch, ok := dst["branch"].(map[string]interface{}); ok {
+			if name, ok := branch["name"].(string); ok {
+				info.BaseBranch = name
+			}
+		}
 	}
 	return info, nil
 }
 
-// RequestReview adds a reviewer to a Bitbucket PR.
 func (c *BitbucketClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
 	for _, reviewer := range reviewers {
-		payload := map[string]interface{}{
-			"uuid": reviewer,
-		}
-		body, _ := json.Marshal(payload)
-		path := fmt.Sprintf("/2.0/repositories/%s/%s/pullrequests/%d/request-changes", owner, repo, number)
-		_, err := c.doRequest(ctx, http.MethodPost, path, bytes.NewReader(body))
+		opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
+		opts.Reviewers = []string{reviewer}
+		_, err := c.client.Repositories.PullRequests.RequestChanges(opts)
 		if err != nil {
 			return fmt.Errorf("failed to request review from %s: %w", reviewer, err)
 		}
