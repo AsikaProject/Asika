@@ -84,7 +84,10 @@ func TestHandleResponse_ObjectWithError(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL)
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("http.Get failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	result := handleResponse(resp, "no data")
@@ -100,7 +103,10 @@ func TestHandleResponse_ObjectWithMessage(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL)
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("http.Get failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	result := handleResponse(resp, "no data")
@@ -116,7 +122,10 @@ func TestHandleResponse_DataArray(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL)
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("http.Get failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	result := handleResponse(resp, "no data")
@@ -131,7 +140,10 @@ func TestHandleWriteResponse_Success(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL)
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("http.Get failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	// Should not panic
@@ -144,7 +156,10 @@ func TestHandleWriteResponse_PlainText(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL)
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("http.Get failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	handleWriteResponse(resp, "default success")
@@ -156,7 +171,10 @@ func TestHandleObjectResponse_Success(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL)
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("http.Get failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	// Should not panic
@@ -169,7 +187,10 @@ func TestHandleObjectResponse_Error(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	resp, _ := http.Get(ts.URL)
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("http.Get failed: %v", err)
+	}
 	defer resp.Body.Close()
 
 	handleObjectResponse(resp, "no data")
