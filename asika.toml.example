@@ -223,10 +223,12 @@ skip_draft_prs    = true            # skip draft/WIP PRs
 
 # Discord bot configuration
 [discord]
-enabled    = false
-token      = "your-bot-token"
-admin_ids  = ["user_id_1", "user_id_2"]
-channel_id = "your-channel-id"
+enabled       = false
+token         = "your-bot-token"
+admin_ids     = ["user_id_1", "user_id_2"]
+operator_ids  = ["user_id_3"]
+viewer_ids    = ["user_id_4"]
+channel_id    = "your-channel-id"
 
 # Feishu/Lark bot configuration
 [feishu]
@@ -237,17 +239,48 @@ webhook_url        = ""  # optional, for notifications
 verification_token = ""  # for event callback verification
 encrypt_key        = ""  # for event callback encryption
 admin_ids          = ["ou_xxx", "oc_xxx"]
+operator_ids       = ["ou_yyy"]
+viewer_ids         = ["ou_zzz"]
 
 # Telegram bot configuration
 [telegram]
-enabled   = false
-token     = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-admin_ids = [12345678, 87654321]
-chat_ids  = ["@mychannel", "-1001234567890"]
+enabled      = false
+token        = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+admin_ids    = [12345678, 87654321]
+operator_ids = [11111111]
+viewer_ids   = [22222222]
+chat_ids     = ["@mychannel", "-1001234567890"]
 
 # Slack bot configuration
 [slack]
-enabled   = false
-token     = "xoxb-your-bot-token"       # Bot User OAuth Token
-app_token = "xapp-your-app-token"        # App-Level Token (for Socket Mode)
-admin_ids = ["U0123456789"]
+enabled      = false
+token        = "xoxb-your-bot-token"       # Bot User OAuth Token
+app_token    = "xapp-your-app-token"        # App-Level Token (for Socket Mode)
+admin_ids    = ["U0123456789"]
+operator_ids = ["U0987654321"]
+viewer_ids   = ["U0555566666"]
+
+# Bot UID Permission Model
+# -------------------------
+# Each platform supports 3-tier role-based access via TOML config:
+#   admin_ids    — Full access: user management, config, API keys, all PR operations
+#   operator_ids — PR operations (approve/close/rebase/etc) + list users
+#   viewer_ids   — Read-only: list PRs, view queue, stats, usage
+#
+# When all three lists are empty, the bot is open to everyone (backward compatible).
+# When only admin_ids is set, only those users are admins — everyone else is rejected.
+# Users are matched by platform-native IDs (Telegram: int64, Discord/Feishu/Slack: string).
+#
+# Bot Commands (all platforms):
+#   User management:  /adduser, /deluser, /listusers
+#   API key management: /apikey new <name> <role>, /apikey list, /apikey revoke <id>
+#   PR operations:    /prs, /pr, /approve, /close, /reopen, /spam, /queue, /rebase, /cherrypick
+#   System:           /stats, /usage, /config, /version
+#
+# API Keys
+# --------
+# API keys provide long-lived authentication for CI/CD and external integrations.
+# Create keys via WebUI (/apikeys), bot command (/apikey new), or CLI (asika apikey create).
+# Keys are delivered via DM and auto-deleted after 2 minutes.
+# Use X-API-Key header for authentication:
+#   curl -H "X-API-Key: ak_xxx..." http://localhost:8080/api/v1/stats
