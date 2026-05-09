@@ -1,6 +1,37 @@
 # ChangeLog for Asika
 
 ## Unreleased
+- **Feature: MongoDB storage backend with migration tools:**
+  - Add `mongoStorage` implementing `Storage` interface with all 22 methods
+  - Add `MigrateBboltToMongo` and `MigrateMongoToBbolt` migration utilities
+  - Extend `DatabaseConfig` with `Type` ("bbolt"/"mongo") and `Name` fields
+  - Update `db.Init()` to accept both string (backward compat) and `DatabaseConfig`
+  - Add MongoDB index creation on init (pr_id, pr_rg_num, username, apikey)
+  - Update `InitWithRetry`/`Bootstrap` to pass full config to `db.Init`
+  - Promote mongo-driver/v2 from indirect to direct dependency
+- **Refactor: decouple database layer with Storage interface:**
+  - Introduce `db.Storage` interface (22 methods) abstracting all database operations
+  - Move bbolt implementation to `bboltStorage` in `common/db/bbolt.go`
+  - Package-level proxy functions delegate to `defaultStorage`
+  - `InitWithStorage()` allows injecting custom implementations
+  - Update testutil to return `Storage` interface instead of raw `*bbolt.DB`
+  - All 29 test files updated: `db.DB = tdb` → `testutil.NewTestDB(t)`
+- **Refactor: replace custom Bitbucket client with go-bitbucket SDK:**
+  - Replace 506-line hand-written HTTP client with ktrysmt/go-bitbucket
+  - Reduces `bitbucket.go` to ~280 lines
+  - Retains custom `VerifyWebhookSignature` (SDK has no webhook auth)
+  - Fix: lowercase state in `parseBitbucketWebhook`
+- **Fix: user management permissions for non-operator roles:**
+  - Frontend now only includes permissions in create/update requests when role is 'operator'
+  - Viewer and admin roles cannot set granular permissions via WebUI
+- **Fix: webhook parser edge cases:**
+  - Fix GitLab Draft prefix check (6 chars not 7)
+  - Fix Gerrit: set `IsDraft=true` for DRAFT status
+  - Fix Bitbucket: lowercase state in parseBitbucketWebhook
+- **Test: add webhook and reviewer test suites:**
+  - `webhook_test.go`: 30+ tests covering all platform parsers, comment extraction, event dispatch
+  - `reviewer_test.go`: 12 tests covering matchReviewRule, HandlePROpened edge cases
+- **Fix: PROJECT.md Mermaid diagram syntax (remove parentheses in node IDs)**
 - **Feature: dynamic worker pool with config-driven hot reload and metrics:**
   - Replace fixed 4-worker pool with dynamic sizing (`min_workers` to `max_workers`)
   - Scale up when channel utilization >= `scale_up_pct` (default 75%), scale down when <= `scale_down_pct` (default 25%)
