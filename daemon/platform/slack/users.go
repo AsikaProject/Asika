@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
@@ -153,22 +152,7 @@ func (b *Bot) handleAPIKey(ev *slack.MessageEvent, client *socketmode.Client, pa
 		}
 		body := map[string]interface{}{"name": name, "role": role}
 		b.doAPIKeyAPI(client, ev.Channel, "POST", "/api/v1/apikeys", body, "API key created")
-		go func() {
-			time.Sleep(2 * time.Minute)
-			b.deleteSlackMessage(ev.Channel, ev.Timestamp)
-		}()
-	case "list":
-		b.handleAPIKeyList(ev, client)
-	case "revoke":
-		if len(parts) < 3 {
-			b.postMessage(client, ev.Channel, "Usage: `apikey revoke <key_id>`")
-			return
-		}
 		b.doAPIKeyAPI(client, ev.Channel, "DELETE", fmt.Sprintf("/api/v1/apikeys/%s", parts[2]), nil, "✅ API key revoked")
-		go func() {
-			time.Sleep(2 * time.Minute)
-			b.deleteSlackMessage(ev.Channel, ev.Timestamp)
-		}()
 	default:
 		b.postMessage(client, ev.Channel, "Unknown subcommand. Use: new, list, revoke")
 	}
@@ -247,7 +231,7 @@ func (b *Bot) doAPIKeyAPI(client *socketmode.Client, channel, method, path strin
 	}
 	if method == "POST" {
 		if key, ok := result["key"].(string); ok {
-			b.postMessage(client, channel, successMsg+"\n\n`"+key+"`\n\n⚠️ Copy it now!")
+			b.postMessage(client, channel, successMsg+"\n\n`"+key+"`\n\n⚠️ Copy it now! This message will be deleted in 2 min.")
 			return
 		}
 	}

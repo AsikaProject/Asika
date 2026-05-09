@@ -144,9 +144,13 @@ func (b *Bot) handleMessageEvent(ctx context.Context, raw json.RawMessage) (inte
 	slog.Info("feishu bot: received message", "sender", senderID, "text", text)
 	reply := b.processCommand(senderID, text)
 	if reply != "" {
-		// Auto-delete API key messages after 2 minutes
+		// If reply contains API key, send via DM instead
 		if strings.Contains(reply, "ak_") {
-			go b.scheduleDelete(msg.Message.MessageID, 2*time.Minute)
+			b.sendDM(senderID, reply)
+			return map[string]interface{}{
+				"msg_type": "text",
+				"content":  map[string]interface{}{"text": "🔑 API key created! Check your DMs."},
+			}, nil
 		}
 		return map[string]interface{}{
 			"msg_type": "text",
@@ -203,6 +207,69 @@ func (b *Bot) getUserRole(userID string) string {
 		return "operator"
 	}
 	return "viewer"
+}
+
+// sendDM sends a direct message to a Feishu user and schedules deletion.
+func (b *Bot) sendDM(receiverID string, text string) {
+	// Step 1: Get tenant_access_token
+	tokenReq, _ := http.NewRequest("POST",
+		"https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+		strings.NewReader(fmt.Sprintf(`{"app_id":"%s","app_secret":"%s"}`, b.feishuCfg.AppID, b.feishuCfg.AppSecret)))
+	tokenReq.Header.Set("Content-Type", "application/json")
+	tokenResp, err := http.DefaultClient.Do(tokenReq)
+	if err != nil {
+		slog.Warn("feishu: failed to get tenant_access_token for DM", "error", err)
+		return
+	}
+	defer tokenResp.Body.Close()
+
+	var tokenResult struct {
+		Code              int    `json:"code"`
+		Msg               string `json:"msg"`
+		TenantAccessToken string `json:"tenant_access_token"`
+	}
+	json.NewDecoder(tokenResp.Body).Decode(&tokenResult)
+	if tokenResult.TenantAccessToken == "" {
+		slog.Warn("feishu: empty tenant_access_token for DM", "code", tokenResult.Code)
+		return
+	}
+
+	// Step 2: Send DM
+	sendURL := "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id"
+	sendBody := fmt.Sprintf(`{"receive_id":"%s","msg_type":"text","content":{"text":%q}}`, receiverID, text)
+	sendReq, _ := http.NewRequest("POST", sendURL, strings.NewReader(sendBody))
+	sendReq.Header.Set("Authorization", "Bearer "+tokenResult.TenantAccessToken)
+	sendReq.Header.Set("Content-Type", "application/json")
+	sendResp, err := http.DefaultClient.Do(sendReq)
+	if err != nil {
+		slog.Warn("feishu: failed to send DM", "error", err)
+		return
+	}
+	defer sendResp.Body.Close()
+
+	var sendResult struct {
+		Code int    `json:"code"`
+		Msg  string `json:"msg"`
+		Data struct {
+			MessageID string `json:"message_id"`
+		} `json:"data"`
+	}
+	json.NewDecoder(sendResp.Body).Decode(&sendResult)
+	if sendResult.Data.MessageID == "" {
+		slog.Warn("feishu: DM sent but no message_id", "code", sendResult.Code)
+		return
+	}
+
+	// Step 3: Schedule deletion after 2 minutes
+	go func() {
+		time.Sleep(2 * time.Minute)
+		delURL := fmt.Sprintf("https://open.feishu.cn/open-apis/im/v1/messages/%s", sendResult.Data.MessageID)
+		delReq, _ := http.NewRequest("DELETE", delURL, nil)
+		delReq.Header.Set("Authorization", "Bearer "+tokenResult.TenantAccessToken)
+		delReq.Header.Set("Content-Type", "application/json")
+		http.DefaultClient.Do(delReq)
+		slog.Info("feishu: auto-deleted DM API key message", "message_id", sendResult.Data.MessageID)
+	}()
 }
 
 // scheduleDelete deletes a Feishu message after the given delay.

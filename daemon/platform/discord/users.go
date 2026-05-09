@@ -238,11 +238,18 @@ func (b *Bot) doAPIKeyAPI(s *discordgo.Session, m *discordgo.MessageCreate, meth
 	}
 	if method == "POST" {
 		if key, ok := result["key"].(string); ok {
-			s.ChannelMessageSend(m.ChannelID, successMsg+"\n\n`"+key+"`\n\n⚠️ Copy it now!")
-			go func() {
-				time.Sleep(2 * time.Minute)
-				s.ChannelMessageDelete(m.ChannelID, m.ID)
-			}()
+			// Send to DM for security
+			s.ChannelMessageSend(m.ChannelID, "🔑 API key created! Check your DMs.")
+			if dmChannel, err := s.UserChannelCreate(m.Author.ID); err == nil {
+				dmMsg, _ := s.ChannelMessageSend(dmChannel.ID,
+					successMsg+"\n\n`"+key+"`\n\n⚠️ Copy it now! This message will self-destruct in 2 minutes.")
+				if dmMsg != nil {
+					go func() {
+						time.Sleep(2 * time.Minute)
+						s.ChannelMessageDelete(dmChannel.ID, dmMsg.ID)
+					}()
+				}
+			}
 			return
 		}
 	}
