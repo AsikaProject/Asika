@@ -512,6 +512,55 @@ func (b *Bot) handleRebasePR(s *discordgo.Session, m *discordgo.MessageCreate, p
 	}
 }
 
+func (b *Bot) handleUsage(s *discordgo.Session, m *discordgo.MessageCreate) {
+	url := fmt.Sprintf("http://localhost%s/api/v1/usage", b.cfg.Server.Listen)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to fetch usage: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(body, &result) != nil {
+		s.ChannelMessageSend(m.ChannelID, "Error parsing usage response")
+		return
+	}
+	var sb strings.Builder
+	sb.WriteString("**💻 System Usage**\n\n")
+	if v, ok := result["cpu_percent"]; ok {
+		sb.WriteString(fmt.Sprintf("🖥 CPU: **%.1f%%**\n", utils.ToFloat64(v)))
+	}
+	if v, ok := result["num_cpu"]; ok {
+		sb.WriteString(fmt.Sprintf("🔢 Cores: **%v**\n", v))
+	}
+	if v, ok := result["goroutines"]; ok {
+		sb.WriteString(fmt.Sprintf("🧵 Goroutines: **%v**\n", v))
+	}
+	sb.WriteString("\n**Memory**\n")
+	if v, ok := result["mem_alloc_mb"]; ok {
+		sb.WriteString(fmt.Sprintf("📦 Alloc: **%s**\n", formatMemMB(utils.ToFloat64(v))))
+	}
+	if v, ok := result["mem_total_mb"]; ok {
+		sb.WriteString(fmt.Sprintf("📊 Total: **%s**\n", formatMemMB(utils.ToFloat64(v))))
+	}
+	if v, ok := result["mem_sys_mb"]; ok {
+		sb.WriteString(fmt.Sprintf("🔧 Sys: **%s**\n", formatMemMB(utils.ToFloat64(v))))
+	}
+	if v, ok := result["mem_limit_mb"]; ok {
+		limit := utils.ToFloat64(v)
+		if limit > 0 {
+			sb.WriteString(fmt.Sprintf("🚫 GOMEMLIMIT: **%s**\n", formatMemMB(limit)))
+			if pct, ok := result["mem_percent"]; ok {
+				sb.WriteString(fmt.Sprintf("📈 Usage: **%.1f%%**\n", utils.ToFloat64(pct)))
+			}
+		}
+	}
+	s.ChannelMessageSend(m.ChannelID, sb.String())
+}
+
 func (b *Bot) handleStats(s *discordgo.Session, m *discordgo.MessageCreate) {
 	url := fmt.Sprintf("http://localhost%s/api/v1/stats?period=30", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
@@ -572,6 +621,13 @@ func (b *Bot) handleStats(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func (b *Bot) handleVersion(s *discordgo.Session, m *discordgo.MessageCreate) {
 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("**Asika**\nVersion: `%s`", version.Version))
+}
+
+func formatMemMB(mb float64) string {
+	if mb >= 1024 {
+		return fmt.Sprintf("%.2f GB", mb/1024)
+	}
+	return fmt.Sprintf("%.1f MB", mb)
 }
 
 func (b *Bot) handleCherryPickPR(s *discordgo.Session, m *discordgo.MessageCreate, parts []string) {

@@ -257,6 +257,9 @@ func (s *Server) setupRoutes() {
 		// Stats / DORA metrics
 		protected.GET("/stats", handlers.GetStats)
 
+		// Real-time usage (CPU/Memory)
+		protected.GET("/usage", handlers.GetUsage)
+
 		// Sync history (8.5)
 		sync := protected.Group("/sync")
 		sync.Use(RequireAnyRole("viewer", "operator", "admin"))
@@ -378,6 +381,14 @@ func (s *Server) setupRoutes() {
 			user := c.GetString("username")
 			c.HTML(http.StatusOK, "settings.html", gin.H{
 				"title":    "Settings - Asika",
+				"username": user,
+			})
+		})
+
+		ssr.GET("/usage", func(c *gin.Context) {
+			user := c.GetString("username")
+			c.HTML(http.StatusOK, "usage.html", gin.H{
+				"title":    "Usage - Asika",
 				"username": user,
 			})
 		})

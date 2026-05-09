@@ -128,6 +128,8 @@ func (b *Bot) processCommand(senderID, text string) string {
 		return b.doRebase(senderID, parts[1], parts[2])
 	case lower == "stats" || lower == "/stats":
 		return b.showStatsText()
+	case lower == "usage" || lower == "/usage":
+		return b.showUsageText()
 	case lower == "version" || lower == "/version":
 		return b.showVersionText()
 	case strings.HasPrefix(lower, "cherry-pick ") || strings.HasPrefix(lower, "/cherry-pick "):
@@ -157,6 +159,7 @@ func (b *Bot) helpText() string {
   rebase <group> <num> - Rebase a PR
   cherry-pick <group> <num> <branch> - Cherry-pick a merged PR
   stats         - Show DORA metrics
+  usage         - Show CPU & memory usage
   version       - Show version info`
 }
 
@@ -606,6 +609,60 @@ func (b *Bot) doCherryPick(senderID, repoGroup, prNumberStr, targetBranch string
 		return "Cherry-pick failed: " + errMsg
 	}
 	return "Cherry-pick request submitted."
+}
+
+func (b *Bot) showUsageText() string {
+	url := fmt.Sprintf("http://localhost%s/api/v1/usage", b.cfg.Server.Listen)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Sprintf("Failed to fetch usage: %v", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(body, &result) != nil {
+		return "Error parsing usage response"
+	}
+	var lines []string
+	lines = append(lines, "System Usage", "─────────────")
+	if v, ok := result["cpu_percent"]; ok {
+		lines = append(lines, fmt.Sprintf("CPU: %.1f%%", utils.ToFloat64(v)))
+	}
+	if v, ok := result["num_cpu"]; ok {
+		lines = append(lines, fmt.Sprintf("Cores: %v", v))
+	}
+	if v, ok := result["goroutines"]; ok {
+		lines = append(lines, fmt.Sprintf("Goroutines: %v", v))
+	}
+	lines = append(lines, "", "Memory", "─────────────")
+	if v, ok := result["mem_alloc_mb"]; ok {
+		lines = append(lines, fmt.Sprintf("Alloc: %s", formatMemMB(utils.ToFloat64(v))))
+	}
+	if v, ok := result["mem_total_mb"]; ok {
+		lines = append(lines, fmt.Sprintf("Total: %s", formatMemMB(utils.ToFloat64(v))))
+	}
+	if v, ok := result["mem_sys_mb"]; ok {
+		lines = append(lines, fmt.Sprintf("Sys: %s", formatMemMB(utils.ToFloat64(v))))
+	}
+	if v, ok := result["mem_limit_mb"]; ok {
+		limit := utils.ToFloat64(v)
+		if limit > 0 {
+			lines = append(lines, fmt.Sprintf("GOMEMLIMIT: %s", formatMemMB(limit)))
+			if pct, ok := result["mem_percent"]; ok {
+				lines = append(lines, fmt.Sprintf("Usage: %.1f%%", utils.ToFloat64(pct)))
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatMemMB(mb float64) string {
+	if mb >= 1024 {
+		return fmt.Sprintf("%.2f GB", mb/1024)
+	}
+	return fmt.Sprintf("%.1f MB", mb)
 }
 
 func (b *Bot) showStatsText() string {

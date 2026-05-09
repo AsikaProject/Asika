@@ -723,6 +723,63 @@ func (b *Bot) handleCherryPickPR(c telebot.Context) error {
 	return c.Send("Cherry-pick request submitted.")
 }
 
+func (b *Bot) handleUsage(c telebot.Context) error {
+	if !b.requireAdmin(c) {
+		return nil
+	}
+	url := fmt.Sprintf("http://localhost%s/api/v1/usage", b.cfg.Server.Listen)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return c.Send(fmt.Sprintf("Failed to fetch usage: %v", err))
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(body, &result) != nil {
+		return c.Send("Error parsing usage response")
+	}
+	var sb strings.Builder
+	sb.WriteString("<b>💻 System Usage</b>\n\n")
+	if v, ok := result["cpu_percent"]; ok {
+		sb.WriteString(fmt.Sprintf("🖥 CPU: <b>%.1f%%</b>\n", utils.ToFloat64(v)))
+	}
+	if v, ok := result["num_cpu"]; ok {
+		sb.WriteString(fmt.Sprintf("🔢 Cores: <b>%v</b>\n", v))
+	}
+	if v, ok := result["goroutines"]; ok {
+		sb.WriteString(fmt.Sprintf("🧵 Goroutines: <b>%v</b>\n", v))
+	}
+	sb.WriteString("\n<b>Memory</b>\n")
+	if v, ok := result["mem_alloc_mb"]; ok {
+		sb.WriteString(fmt.Sprintf("📦 Alloc: <b>%s</b>\n", formatMemMB(utils.ToFloat64(v))))
+	}
+	if v, ok := result["mem_total_mb"]; ok {
+		sb.WriteString(fmt.Sprintf("📊 Total: <b>%s</b>\n", formatMemMB(utils.ToFloat64(v))))
+	}
+	if v, ok := result["mem_sys_mb"]; ok {
+		sb.WriteString(fmt.Sprintf("🔧 Sys: <b>%s</b>\n", formatMemMB(utils.ToFloat64(v))))
+	}
+	if v, ok := result["mem_limit_mb"]; ok {
+		limit := utils.ToFloat64(v)
+		if limit > 0 {
+			sb.WriteString(fmt.Sprintf("🚫 GOMEMLIMIT: <b>%s</b>\n", formatMemMB(limit)))
+			if pct, ok := result["mem_percent"]; ok {
+				sb.WriteString(fmt.Sprintf("📈 Usage: <b>%.1f%%</b>\n", utils.ToFloat64(pct)))
+			}
+		}
+	}
+	return c.Send(sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeHTML})
+}
+
+func formatMemMB(mb float64) string {
+	if mb >= 1024 {
+		return fmt.Sprintf("%.2f GB", mb/1024)
+	}
+	return fmt.Sprintf("%.1f MB", mb)
+}
+
 func (b *Bot) handleStats(c telebot.Context) error {
 	if !b.requireAdmin(c) {
 		return nil

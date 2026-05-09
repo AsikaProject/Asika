@@ -8,6 +8,7 @@ import (
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
 
+	"asika/common/auth"
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
@@ -26,6 +27,7 @@ type Bot struct {
 	spamDetector *syncer.SpamDetector
 	notifier     *notifier.SlackBotNotifier
 	adminIDs     map[string]bool
+	internalToken string
 	stop         chan struct{}
 }
 
@@ -40,14 +42,15 @@ func NewBot(
 	adminIDs []string,
 ) *Bot {
 	b := &Bot{
-		cfg:          cfg,
-		clients:      clients,
-		queueMgr:     queueMgr,
-		syncerRef:    syncerRef,
-		spamDetector: spamDetector,
-		notifier:     slackNotifier,
-		adminIDs:     make(map[string]bool),
-		stop:         make(chan struct{}),
+		cfg:           cfg,
+		clients:       clients,
+		queueMgr:      queueMgr,
+		syncerRef:     syncerRef,
+		spamDetector:  spamDetector,
+		notifier:      slackNotifier,
+		adminIDs:      make(map[string]bool),
+		internalToken: func() string { tok, _ := auth.GenerateInternalToken(); return tok }(),
+		stop:          make(chan struct{}),
 	}
 	for _, id := range adminIDs {
 		b.adminIDs[id] = true
@@ -187,6 +190,8 @@ func (b *Bot) handleMessage(ev *slack.MessageEvent, client *socketmode.Client) {
 		b.handleCherryPickPR(ev, client, parts)
 	case "stats":
 		b.handleStats(ev, client)
+	case "usage":
+		b.handleUsage(ev, client)
 	case "version":
 		b.handleVersion(ev, client)
 	}

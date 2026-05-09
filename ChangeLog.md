@@ -16,6 +16,15 @@
   - Add `internalToken` field to all bot structs (Telegram/Discord/Feishu)
   - Replace all `b.cfg.Auth.JWTSecret` usages in bot API calls with `b.internalToken`
 - **Fix: add missing utils.ToFloat64 conversion in telegram handleStats**
+- **Add real-time system usage monitoring:**
+  - New `GET /api/v1/usage` endpoint returning CPU%, memory alloc/total/sys, GOMEMLIMIT, goroutines, CPU cores
+  - CPU measured via `/proc/stat` + `/proc/self/stat` (Linux, zero extra deps)
+  - Memory from `runtime.ReadMemStats`; GOMEMLIMIT from env var
+  - New `/usage` WebUI page with auto-refresh (5s), progress bar, color-coded thresholds
+  - Add `/usage` bot command to all 4 platforms (Telegram/Discord/Feishu/Slack)
+  - Implement Slack `stats` command (was previously a stub)
+  - Add `nav.usage` / `usage.*` i18n keys (en + zh)
+  - Add `internalToken` to Slack bot struct (was missing)
 - **Performance optimizations:**
   - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
   - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration

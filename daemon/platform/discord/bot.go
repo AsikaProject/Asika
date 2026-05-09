@@ -146,6 +146,8 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 		b.handleCherryPickPR(s, m, parts)
 	case "!stats":
 		b.handleStats(s, m)
+	case "!usage":
+		b.handleUsage(s, m)
 	case "!version":
 		b.handleVersion(s, m)
 	default:

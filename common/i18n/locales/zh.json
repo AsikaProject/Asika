@@ -5,6 +5,7 @@
 	"nav.users": "用户",
 	"nav.settings": "设置",
 	"nav.config": "配置",
+	"nav.usage": "资源占用",
 	"nav.logout": "退出",
 
 	"login.title": "登录 Asika",
@@ -146,6 +147,19 @@
 	"settings.refresh": "刷新",
 	"settings.saved": "设置保存成功",
 	"settings.rollback": "回滚",
+
+	"usage.title": "资源占用",
+	"usage.cpu": "CPU",
+	"usage.cpu_percent": "CPU 占用",
+	"usage.num_cpu": "CPU 核心数",
+	"usage.goroutines": "Goroutines",
+	"usage.memory": "内存",
+	"usage.mem_alloc": "当前分配",
+	"usage.mem_total": "累计分配",
+	"usage.mem_sys": "系统占用",
+	"usage.mem_limit": "GOMEMLIMIT",
+	"usage.mem_percent": "内存占用比",
+	"usage.progress": "内存使用",
 
 	"config.title": "配置",
 	"config.system": "系统",

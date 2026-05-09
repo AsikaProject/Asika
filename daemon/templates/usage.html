@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="{{currentLang}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{template "pwa"}}
+    {{template "styles"}}
+    <title>{{t "usage.title"}}</title>
+</head>
+<body>
+{{template "header" .}}
+<div class="container">
+<h1>{{t "usage.title"}}</h1>
+
+<h2 style="margin-top:20px;">{{t "usage.cpu"}}</h2>
+<div class="stats" id="cpuStats">
+    <div class="stat-card">
+        <h3>{{t "usage.cpu_percent"}}</h3>
+        <p id="cpuPercent">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{t "usage.num_cpu"}}</h3>
+        <p id="numCPU">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{t "usage.goroutines"}}</h3>
+        <p id="goroutines">-</p>
+    </div>
+</div>
+
+<h2 style="margin-top:20px;">{{t "usage.memory"}}</h2>
+<div class="stats" id="memStats">
+    <div class="stat-card">
+        <h3>{{t "usage.mem_alloc"}}</h3>
+        <p id="memAlloc">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{t "usage.mem_total"}}</h3>
+        <p id="memTotal">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>{{t "usage.mem_sys"}}</h3>
+        <p id="memSys">-</p>
+    </div>
+    <div class="stat-card" id="memLimitCard" style="display:none;">
+        <h3>{{t "usage.mem_limit"}}</h3>
+        <p id="memLimit">-</p>
+    </div>
+    <div class="stat-card" id="memPercentCard" style="display:none;">
+        <h3>{{t "usage.mem_percent"}}</h3>
+        <p id="memPercent">-</p>
+    </div>
+</div>
+
+<div class="card" style="margin-top:20px;">
+    <h3>{{t "usage.progress"}}</h3>
+    <div style="background: var(--border); border-radius: 4px; height: 24px; overflow: hidden; margin-top: 8px;">
+        <div id="memBar" style="background: var(--success); height: 100%; width: 0%; transition: width 0.3s ease, background 0.3s ease;"></div>
+    </div>
+    <p id="memBarLabel" style="font-size: 13px; color: var(--text-secondary); margin-top: 6px;"></p>
+</div>
+</div>
+{{template "scripts"}}
+<script>
+    const REFRESH_INTERVAL = 5000;
+    let refreshTimer = null;
+
+    function formatMB(mb) {
+        if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+        return mb.toFixed(1) + ' MB';
+    }
+
+    function barColor(pct) {
+        if (pct >= 80) return 'var(--danger)';
+        if (pct >= 60) return '#ffc107';
+        return 'var(--success)';
+    }
+
+    async function loadUsage() {
+        try {
+            const resp = await apiRequest('/api/v1/usage');
+            if (!resp.ok) return;
+            const s = await resp.json();
+
+            document.getElementById('cpuPercent').textContent = s.cpu_percent.toFixed(1) + '%';
+            document.getElementById('numCPU').textContent = s.num_cpu || 0;
+            document.getElementById('goroutines').textContent = s.goroutines || 0;
+
+            document.getElementById('memAlloc').textContent = formatMB(s.mem_alloc_mb);
+            document.getElementById('memTotal').textContent = formatMB(s.mem_total_mb);
+            document.getElementById('memSys').textContent = formatMB(s.mem_sys_mb);
+
+            if (s.mem_limit_mb > 0) {
+                document.getElementById('memLimitCard').style.display = '';
+                document.getElementById('memPercentCard').style.display = '';
+                document.getElementById('memLimit').textContent = formatMB(s.mem_limit_mb);
+                document.getElementById('memPercent').textContent = s.mem_percent.toFixed(1) + '%';
+
+                const bar = document.getElementById('memBar');
+                const pct = Math.min(s.mem_percent, 100);
+                bar.style.width = pct + '%';
+                bar.style.background = barColor(s.mem_percent);
+                document.getElementById('memBarLabel').textContent =
+                    formatMB(s.mem_alloc_mb) + ' / ' + formatMB(s.mem_limit_mb) +
+                    ' (' + s.mem_percent.toFixed(1) + '%)';
+            } else {
+                document.getElementById('memLimitCard').style.display = 'none';
+                document.getElementById('memPercentCard').style.display = 'none';
+                const bar = document.getElementById('memBar');
+                bar.style.width = '0%';
+                document.getElementById('memBarLabel').textContent = formatMB(s.mem_alloc_mb) + ' allocated (no GOMEMLIMIT set)';
+            }
+        } catch (e) {}
+    }
+
+    loadUsage();
+    refreshTimer = setInterval(loadUsage, REFRESH_INTERVAL);
+</script>
+{{template "pwa_sw"}}
+{{template "client_auth"}}
+</body>
+</html>

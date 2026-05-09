@@ -97,6 +97,7 @@ func (b *Bot) registerCommands() {
 	b.bot.Handle("/rebase", b.handleRebasePR)
 	b.bot.Handle("/cherrypick", b.handleCherryPickPR)
 	b.bot.Handle("/stats", b.handleStats)
+	b.bot.Handle("/usage", b.handleUsage)
 	b.bot.Handle("/version", b.handleVersion)
 	b.bot.Handle(telebot.OnCallback, b.handleCallback)
 	b.bot.Handle(telebot.OnText, b.handleText)
@@ -120,6 +121,7 @@ func (b *Bot) registerBotMenu() {
 		{Text: "rebase", Description: "Rebase a PR"},
 		{Text: "cherrypick", Description: "Cherry-pick a PR"},
 		{Text: "stats", Description: "Show DORA metrics"},
+		{Text: "usage", Description: "Show CPU & memory usage"},
 		{Text: "version", Description: "Show version info"},
 	}
 	if err := b.bot.SetCommands(commands); err != nil {
