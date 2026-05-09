@@ -10,10 +10,10 @@ import (
 
 	"asika/common/i18n"
 
-    "asika/common/auth"
-    "asika/common/config"
-    "asika/common/db"
-    "asika/common/models"
+	"asika/common/auth"
+	"asika/common/config"
+	"asika/common/db"
+	"asika/common/models"
 )
 
 // Login handles POST /api/v1/auth/login (8.1)
@@ -70,27 +70,27 @@ func Login(c *gin.Context) {
 
 // Logout handles POST /api/v1/auth/logout (8.1)
 func Logout(c *gin.Context) {
-    token := extractLogoutToken(c)
-    if token != "" {
-        auth.BlacklistToken(token)
-    }
-    c.SetCookie("asika_token", "", -1, "/", "", false, true)
-    c.JSON(http.StatusOK, gin.H{"message": "logged out"})
+	token := extractLogoutToken(c)
+	if token != "" {
+		auth.BlacklistToken(token)
+	}
+	c.SetCookie("asika_token", "", -1, "/", "", false, true)
+	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
 
 func extractLogoutToken(c *gin.Context) string {
-    if token, err := c.Cookie("asika_token"); err == nil && token != "" {
-        return token
-    }
-    authHeader := c.GetHeader("Authorization")
-    if authHeader == "" {
-        return ""
-    }
-    parts := strings.SplitN(authHeader, " ", 2)
-    if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-        return ""
-    }
-    return parts[1]
+	if token, err := c.Cookie("asika_token"); err == nil && token != "" {
+		return token
+	}
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		return ""
+	}
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+		return ""
+	}
+	return parts[1]
 }
 
 // ListUsers handles GET /api/v1/users (8.1)

@@ -124,13 +124,13 @@ func (d *SpamDetector) detectSpam(prs []*models.PRRecord) []*models.PRRecord {
 func (d *SpamDetector) HandleSpam(pr *models.PRRecord, repoGroup string) {
 	ctx := context.Background()
 
-// Mark as spam in bbolt
-    pr.SpamFlag = true
-    pr.State = "spam"
-    pr.UpdatedAt = time.Now()
-    key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
-    data, _ := json.Marshal(pr)
-    db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
+	// Mark as spam in bbolt
+	pr.SpamFlag = true
+	pr.State = "spam"
+	pr.UpdatedAt = time.Now()
+	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+	data, _ := json.Marshal(pr)
+	db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
 
 	// Close PR via platform API
 	if d.clients != nil {
@@ -205,4 +205,3 @@ func (d *SpamDetector) Stop() {
 func (d *SpamDetector) StopChan() <-chan struct{} {
 	return d.stop
 }
-

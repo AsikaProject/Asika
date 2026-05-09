@@ -64,10 +64,10 @@ func TestParseDuration(t *testing.T) {
 
 func TestSplitRepo(t *testing.T) {
 	tests := []struct {
-		input    string
+		input     string
 		wantOwner string
 		wantRepo  string
-		wantErr  bool
+		wantErr   bool
 	}{
 		{"owner/repo", "owner", "repo", false},
 		{"org/subgroup/repo", "org", "subgroup/repo", false}, // Split only first /
@@ -127,8 +127,8 @@ func TestStringSliceContains(t *testing.T) {
 
 func TestUniqueStrings(t *testing.T) {
 	tests := []struct {
-		input  []string
-		want   []string
+		input []string
+		want  []string
 	}{
 		{[]string{"a", "b", "a", "c", "b"}, []string{"a", "b", "c"}},
 		{[]string{"x", "y", "z"}, []string{"x", "y", "z"}},
@@ -176,9 +176,9 @@ func TestTruncateString(t *testing.T) {
 
 func TestParseBool(t *testing.T) {
 	tests := []struct {
-		input    string
+		input      string
 		defaultVal bool
-		want     bool
+		want       bool
 	}{
 		{"true", false, true},
 		{"false", true, false},

@@ -14,22 +14,22 @@ import (
 
 // StatsResponse holds DORA metrics and general stats
 type StatsResponse struct {
-	DeploymentFrequency  float64            `json:"deployment_frequency"`
-	LeadTimeHours        float64            `json:"lead_time_hours"`
-	ChangeFailureRate    float64            `json:"change_failure_rate"`
-	MTTRHours            float64            `json:"mttr_hours"`
-	TotalPRs             int                `json:"total_prs"`
-	MergedPRs            int                `json:"merged_prs"`
-	OpenPRs              int                `json:"open_prs"`
-	ClosedPRs            int                `json:"closed_prs"`
-	SpamPRs              int                `json:"spam_prs"`
-	QueueItems           int                `json:"queue_items"`
-	FailedQueueItems     int                `json:"failed_queue_items"`
-	SyncFailures         int                `json:"sync_failures"`
-	PeriodDays           int                `json:"period_days"`
-	PRsByRepoGroup       map[string]int     `json:"prs_by_repo_group"`
-	PRsByPlatform        map[string]int     `json:"prs_by_platform"`
-	MergesByDay          map[string]int     `json:"merges_by_day"`
+	DeploymentFrequency float64        `json:"deployment_frequency"`
+	LeadTimeHours       float64        `json:"lead_time_hours"`
+	ChangeFailureRate   float64        `json:"change_failure_rate"`
+	MTTRHours           float64        `json:"mttr_hours"`
+	TotalPRs            int            `json:"total_prs"`
+	MergedPRs           int            `json:"merged_prs"`
+	OpenPRs             int            `json:"open_prs"`
+	ClosedPRs           int            `json:"closed_prs"`
+	SpamPRs             int            `json:"spam_prs"`
+	QueueItems          int            `json:"queue_items"`
+	FailedQueueItems    int            `json:"failed_queue_items"`
+	SyncFailures        int            `json:"sync_failures"`
+	PeriodDays          int            `json:"period_days"`
+	PRsByRepoGroup      map[string]int `json:"prs_by_repo_group"`
+	PRsByPlatform       map[string]int `json:"prs_by_platform"`
+	MergesByDay         map[string]int `json:"merges_by_day"`
 }
 
 // GetStats handles GET /api/v1/stats

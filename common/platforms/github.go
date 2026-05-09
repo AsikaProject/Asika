@@ -66,7 +66,7 @@ func (c *GitHubClient) GetPR(ctx context.Context, owner, repo string, number int
 // ListPRs lists pull requests
 func (c *GitHubClient) ListPRs(ctx context.Context, owner, repo string, state string) ([]*models.PRRecord, error) {
 	opts := &github.PullRequestListOptions{
-		State: state,
+		State:       state,
 		ListOptions: github.ListOptions{PerPage: 100},
 	}
 
@@ -78,23 +78,23 @@ func (c *GitHubClient) ListPRs(ctx context.Context, owner, repo string, state st
 		}
 
 		for _, pr := range prs {
- 			record := &models.PRRecord{
- 				ID:             fmt.Sprintf("%d", pr.GetID()),
- 				Platform:       "github",
- 				PRNumber:       pr.GetNumber(),
- 				Title:          pr.GetTitle(),
- 				Author:         pr.GetUser().GetLogin(),
- 				State:          pr.GetState(),
- 				Labels:         extractLabels(pr.Labels),
- 				MergeCommitSHA: pr.GetMergeCommitSHA(),
- 				SpamFlag:       false,
- 				CreatedAt:      pr.GetCreatedAt().Time,
- 				UpdatedAt:      pr.GetUpdatedAt().Time,
- 				Events:         []models.PREvent{},
- 				IsDraft:        pr.GetDraft(),
- 				HTMLURL:        pr.GetHTMLURL(),
- 				MergedAt:       pr.GetMergedAt().Time,
- 			}
+			record := &models.PRRecord{
+				ID:             fmt.Sprintf("%d", pr.GetID()),
+				Platform:       "github",
+				PRNumber:       pr.GetNumber(),
+				Title:          pr.GetTitle(),
+				Author:         pr.GetUser().GetLogin(),
+				State:          pr.GetState(),
+				Labels:         extractLabels(pr.Labels),
+				MergeCommitSHA: pr.GetMergeCommitSHA(),
+				SpamFlag:       false,
+				CreatedAt:      pr.GetCreatedAt().Time,
+				UpdatedAt:      pr.GetUpdatedAt().Time,
+				Events:         []models.PREvent{},
+				IsDraft:        pr.GetDraft(),
+				HTMLURL:        pr.GetHTMLURL(),
+				MergedAt:       pr.GetMergedAt().Time,
+			}
 			result = append(result, record)
 		}
 

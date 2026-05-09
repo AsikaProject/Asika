@@ -147,14 +147,14 @@ var prCommentCmd = &cobra.Command{
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
-	token := GetToken(cmd)
-	if token != "" {
-		if isAPIKey(token) {
-			req.Header.Set("X-API-Key", token)
-		} else {
-			setAuthHeader(req, token)
+		token := GetToken(cmd)
+		if token != "" {
+			if isAPIKey(token) {
+				req.Header.Set("X-API-Key", token)
+			} else {
+				setAuthHeader(req, token)
+			}
 		}
-	}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)

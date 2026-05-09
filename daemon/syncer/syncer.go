@@ -1,56 +1,56 @@
 package syncer
 
 import (
-    "context"
-    "encoding/json"
-    "fmt"
-    "log/slog"
-    "strings"
-    "sync"
-    "time"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"strings"
+	"sync"
+	"time"
 
-    "asika/common/config"
-    "asika/common/db"
-    "asika/common/models"
-    "asika/common/gitutil"
-    "asika/common/platforms"
-    "asika/daemon/hooks"
+	"asika/common/config"
+	"asika/common/db"
+	"asika/common/gitutil"
+	"asika/common/models"
+	"asika/common/platforms"
+	"asika/daemon/hooks"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 )
 
 // Syncer handles cross-platform synchronization
 type Syncer struct {
-    cfg       *models.Config
-    clients   map[platforms.PlatformType]platforms.PlatformClient
-    syncLocks sync.Map
+	cfg       *models.Config
+	clients   map[platforms.PlatformType]platforms.PlatformClient
+	syncLocks sync.Map
 }
 
 // NewSyncer creates a new syncer
 func NewSyncer(cfg *models.Config, clients map[platforms.PlatformType]platforms.PlatformClient) *Syncer {
-    return &Syncer{
-        cfg:     cfg,
-        clients: clients,
-    }
+	return &Syncer{
+		cfg:     cfg,
+		clients: clients,
+	}
 }
 
 // SyncOnMerge handles a merge event and syncs to other platforms
 func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
-    group := config.GetRepoGroupByName(s.cfg, pr.RepoGroup)
-    if group == nil {
-        return fmt.Errorf("repo group not found: %s", pr.RepoGroup)
-    }
+	group := config.GetRepoGroupByName(s.cfg, pr.RepoGroup)
+	if group == nil {
+		return fmt.Errorf("repo group not found: %s", pr.RepoGroup)
+	}
 
-    if group.Mode != "multi" {
-        slog.Info("skipping sync: repo group not in multi mode", "repo_group", pr.RepoGroup)
-        return nil
-    }
+	if group.Mode != "multi" {
+		slog.Info("skipping sync: repo group not in multi mode", "repo_group", pr.RepoGroup)
+		return nil
+	}
 
-    mu := s.getOrCreateLock(pr.RepoGroup)
-    mu.Lock()
-    defer mu.Unlock()
+	mu := s.getOrCreateLock(pr.RepoGroup)
+	mu.Lock()
+	defer mu.Unlock()
 
-    // Create temp workdir for this sync
+	// Create temp workdir for this sync
 	workdir, err := gitutil.CreateTempWorkdir("asika-sync-")
 	if err != nil {
 		return fmt.Errorf("failed to create workdir: %w", err)
@@ -65,7 +65,7 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 	}
 
 	sourceURL := s.getRepoURL(pr.Platform, sourceRepo)
-	sourceToken := config.GetToken(s.cfg,pr.Platform)
+	sourceToken := config.GetToken(s.cfg, pr.Platform)
 
 	// Clone source repo
 	gitRepo, err := gitutil.CloneOrOpen(workdir, sourceURL, sourceToken)
@@ -117,7 +117,7 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 
 		// Add target remote
 		targetURL := s.getRepoURL(target.name, target.repo)
-		targetToken := config.GetToken(s.cfg,target.name)
+		targetToken := config.GetToken(s.cfg, target.name)
 		remoteName := "target-" + target.name
 
 		if err := gitutil.AddRemote(gitRepo, remoteName, targetURL); err != nil {
@@ -183,24 +183,22 @@ func (s *Syncer) SyncBranchDeletion(repoGroup, sourcePlatform, branch string) {
 
 // recordSync records sync history in bbolt
 func (s *Syncer) recordSync(pr *models.PRRecord, branch, targetPlatform, status, errorMsg string) {
-    record := models.SyncRecord{
-        ID:             uuid.New().String(),
-        PRID:           pr.ID,
-        RepoGroup:      pr.RepoGroup,
-        SourcePlatform: pr.Platform,
-        TargetPlatform: targetPlatform,
-        Branch:         branch,
-        CommitSHA:      pr.MergeCommitSHA,
-        Status:         status,
-        ErrorMessage:   errorMsg,
-        Timestamp:      time.Now(),
-    }
+	record := models.SyncRecord{
+		ID:             uuid.New().String(),
+		PRID:           pr.ID,
+		RepoGroup:      pr.RepoGroup,
+		SourcePlatform: pr.Platform,
+		TargetPlatform: targetPlatform,
+		Branch:         branch,
+		CommitSHA:      pr.MergeCommitSHA,
+		Status:         status,
+		ErrorMessage:   errorMsg,
+		Timestamp:      time.Now(),
+	}
 
 	data, _ := json.Marshal(record)
 	db.Put(db.BucketSyncHistory, record.ID, data)
 }
-
-
 
 // getRepoURL returns the clone URL (with .git suffix) for a platform repo.
 func (s *Syncer) getRepoURL(platform, repo string) string {
@@ -242,6 +240,6 @@ func (s *Syncer) getRepoURL(platform, repo string) string {
 }
 
 func (s *Syncer) getOrCreateLock(repoGroup string) *sync.Mutex {
-    actual, _ := s.syncLocks.LoadOrStore(repoGroup, &sync.Mutex{})
-    return actual.(*sync.Mutex)
+	actual, _ := s.syncLocks.LoadOrStore(repoGroup, &sync.Mutex{})
+	return actual.(*sync.Mutex)
 }

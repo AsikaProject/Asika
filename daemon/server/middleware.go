@@ -8,33 +8,33 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"asika/common/auth"
 	"asika/common/db"
 	"asika/common/i18n"
 	"asika/common/models"
 	"asika/daemon/handlers"
+	"github.com/gin-gonic/gin"
 )
 
 // Logger is a custom logger middleware
 func Logger() gin.HandlerFunc {
-    return func(c *gin.Context) {
-        start := time.Now()
-        path := c.Request.URL.Path
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
 
-        c.Next()
+		c.Next()
 
-        latency := time.Since(start)
-        statusCode := c.Writer.Status()
+		latency := time.Since(start)
+		statusCode := c.Writer.Status()
 
-        slog.Info("request",
-            "method", c.Request.Method,
-            "path", path,
-            "status", statusCode,
-            "latency", latency,
-            "ip", c.ClientIP(),
-        )
-    }
+		slog.Info("request",
+			"method", c.Request.Method,
+			"path", path,
+			"status", statusCode,
+			"latency", latency,
+			"ip", c.ClientIP(),
+		)
+	}
 }
 
 // AuthMiddleware creates an authentication middleware
@@ -89,7 +89,7 @@ func AuthMiddleware() gin.HandlerFunc {
 			c.Redirect(http.StatusFound, "/login")
 		}
 		c.Abort()
-    }
+	}
 }
 
 // LocaleMiddleware detects the user's preferred locale from Accept-Language header
@@ -111,15 +111,15 @@ func LocaleMiddleware() gin.HandlerFunc {
 
 // RequireAuth requires authentication
 func RequireAuth() gin.HandlerFunc {
-    return func(c *gin.Context) {
-        _, exists := c.Get("username")
-        if !exists {
-            c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
-            c.Abort()
-            return
-        }
-        c.Next()
-    }
+	return func(c *gin.Context) {
+		_, exists := c.Get("username")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 // SSRAuthRequired redirects to login if not authenticated (for browser pages)
@@ -135,22 +135,22 @@ func SSRAuthRequired() gin.HandlerFunc {
 	}
 }
 func RequireRole(role string) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        userRole, exists := c.Get("role")
-        if !exists {
-            c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
-            c.Abort()
-            return
-        }
+	return func(c *gin.Context) {
+		userRole, exists := c.Get("role")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
+			c.Abort()
+			return
+		}
 
-         if !auth.HasPermission(userRole.(string), role) {
-             c.JSON(http.StatusForbidden, gin.H{"error": "权限不够", "code": 403})
-             c.Abort()
-             return
-         }
+		if !auth.HasPermission(userRole.(string), role) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "权限不够", "code": 403})
+			c.Abort()
+			return
+		}
 
-        c.Next()
-    }
+		c.Next()
+	}
 }
 
 // RequireRepoGroupAccess checks if the user has access to the requested repo group.
@@ -211,24 +211,24 @@ func RequireRepoGroupAccess() gin.HandlerFunc {
 
 // RequireAnyRole requires any of the specified roles
 func RequireAnyRole(roles ...string) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        userRole, exists := c.Get("role")
-        if !exists {
-            c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
-            c.Abort()
-            return
-        }
+	return func(c *gin.Context) {
+		userRole, exists := c.Get("role")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
+			c.Abort()
+			return
+		}
 
-        for _, r := range roles {
-            if auth.HasPermission(userRole.(string), r) {
-                c.Next()
-                return
-            }
-        }
+		for _, r := range roles {
+			if auth.HasPermission(userRole.(string), r) {
+				c.Next()
+				return
+			}
+		}
 
-        c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "code": 403})
-        c.Abort()
-    }
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "code": 403})
+		c.Abort()
+	}
 }
 
 // RequirePermission checks if the user has a specific granular permission.
@@ -343,12 +343,12 @@ func extractToken(c *gin.Context) string {
 
 // splitToken splits the Authorization header into parts
 func splitToken(header string) []string {
-    for i, c := range header {
-        if c == ' ' {
-            return []string{header[:i], header[i+1:]}
-        }
-    }
-    return nil
+	for i, c := range header {
+		if c == ' ' {
+			return []string{header[:i], header[i+1:]}
+		}
+	}
+	return nil
 }
 
 // extractAPIKey extracts the API key from X-API-Key header

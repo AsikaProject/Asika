@@ -52,7 +52,7 @@ func (c *GiteaClient) GetPR(ctx context.Context, owner, repo string, number int)
 // ListPRs lists pull requests
 func (c *GiteaClient) ListPRs(ctx context.Context, owner, repo string, state string) ([]*models.PRRecord, error) {
 	opts := gitea.ListPullRequestsOptions{
-		State: gitea.StateType(state),
+		State:       gitea.StateType(state),
 		ListOptions: gitea.ListOptions{Page: 1, PageSize: 100},
 	}
 
@@ -93,28 +93,28 @@ func giteaPRToRecord(pr *gitea.PullRequest) *models.PRRecord {
 		mergeCommitSHA = *pr.MergedCommitID
 	}
 
- 	var mergedAt time.Time
- 	if pr.Merged != nil {
- 		mergedAt = *pr.Merged
- 	}
+	var mergedAt time.Time
+	if pr.Merged != nil {
+		mergedAt = *pr.Merged
+	}
 
- 	return &models.PRRecord{
- 		ID:             fmt.Sprintf("%d", pr.ID),
- 		Platform:       "gitea",
- 		PRNumber:       int(pr.Index),
- 		Title:          pr.Title,
- 		Author:         pr.Poster.UserName,
- 		State:          state,
- 		Labels:         extractGiteaLabels(pr.Labels),
- 		MergeCommitSHA: mergeCommitSHA,
- 		SpamFlag:       false,
- 		CreatedAt:      *pr.Created,
- 		UpdatedAt:      *pr.Updated,
- 		Events:         []models.PREvent{},
- 		HasConflict:    !pr.Mergeable,
- 		HTMLURL:        pr.HTMLURL,
- 		MergedAt:       mergedAt,
- 	}
+	return &models.PRRecord{
+		ID:             fmt.Sprintf("%d", pr.ID),
+		Platform:       "gitea",
+		PRNumber:       int(pr.Index),
+		Title:          pr.Title,
+		Author:         pr.Poster.UserName,
+		State:          state,
+		Labels:         extractGiteaLabels(pr.Labels),
+		MergeCommitSHA: mergeCommitSHA,
+		SpamFlag:       false,
+		CreatedAt:      *pr.Created,
+		UpdatedAt:      *pr.Updated,
+		Events:         []models.PREvent{},
+		HasConflict:    !pr.Mergeable,
+		HTMLURL:        pr.HTMLURL,
+		MergedAt:       mergedAt,
+	}
 }
 
 func extractGiteaLabels(labels []*gitea.Label) []string {
@@ -498,8 +498,8 @@ func NewForgejoClient(baseURL, token string, webhookSecret string) *GiteaClient 
 // Uses https://codeberg.org as the default base URL.
 // Note: Codeberg client is created via NewForgejoClient in bootstrap to allow URL override.
 func NewCodebergClient(token string, webhookSecret string) *GiteaClient {
- 	return NewForgejoClient("https://codeberg.org", token, webhookSecret)
- }
+	return NewForgejoClient("https://codeberg.org", token, webhookSecret)
+}
 
 // RequestReview requests reviewers for a PR on Gitea/Forgejo via a comment note.
 func (c *GiteaClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {

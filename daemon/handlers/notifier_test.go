@@ -58,7 +58,7 @@ func TestInitNotifiers(t *testing.T) {
 	cfg := &models.Config{
 		Notify: []models.NotifyConfig{
 			{
-				Type:   "github_at",
+				Type: "github_at",
 				Config: map[string]interface{}{
 					"to":    []interface{}{"user1"},
 					"owner": "org",

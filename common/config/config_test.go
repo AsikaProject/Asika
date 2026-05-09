@@ -441,9 +441,9 @@ func TestSaveToFile(t *testing.T) {
 	ConfigPath = configPath
 
 	cfg := models.Config{
-		Server: models.ServerConfig{Listen: ":8080", Mode: "debug"},
+		Server:   models.ServerConfig{Listen: ":8080", Mode: "debug"},
 		Database: models.DatabaseConfig{Path: "./db/test.db"},
-		Auth: models.AuthConfig{JWTSecret: "saved-secret", TokenExpiry: "72h"},
+		Auth:     models.AuthConfig{JWTSecret: "saved-secret", TokenExpiry: "72h"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "main", Mode: "multi", GitHub: "org/repo", DefaultBranch: "main"},
 		},

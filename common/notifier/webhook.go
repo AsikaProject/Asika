@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	webhookRequestTimeout = 10 * time.Second
+	webhookRequestTimeout  = 10 * time.Second
 	webhookSignatureHeader = "X-Asika-Signature"
 )
 

@@ -62,5 +62,3 @@ func checkAndNotify(cfg *models.Config) {
 		SendNotificationSync(title, body)
 	}
 }
-
-

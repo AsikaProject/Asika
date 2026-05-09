@@ -39,8 +39,8 @@ func NewManager(cfg *models.Config, clients map[platforms.PlatformType]platforms
 // been merged on the platform to avoid double-merges.
 func (m *Manager) Recover() {
 	var toReset []struct {
-		key   string
-		item  models.QueueItem
+		key  string
+		item models.QueueItem
 	}
 	err := db.ForEach(db.BucketQueueItems, func(key, value []byte) error {
 		var item models.QueueItem
@@ -283,33 +283,33 @@ func (m *Manager) merge(item *models.QueueItem) error {
 
 // findPRByID finds a PR by its ID in bbolt
 func findPRByID(prID string) (*models.PRRecord, error) {
-    data, err := db.GetPRByIndex(prID, "", 0)
-    if err != nil || data == nil {
-        var pr *models.PRRecord
-        err := db.ForEach(db.BucketPRs, func(key, value []byte) error {
-            var record models.PRRecord
-            if err := json.Unmarshal(value, &record); err != nil {
-                return err
-            }
-            if record.ID == prID {
-                pr = &record
-            }
-            return nil
-        })
-        if err != nil {
-            return nil, err
-        }
-        if pr == nil {
-            return nil, fmt.Errorf("PR not found: %s", prID)
-        }
-        return pr, nil
-    }
+	data, err := db.GetPRByIndex(prID, "", 0)
+	if err != nil || data == nil {
+		var pr *models.PRRecord
+		err := db.ForEach(db.BucketPRs, func(key, value []byte) error {
+			var record models.PRRecord
+			if err := json.Unmarshal(value, &record); err != nil {
+				return err
+			}
+			if record.ID == prID {
+				pr = &record
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		if pr == nil {
+			return nil, fmt.Errorf("PR not found: %s", prID)
+		}
+		return pr, nil
+	}
 
-    var pr models.PRRecord
-    if err := json.Unmarshal(data, &pr); err != nil {
-        return nil, err
-    }
-    return &pr, nil
+	var pr models.PRRecord
+	if err := json.Unmarshal(data, &pr); err != nil {
+		return nil, err
+	}
+	return &pr, nil
 }
 
 // GetQueueItems returns all queue items for a repo group
@@ -326,6 +326,7 @@ func (m *Manager) GetQueueItems(repoGroup string) ([]models.QueueItem, error) {
 	})
 	return items, err
 }
+
 // RemoveFromQueue removes a single queue item by repo group and PR ID.
 func (m *Manager) RemoveFromQueue(repoGroup, prID string) error {
 	key := fmt.Sprintf("%s#%s", repoGroup, prID)

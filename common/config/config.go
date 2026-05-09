@@ -18,30 +18,30 @@ import (
 )
 
 var (
-    current    atomic.Value
-    ConfigPath string
+	current    atomic.Value
+	ConfigPath string
 )
 
 // Store stores the configuration atomically
 func Store(cfg *models.Config) {
-    current.Store(cfg)
+	current.Store(cfg)
 }
 
 // Current returns the current configuration
 func Current() *models.Config {
-    v := current.Load()
-    if v == nil {
-        return nil
-    }
-    return v.(*models.Config)
+	v := current.Load()
+	if v == nil {
+		return nil
+	}
+	return v.(*models.Config)
 }
 
 // Load loads configuration from the TOML file
 func Load(path string) (*models.Config, error) {
-    data, err := os.ReadFile(path)
-    if err != nil {
-        return nil, fmt.Errorf("failed to read config file: %w", err)
-    }
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
 
 	cfg := &models.Config{
 		Server: models.ServerConfig{
@@ -78,29 +78,29 @@ func Load(path string) (*models.Config, error) {
 		},
 	}
 
-    if err := toml.Unmarshal(data, cfg); err != nil {
-        return nil, fmt.Errorf("failed to parse config file: %w", err)
-    }
+	if err := toml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
 
-    // Apply environment variable overrides for tokens
-    if token := os.Getenv("ASIKA_GITHUB_TOKEN"); token != "" {
-        cfg.Tokens.GitHub = token
-    }
-    if token := os.Getenv("ASIKA_GITLAB_TOKEN"); token != "" {
-        cfg.Tokens.GitLab = token
-    }
-    if token := os.Getenv("ASIKA_GITEA_TOKEN"); token != "" {
-        cfg.Tokens.Gitea = token
-    }
+	// Apply environment variable overrides for tokens
+	if token := os.Getenv("ASIKA_GITHUB_TOKEN"); token != "" {
+		cfg.Tokens.GitHub = token
+	}
+	if token := os.Getenv("ASIKA_GITLAB_TOKEN"); token != "" {
+		cfg.Tokens.GitLab = token
+	}
+	if token := os.Getenv("ASIKA_GITEA_TOKEN"); token != "" {
+		cfg.Tokens.Gitea = token
+	}
 
-    // Validate configuration
-    if err := validate(cfg); err != nil {
-        return nil, err
-    }
+	// Validate configuration
+	if err := validate(cfg); err != nil {
+		return nil, err
+	}
 
-    Store(cfg)
-    ConfigPath = path
-    return cfg, nil
+	Store(cfg)
+	ConfigPath = path
+	return cfg, nil
 }
 
 // validate validates the configuration
@@ -146,25 +146,25 @@ func validate(cfg *models.Config) error {
 		if _, err := time.ParseDuration(cfg.Spam.TimeWindow); err != nil {
 			return fmt.Errorf("invalid spam.time_window: %w", err)
 		}
- 		if !cfg.Spam.TriggerOnAuthor && len(cfg.Spam.TriggerOnTitleKw) == 0 {
- 			return fmt.Errorf("spam requires at least one trigger: trigger_on_author or trigger_on_title_kw")
- 		}
- 		if cfg.Spam.AutoCleanEnabled {
- 			if cfg.Spam.AutoCleanInterval == "" {
- 				return fmt.Errorf("spam.auto_clean_interval is required when auto_clean_enabled is true")
- 			}
- 			if _, err := time.ParseDuration(cfg.Spam.AutoCleanInterval); err != nil {
- 				return fmt.Errorf("invalid spam.auto_clean_interval: %w", err)
- 			}
- 		}
- 	}
+		if !cfg.Spam.TriggerOnAuthor && len(cfg.Spam.TriggerOnTitleKw) == 0 {
+			return fmt.Errorf("spam requires at least one trigger: trigger_on_author or trigger_on_title_kw")
+		}
+		if cfg.Spam.AutoCleanEnabled {
+			if cfg.Spam.AutoCleanInterval == "" {
+				return fmt.Errorf("spam.auto_clean_interval is required when auto_clean_enabled is true")
+			}
+			if _, err := time.ParseDuration(cfg.Spam.AutoCleanInterval); err != nil {
+				return fmt.Errorf("invalid spam.auto_clean_interval: %w", err)
+			}
+		}
+	}
 
 	return nil
 }
 
 // GetRepoGroups returns all repo groups
 func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
-    groups := make([]models.RepoGroup, len(cfg.RepoGroups))
+	groups := make([]models.RepoGroup, len(cfg.RepoGroups))
 	for i, rg := range cfg.RepoGroups {
 		mode := rg.Mode
 		if mode == "" {
@@ -178,9 +178,9 @@ func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 			GitLab:         rg.GitLab,
 			Gitea:          rg.Gitea,
 			Forgejo:        rg.Forgejo,
-		Codeberg:       rg.Codeberg,
-		Bitbucket:      rg.Bitbucket,
-		DefaultBranch:  rg.DefaultBranch,
+			Codeberg:       rg.Codeberg,
+			Bitbucket:      rg.Bitbucket,
+			DefaultBranch:  rg.DefaultBranch,
 			HookPath:       rg.HookPath,
 			CIProvider:     rg.CIProvider,
 			MergeQueue:     rg.MergeQueue,
@@ -191,80 +191,80 @@ func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 
 // GetRepoGroupByName finds a repo group by name
 func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
-    var defaultGroup *models.RepoGroup
-    for i := range cfg.RepoGroups {
-        rg := &cfg.RepoGroups[i]
-        mode := rg.Mode
-        if mode == "" {
-            mode = "multi"
-        }
-          if rg.Name == name {
-             return &models.RepoGroup{
-                 Name:           rg.Name,
-                 Mode:           mode,
-                 MirrorPlatform: rg.MirrorPlatform,
-                 GitHub:         rg.GitHub,
-                 GitLab:         rg.GitLab,
-                 Gitea:          rg.Gitea,
-                 Forgejo:        rg.Forgejo,
-                 Codeberg:       rg.Codeberg,
-                 Bitbucket:      rg.Bitbucket,
-                 DefaultBranch:  rg.DefaultBranch,
-                 HookPath:       rg.HookPath,
-                 CIProvider:     rg.CIProvider,
-                 MergeQueue:     rg.MergeQueue,
-             }
-         }
-         if rg.Name == "default" {
-             defaultGroup = &models.RepoGroup{
-                 Name:           rg.Name,
-                 Mode:           mode,
-                 MirrorPlatform: rg.MirrorPlatform,
-                 GitHub:         rg.GitHub,
-                 GitLab:         rg.GitLab,
-                 Gitea:          rg.Gitea,
-                 Forgejo:        rg.Forgejo,
-                 Codeberg:       rg.Codeberg,
-                 Bitbucket:      rg.Bitbucket,
-                 DefaultBranch:  rg.DefaultBranch,
-                 HookPath:       rg.HookPath,
-                 CIProvider:     rg.CIProvider,
-                 MergeQueue:     rg.MergeQueue,
-             }
-        }
-    }
-    if defaultGroup != nil {
-        slog.Info("repo group not found, falling back to default", "requested", name)
-        return defaultGroup
-    }
-    return nil
+	var defaultGroup *models.RepoGroup
+	for i := range cfg.RepoGroups {
+		rg := &cfg.RepoGroups[i]
+		mode := rg.Mode
+		if mode == "" {
+			mode = "multi"
+		}
+		if rg.Name == name {
+			return &models.RepoGroup{
+				Name:           rg.Name,
+				Mode:           mode,
+				MirrorPlatform: rg.MirrorPlatform,
+				GitHub:         rg.GitHub,
+				GitLab:         rg.GitLab,
+				Gitea:          rg.Gitea,
+				Forgejo:        rg.Forgejo,
+				Codeberg:       rg.Codeberg,
+				Bitbucket:      rg.Bitbucket,
+				DefaultBranch:  rg.DefaultBranch,
+				HookPath:       rg.HookPath,
+				CIProvider:     rg.CIProvider,
+				MergeQueue:     rg.MergeQueue,
+			}
+		}
+		if rg.Name == "default" {
+			defaultGroup = &models.RepoGroup{
+				Name:           rg.Name,
+				Mode:           mode,
+				MirrorPlatform: rg.MirrorPlatform,
+				GitHub:         rg.GitHub,
+				GitLab:         rg.GitLab,
+				Gitea:          rg.Gitea,
+				Forgejo:        rg.Forgejo,
+				Codeberg:       rg.Codeberg,
+				Bitbucket:      rg.Bitbucket,
+				DefaultBranch:  rg.DefaultBranch,
+				HookPath:       rg.HookPath,
+				CIProvider:     rg.CIProvider,
+				MergeQueue:     rg.MergeQueue,
+			}
+		}
+	}
+	if defaultGroup != nil {
+		slog.Info("repo group not found, falling back to default", "requested", name)
+		return defaultGroup
+	}
+	return nil
 }
 
 // GetOwnerRepoFromGroup returns the owner/repo for a platform in a repo group
 func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, repo string) {
-    var repoPath string
-    switch platform {
-    case "github":
-        repoPath = group.GitHub
-    case "gitlab":
-        repoPath = group.GitLab
-    case "gitea":
-        repoPath = group.Gitea
-    case "forgejo":
-        repoPath = group.Forgejo
-    case "codeberg":
-        repoPath = group.Codeberg
-    case "bitbucket":
-        repoPath = group.Bitbucket
-    }
-    if repoPath == "" {
-        return "", ""
-    }
-    idx := strings.LastIndex(repoPath, "/")
-    if idx < 0 {
-        return "", repoPath
-    }
-    return repoPath[:idx], repoPath[idx+1:]
+	var repoPath string
+	switch platform {
+	case "github":
+		repoPath = group.GitHub
+	case "gitlab":
+		repoPath = group.GitLab
+	case "gitea":
+		repoPath = group.Gitea
+	case "forgejo":
+		repoPath = group.Forgejo
+	case "codeberg":
+		repoPath = group.Codeberg
+	case "bitbucket":
+		repoPath = group.Bitbucket
+	}
+	if repoPath == "" {
+		return "", ""
+	}
+	idx := strings.LastIndex(repoPath, "/")
+	if idx < 0 {
+		return "", repoPath
+	}
+	return repoPath[:idx], repoPath[idx+1:]
 }
 
 // GetPlatformForGroup determines the platform for a repo group.
@@ -360,17 +360,17 @@ func GetToken(cfg *models.Config, platform string) string {
 
 // GenerateTokenExpiry parses the token expiry duration
 func GenerateTokenExpiry(expiry string) time.Duration {
-    d, err := time.ParseDuration(expiry)
-    if err != nil {
-        slog.Warn("invalid token_expiry, using default 72h", "error", err)
-        d = 72 * time.Hour
-    }
-    return d
+	d, err := time.ParseDuration(expiry)
+	if err != nil {
+		slog.Warn("invalid token_expiry, using default 72h", "error", err)
+		d = 72 * time.Hour
+	}
+	return d
 }
 
 // GenerateUUID generates a new UUID string
 func GenerateUUID() string {
-    return uuid.New().String()
+	return uuid.New().String()
 }
 
 // SaveToFile writes the config to the configured file path
@@ -495,11 +495,11 @@ func RollbackConfig(version int) error {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal snapshot: %w", err)
 	}
- 	if err := SaveToFile(cfg); err != nil {
- 		return fmt.Errorf("failed to write config: %w", err)
- 	}
- 	Store(&cfg)
- 	slog.Info("config rolled back", "version", version)
+	if err := SaveToFile(cfg); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+	Store(&cfg)
+	slog.Info("config rolled back", "version", version)
 	return nil
 }
 

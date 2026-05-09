@@ -124,15 +124,15 @@ func (c *Consumer) handlePROpened(event events.Event) {
 
 	slog.Info("PR opened", "title", pr.Title, "author", pr.Author)
 
-// 1. Store in bbolt
-    if pr.ID == "" {
-        pr.ID = uuid.New().String()
-    }
-    pr.CreatedAt = time.Now()
-    pr.UpdatedAt = time.Now()
-    key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-    data, _ := json.Marshal(pr)
-    db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
+	// 1. Store in bbolt
+	if pr.ID == "" {
+		pr.ID = uuid.New().String()
+	}
+	pr.CreatedAt = time.Now()
+	pr.UpdatedAt = time.Now()
+	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
+	data, _ := json.Marshal(pr)
+	db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
 
 	// 2. Trigger label rule engine
 	if c.labeler != nil {
@@ -158,12 +158,12 @@ func (c *Consumer) handlePRClosed(event events.Event) {
 
 	slog.Info("PR closed", "title", pr.Title)
 
-// Update state in bbolt
-    pr.State = "closed"
-    pr.UpdatedAt = time.Now()
-    key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-    data, _ := json.Marshal(pr)
-    db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
+	// Update state in bbolt
+	pr.State = "closed"
+	pr.UpdatedAt = time.Now()
+	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
+	data, _ := json.Marshal(pr)
+	db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
 }
 
 func (c *Consumer) handlePRMerged(event events.Event) {
@@ -174,12 +174,12 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 
 	slog.Info("PR merged", "title", pr.Title)
 
-// Update state in bbolt
-    pr.State = "merged"
-    pr.UpdatedAt = time.Now()
-    key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-    data, _ := json.Marshal(pr)
-    db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
+	// Update state in bbolt
+	pr.State = "merged"
+	pr.UpdatedAt = time.Now()
+	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
+	data, _ := json.Marshal(pr)
+	db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
 
 	// Trigger code sync (multi mode only)
 	if c.syncer != nil {
@@ -229,13 +229,13 @@ func (c *Consumer) handlePRReopened(event events.Event) {
 
 	slog.Info("PR reopened (spam recovery)", "title", pr.Title, "repo_group", pr.RepoGroup)
 
-// Update state in bbolt - set to open, spam flag cleared
-    pr.State = "open"
-    pr.SpamFlag = false
-    pr.UpdatedAt = time.Now()
-    key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-    data, _ := json.Marshal(pr)
-    db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
+	// Update state in bbolt - set to open, spam flag cleared
+	pr.State = "open"
+	pr.SpamFlag = false
+	pr.UpdatedAt = time.Now()
+	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
+	data, _ := json.Marshal(pr)
+	db.PutPRWithIndex(key, data, pr.ID, event.RepoGroup, pr.PRNumber)
 
 	// Check for stale activity (remove stale label on re-open)
 	if c.staleMgr != nil {

@@ -142,9 +142,9 @@ func TestGetConfig_Masked(t *testing.T) {
 	defer cleanup()
 
 	cfg := &models.Config{
-		Server: models.ServerConfig{Listen: ":8080", Mode: "debug"},
+		Server:   models.ServerConfig{Listen: ":8080", Mode: "debug"},
 		Database: models.DatabaseConfig{Path: "./test.db"},
-		Auth: models.AuthConfig{JWTSecret: "super-secret-key-value", TokenExpiry: "72h"},
+		Auth:     models.AuthConfig{JWTSecret: "super-secret-key-value", TokenExpiry: "72h"},
 		Tokens: models.TokensConfig{
 			GitHub: "ghp_real_token_1234567890abcdef",
 			GitLab: "glpat_long_token_value_xyz",
@@ -569,11 +569,11 @@ func TestSingleMode_SyncerLogic(t *testing.T) {
 				DefaultBranch:  "gh-pages",
 			},
 			{
-				Name: "multi-project",
-				Mode: "multi",
+				Name:   "multi-project",
+				Mode:   "multi",
 				GitHub: "org/main",
 				GitLab: "group/main",
-				Gitea: "user/main",
+				Gitea:  "user/main",
 			},
 		},
 	}
@@ -659,9 +659,9 @@ func TestWebhookRouteRegistration(t *testing.T) {
 
 func TestGetPlatformForGroup_SingleMode(t *testing.T) {
 	tests := []struct {
-		name           string
-		group          *models.RepoGroup
-		wantPlatform   string
+		name         string
+		group        *models.RepoGroup
+		wantPlatform string
 	}{
 		{
 			name: "single mode with gitlab mirror",
@@ -1061,11 +1061,11 @@ func TestSingleMode_GitlabOnlyMirror(t *testing.T) {
 
 func TestUserModel_AllowedRepoGroups(t *testing.T) {
 	tests := []struct {
-		name            string
-		role            string
-		allowedGroups   []string
-		requestedGroup  string
-		expectAccess    bool
+		name           string
+		role           string
+		allowedGroups  []string
+		requestedGroup string
+		expectAccess   bool
 	}{
 		{
 			name:           "admin always has access",

@@ -17,15 +17,15 @@ import (
 
 // apiKeyResponse is the safe representation (raw key only shown once at creation).
 type apiKeyResponse struct {
-	ID                string              `json:"id"`
-	Name              string              `json:"name"`
-	Role              string              `json:"role"`
-	CreatedAt         time.Time           `json:"created_at"`
-	CreatedBy         string              `json:"created_by"`
-	LastUsedAt        time.Time           `json:"last_used_at"`
-	AllowedRepoGroups []string            `json:"allowed_repo_groups"`
+	ID                string                 `json:"id"`
+	Name              string                 `json:"name"`
+	Role              string                 `json:"role"`
+	CreatedAt         time.Time              `json:"created_at"`
+	CreatedBy         string                 `json:"created_by"`
+	LastUsedAt        time.Time              `json:"last_used_at"`
+	AllowedRepoGroups []string               `json:"allowed_repo_groups"`
 	Permissions       models.UserPermissions `json:"permissions"`
-	RawKey            string              `json:"key,omitempty"` // only on creation
+	RawKey            string                 `json:"key,omitempty"` // only on creation
 }
 
 func toAPIKeyResponse(key *models.APIKey, rawKey string) apiKeyResponse {

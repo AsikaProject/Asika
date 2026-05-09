@@ -254,11 +254,11 @@ func TestCheckMergeMethods_RepoWithGitLabOnly(t *testing.T) {
 	cfg := &models.Config{
 		RepoGroups: []models.RepoGroupConfig{
 			{
-				Name:          "gitlab-only",
-				Mode:          "single",
+				Name:           "gitlab-only",
+				Mode:           "single",
 				MirrorPlatform: "gitlab",
-				GitLab:        "group/project",
-				DefaultBranch: "main",
+				GitLab:         "group/project",
+				DefaultBranch:  "main",
 			},
 		},
 	}

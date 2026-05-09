@@ -11,15 +11,15 @@ import (
 
 // UsageResponse holds real-time CPU and memory usage
 type UsageResponse struct {
-	CPUPercent    float64 `json:"cpu_percent"`
-	MemAllocMB    float64 `json:"mem_alloc_mb"`
-	MemTotalMB    float64 `json:"mem_total_mb"`
-	MemSysMB      float64 `json:"mem_sys_mb"`
-	MemLimitMB    float64 `json:"mem_limit_mb"`
-	MemPercent    float64 `json:"mem_percent"`
-	Goroutines    int     `json:"goroutines"`
-	NumCPU        int     `json:"num_cpu"`
-	PID           int     `json:"pid"`
+	CPUPercent float64 `json:"cpu_percent"`
+	MemAllocMB float64 `json:"mem_alloc_mb"`
+	MemTotalMB float64 `json:"mem_total_mb"`
+	MemSysMB   float64 `json:"mem_sys_mb"`
+	MemLimitMB float64 `json:"mem_limit_mb"`
+	MemPercent float64 `json:"mem_percent"`
+	Goroutines int     `json:"goroutines"`
+	NumCPU     int     `json:"num_cpu"`
+	PID        int     `json:"pid"`
 }
 
 // GetUsage handles GET /api/v1/usage

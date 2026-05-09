@@ -47,9 +47,9 @@ func CreateBackup(c *gin.Context) {
 
 	slog.Info("database backup created", "path", backupPath)
 	c.JSON(http.StatusOK, gin.H{
-		"message":    "backup created",
-		"path":       backupPath,
-		"timestamp":  timestamp,
+		"message":   "backup created",
+		"path":      backupPath,
+		"timestamp": timestamp,
 	})
 }
 
@@ -75,9 +75,9 @@ func ListBackups(c *gin.Context) {
 	}
 
 	type backupInfo struct {
-		Filename  string    `json:"filename"`
-		Size      int64     `json:"size_bytes"`
-		Modified  time.Time `json:"modified_at"`
+		Filename string    `json:"filename"`
+		Size     int64     `json:"size_bytes"`
+		Modified time.Time `json:"modified_at"`
 	}
 	backups := make([]backupInfo, 0, len(entries))
 	for _, entry := range entries {

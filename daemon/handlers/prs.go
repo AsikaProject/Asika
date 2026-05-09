@@ -171,41 +171,41 @@ func GetPR(c *gin.Context) {
 		return
 	}
 
-// Try to find PR in DB using index or scan
-    var found *models.PRRecord
-    prNumber, convErr := strconv.Atoi(prID)
-    if convErr == nil {
-        data, err := db.GetPRByIndex("", repoGroup, prNumber)
-        if err == nil && data != nil {
-            var pr models.PRRecord
-            if json.Unmarshal(data, &pr) == nil && pr.RepoGroup == repoGroup {
-                found = &pr
-            }
-        }
-    }
-    if found == nil {
-        data, err := db.GetPRByIndex(prID, "", 0)
-        if err == nil && data != nil {
-            var pr models.PRRecord
-            if json.Unmarshal(data, &pr) == nil {
-                if pr.RepoGroup == repoGroup || pr.RepoGroup == "" {
-                    found = &pr
-                }
-            }
-        }
-    }
-    if found == nil {
-        db.ForEach(db.BucketPRs, func(key, value []byte) error {
-            var pr models.PRRecord
-            if json.Unmarshal(value, &pr) != nil {
-                return nil
-            }
-            if pr.RepoGroup == repoGroup && (pr.ID == prID || fmt.Sprintf("%d", pr.PRNumber) == prID) {
-                found = &pr
-            }
-            return nil
-        })
-    }
+	// Try to find PR in DB using index or scan
+	var found *models.PRRecord
+	prNumber, convErr := strconv.Atoi(prID)
+	if convErr == nil {
+		data, err := db.GetPRByIndex("", repoGroup, prNumber)
+		if err == nil && data != nil {
+			var pr models.PRRecord
+			if json.Unmarshal(data, &pr) == nil && pr.RepoGroup == repoGroup {
+				found = &pr
+			}
+		}
+	}
+	if found == nil {
+		data, err := db.GetPRByIndex(prID, "", 0)
+		if err == nil && data != nil {
+			var pr models.PRRecord
+			if json.Unmarshal(data, &pr) == nil {
+				if pr.RepoGroup == repoGroup || pr.RepoGroup == "" {
+					found = &pr
+				}
+			}
+		}
+	}
+	if found == nil {
+		db.ForEach(db.BucketPRs, func(key, value []byte) error {
+			var pr models.PRRecord
+			if json.Unmarshal(value, &pr) != nil {
+				return nil
+			}
+			if pr.RepoGroup == repoGroup && (pr.ID == prID || fmt.Sprintf("%d", pr.PRNumber) == prID) {
+				found = &pr
+			}
+			return nil
+		})
+	}
 
 	if found != nil {
 		c.JSON(http.StatusOK, found)
@@ -328,10 +328,10 @@ func ApprovePR(c *gin.Context) {
 		slog.Error("failed to approve PR", "error", err)
 		db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
 			"pr_number":  prNumber,
-			"repo_group":  repoGroup,
-			"actor":       c.GetString("username"),
-			"platform":    platform,
-			"error":       err.Error(),
+			"repo_group": repoGroup,
+			"actor":      c.GetString("username"),
+			"platform":   platform,
+			"error":      err.Error(),
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve PR"})
 		return
@@ -355,10 +355,10 @@ func ApprovePR(c *gin.Context) {
 	if pr == nil {
 		isNew = true
 		pr = &models.PRRecord{
-			ID:       fmt.Sprintf("%d", prNumber),
-			Platform: platform,
+			ID:        fmt.Sprintf("%d", prNumber),
+			Platform:  platform,
 			RepoGroup: repoGroup,
-			PRNumber: prNumber,
+			PRNumber:  prNumber,
 		}
 	}
 
@@ -420,10 +420,10 @@ func ApprovePR(c *gin.Context) {
 	}
 
 	db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-		"pr_number":     prNumber,
-		"repo_group":    repoGroup,
-		"actor":         c.GetString("username"),
-		"platform":      platform,
+		"pr_number":      prNumber,
+		"repo_group":     repoGroup,
+		"actor":          c.GetString("username"),
+		"platform":       platform,
 		"added_to_queue": addedToQueue,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "PR approved", "queued": addedToQueue})
@@ -482,10 +482,10 @@ func ClosePR(c *gin.Context) {
 		slog.Error("failed to close PR", "error", err)
 		db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
 			"pr_number":  prNumber,
-			"repo_group":  repoGroup,
-			"actor":       c.GetString("username"),
-			"platform":    platform,
-			"error":       err.Error(),
+			"repo_group": repoGroup,
+			"actor":      c.GetString("username"),
+			"platform":   platform,
+			"error":      err.Error(),
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to close PR"})
 		return
@@ -500,9 +500,9 @@ func ClosePR(c *gin.Context) {
 
 	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
 		"pr_number":  prNumber,
-		"repo_group":  repoGroup,
-		"actor":       c.GetString("username"),
-		"platform":    platform,
+		"repo_group": repoGroup,
+		"actor":      c.GetString("username"),
+		"platform":   platform,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "PR closed"})
 }
@@ -560,10 +560,10 @@ func ReopenPR(c *gin.Context) {
 		slog.Error("failed to reopen PR", "error", err)
 		db.AppendAuditLog("error", "PR reopen failed", map[string]interface{}{
 			"pr_number":  prNumber,
-			"repo_group":  repoGroup,
-			"actor":       c.GetString("username"),
-			"platform":    platform,
-			"error":       err.Error(),
+			"repo_group": repoGroup,
+			"actor":      c.GetString("username"),
+			"platform":   platform,
+			"error":      err.Error(),
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reopen PR"})
 		return
@@ -571,9 +571,9 @@ func ReopenPR(c *gin.Context) {
 
 	db.AppendAuditLog("info", "PR reopened", map[string]interface{}{
 		"pr_number":  prNumber,
-		"repo_group":  repoGroup,
-		"actor":       c.GetString("username"),
-		"platform":    platform,
+		"repo_group": repoGroup,
+		"actor":      c.GetString("username"),
+		"platform":   platform,
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "PR reopened"})
 }
@@ -635,10 +635,10 @@ func MarkSpam(c *gin.Context) {
 		slog.Error("failed to mark PR as spam", "error", err)
 		db.AppendAuditLog("error", "PR spam marking failed", map[string]interface{}{
 			"pr_number":  prNumber,
-			"repo_group":  repoGroup,
-			"actor":       c.GetString("username"),
-			"platform":    platform,
-			"error":       err.Error(),
+			"repo_group": repoGroup,
+			"actor":      c.GetString("username"),
+			"platform":   platform,
+			"error":      err.Error(),
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mark as spam"})
 		return
@@ -663,9 +663,9 @@ func MarkSpam(c *gin.Context) {
 
 	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
 		"pr_number":  prNumber,
-		"repo_group":  repoGroup,
-		"actor":       c.GetString("username"),
-		"platform":    platform,
+		"repo_group": repoGroup,
+		"actor":      c.GetString("username"),
+		"platform":   platform,
 	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "PR marked as spam"})
@@ -730,10 +730,10 @@ func CommentPR(c *gin.Context) {
 		slog.Error("failed to comment on PR", "error", err)
 		db.AppendAuditLog("error", "PR comment failed", map[string]interface{}{
 			"pr_number":  prNumber,
-			"repo_group":  repoGroup,
-			"actor":       c.GetString("username"),
-			"platform":    platform,
-			"error":       err.Error(),
+			"repo_group": repoGroup,
+			"actor":      c.GetString("username"),
+			"platform":   platform,
+			"error":      err.Error(),
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to comment on PR"})
 		return
@@ -741,10 +741,10 @@ func CommentPR(c *gin.Context) {
 
 	db.AppendAuditLog("info", "PR commented", map[string]interface{}{
 		"pr_number":  prNumber,
-		"repo_group":  repoGroup,
-		"actor":       c.GetString("username"),
-		"platform":    platform,
-		"comment":     req.Body[:min(len(req.Body), 50)],
+		"repo_group": repoGroup,
+		"actor":      c.GetString("username"),
+		"platform":   platform,
+		"comment":    req.Body[:min(len(req.Body), 50)],
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "comment added"})
 }
@@ -801,10 +801,10 @@ func BatchApprovePR(c *gin.Context) {
 			results[prID] = "success"
 			db.AppendAuditLog("info", "PR approved (batch)", map[string]interface{}{
 				"pr_number":  prNumber,
-				"repo_group":  repoGroup,
-				"actor":       c.GetString("username"),
-				"platform":    platform,
-				"batch":       true,
+				"repo_group": repoGroup,
+				"actor":      c.GetString("username"),
+				"platform":   platform,
+				"batch":      true,
 			})
 		}
 	}
@@ -864,10 +864,10 @@ func BatchClosePR(c *gin.Context) {
 			results[prID] = "success"
 			db.AppendAuditLog("info", "PR closed (batch)", map[string]interface{}{
 				"pr_number":  prNumber,
-				"repo_group":  repoGroup,
-				"actor":       c.GetString("username"),
-				"platform":    platform,
-				"batch":       true,
+				"repo_group": repoGroup,
+				"actor":      c.GetString("username"),
+				"platform":   platform,
+				"batch":      true,
 			})
 		}
 	}
@@ -881,8 +881,8 @@ func BatchLabelPR(c *gin.Context) {
 
 	var req struct {
 		PRIDs []string `json:"pr_ids" binding:"required"`
-		Label  string   `json:"label" binding:"required"`
-		Color  string   `json:"color"`
+		Label string   `json:"label" binding:"required"`
+		Color string   `json:"color"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "pr_ids and label are required"})
@@ -929,11 +929,11 @@ func BatchLabelPR(c *gin.Context) {
 			results[prID] = "success"
 			db.AppendAuditLog("info", "PR labeled (batch)", map[string]interface{}{
 				"pr_number":  prNumber,
-				"repo_group":  repoGroup,
-				"actor":       c.GetString("username"),
-				"platform":    platform,
-				"label":       req.Label,
-				"batch":       true,
+				"repo_group": repoGroup,
+				"actor":      c.GetString("username"),
+				"platform":   platform,
+				"label":      req.Label,
+				"batch":      true,
 			})
 		}
 	}
@@ -1018,5 +1018,3 @@ func getClientForGroup(group *models.RepoGroup, platform string) platforms.Platf
 	}
 	return clients[platforms.PlatformType(platform)]
 }
-
-

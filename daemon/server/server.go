@@ -32,10 +32,10 @@ func currentLangFunc() string {
 
 // Server represents the HTTP server
 type Server struct {
-	engine   *gin.Engine
-	httpSrv  *http.Server
-	cfg      *models.Config
-	clients  map[platforms.PlatformType]platforms.PlatformClient
+	engine  *gin.Engine
+	httpSrv *http.Server
+	cfg     *models.Config
+	clients map[platforms.PlatformType]platforms.PlatformClient
 }
 
 // NewServer creates a new server instance
@@ -177,10 +177,10 @@ func (s *Server) setupRoutes() {
 		users := protected.Group("/users")
 		users.Use(RequireRole("admin"))
 		{
- 			users.GET("", handlers.ListUsers)
- 			users.POST("", handlers.CreateUser)
- 			users.PUT("/:username", handlers.UpdateUser)
- 			users.DELETE("/:username", handlers.DeleteUser)
+			users.GET("", handlers.ListUsers)
+			users.POST("", handlers.CreateUser)
+			users.PUT("/:username", handlers.UpdateUser)
+			users.DELETE("/:username", handlers.DeleteUser)
 		}
 
 		// PR management (8.2)

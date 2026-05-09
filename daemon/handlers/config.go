@@ -176,9 +176,9 @@ func GetConfigHistory(c *gin.Context) {
 		return
 	}
 	type historyEntry struct {
-		Version   int                      `json:"version"`
-		Timestamp time.Time                `json:"timestamp"`
-		Config    *models.Config           `json:"config"`
+		Version   int            `json:"version"`
+		Timestamp time.Time      `json:"timestamp"`
+		Config    *models.Config `json:"config"`
 	}
 	entries := make([]historyEntry, 0, len(snapshots))
 	for _, s := range snapshots {

@@ -104,12 +104,12 @@ func (m *Manager) CheckRepoGroupDryRun(group *models.RepoGroup) []StaleAction {
 }
 
 type StaleAction struct {
-	Type      string `json:"type"` // "mark" | "close" | "skip"
-	Platform  string `json:"platform"`
-	Repo      string `json:"repo"`
-	PRNumber  int    `json:"pr_number"`
-	PRTitle   string `json:"pr_title"`
-	Reason    string `json:"reason"`
+	Type     string `json:"type"` // "mark" | "close" | "skip"
+	Platform string `json:"platform"`
+	Repo     string `json:"repo"`
+	PRNumber int    `json:"pr_number"`
+	PRTitle  string `json:"pr_title"`
+	Reason   string `json:"reason"`
 }
 
 func (m *Manager) analyzePR(client platforms.PlatformClient, group *models.RepoGroup, pr *models.PRRecord, cfg *models.StaleConfig) StaleAction {
@@ -266,8 +266,8 @@ func (m *Manager) markStale(client platforms.PlatformClient, group *models.RepoG
 	}
 
 	data := commentData{
-		Days:       daysInactive,
-		CloseIn:    closeIn,
+		Days:        daysInactive,
+		CloseIn:     closeIn,
 		ExemptLabel: exemptLabel,
 	}
 	rendered, err := renderComment(commentBody, data)
@@ -347,8 +347,6 @@ func (m *Manager) sendNotification(group, title, body string) {
 		}
 	}
 }
-
-
 
 func hasLabel(labels []string, target string) bool {
 	for _, l := range labels {

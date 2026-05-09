@@ -23,7 +23,7 @@ import (
 
 const (
 	defaultShutdownTimeout = 30 * time.Second
-	metricsLogInterval    = 5 * time.Minute
+	metricsLogInterval     = 5 * time.Minute
 )
 
 func main() {

@@ -75,7 +75,7 @@ func TestAddToQueue_Duplicate(t *testing.T) {
 	m := NewManager(cfg, clients)
 
 	pr := &models.PRRecord{
-		ID:       "pr-123",
+		ID:        "pr-123",
 		RepoGroup: "main",
 		Platform:  "github",
 		PRNumber:  1,
@@ -191,7 +191,7 @@ func TestShouldMerge(t *testing.T) {
 	db.Put(db.BucketPRs, "main#github#1", data)
 
 	item := &models.QueueItem{
-		PRID:     "pr-123",
+		PRID:      "pr-123",
 		RepoGroup: "main",
 		Status:    "waiting",
 	}
@@ -246,7 +246,7 @@ func TestShouldMerge_NotEnoughApprovals(t *testing.T) {
 	db.Put(db.BucketPRs, "main#github#1", data)
 
 	item := &models.QueueItem{
-		PRID:     "pr-123",
+		PRID:      "pr-123",
 		RepoGroup: "main",
 		Status:    "waiting",
 	}
@@ -260,8 +260,6 @@ func TestShouldMerge_NotEnoughApprovals(t *testing.T) {
 		t.Error("ShouldMerge should return false when not enough approvals")
 	}
 }
-
-
 
 func TestFindPRByID(t *testing.T) {
 	dir := t.TempDir()
@@ -368,7 +366,7 @@ func TestShouldMerge_CICheckRequired(t *testing.T) {
 	db.Put(db.BucketPRs, "main#github#1", data)
 
 	item := &models.QueueItem{
-		PRID:     "pr-ci-1",
+		PRID:      "pr-ci-1",
 		RepoGroup: "main",
 		Status:    "waiting",
 	}
@@ -425,7 +423,7 @@ func TestShouldMerge_CIFailing(t *testing.T) {
 	db.Put(db.BucketPRs, "main#github#1", data)
 
 	item := &models.QueueItem{
-		PRID:     "pr-ci-fail-1",
+		PRID:      "pr-ci-fail-1",
 		RepoGroup: "main",
 		Status:    "waiting",
 	}
@@ -481,7 +479,7 @@ func TestShouldMerge_CoreContributorBypass(t *testing.T) {
 	db.Put(db.BucketPRs, "main#github#1", data)
 
 	item := &models.QueueItem{
-		PRID:     "pr-core-1",
+		PRID:      "pr-core-1",
 		RepoGroup: "main",
 		Status:    "waiting",
 	}
@@ -505,7 +503,7 @@ func TestShouldMerge_PRNotFound(t *testing.T) {
 	c := NewChecker(cfg, clients)
 
 	item := &models.QueueItem{
-		PRID:     "nonexistent-pr",
+		PRID:      "nonexistent-pr",
 		RepoGroup: "main",
 		Status:    "waiting",
 	}
@@ -539,7 +537,7 @@ func TestShouldMerge_GroupNotFound(t *testing.T) {
 	db.Put(db.BucketPRs, "missing#github#1", data)
 
 	item := &models.QueueItem{
-		PRID:     "pr-nogroup-1",
+		PRID:      "pr-nogroup-1",
 		RepoGroup: "missing",
 		Status:    "waiting",
 	}

@@ -38,19 +38,19 @@ func TestPublishAndSubscribe(t *testing.T) {
 	// Publish event
 	pr := &models.PRRecord{
 		ID:        "pr-123",
-		RepoGroup:  "main",
-		Platform:   "github",
-		PRNumber:   1,
-		Title:      "Test PR",
-		State:      "open",
+		RepoGroup: "main",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Test PR",
+		State:     "open",
 	}
 
 	Publish(Event{
 		Type:      EventPROpened,
-		RepoGroup:  "main",
-		Platform:   "github",
+		RepoGroup: "main",
+		Platform:  "github",
 		PR:        pr,
-		Timestamp:  time.Now(),
+		Timestamp: time.Now(),
 	})
 
 	// Receive event (with timeout)
@@ -76,7 +76,7 @@ func TestPublishPR(t *testing.T) {
 	ch := Subscribe()
 
 	pr := &models.PRRecord{
-		ID:       "pr-456",
+		ID:        "pr-456",
 		RepoGroup: "main",
 		Platform:  "gitlab",
 		PRNumber:  2,
@@ -103,7 +103,7 @@ func TestMultipleSubscribers(t *testing.T) {
 	ch2 := Subscribe()
 
 	pr := &models.PRRecord{
-		ID:       "pr-789",
+		ID:        "pr-789",
 		RepoGroup: "main",
 		Platform:  "gitea",
 		PRNumber:  3,
@@ -168,7 +168,7 @@ func TestPublishBufferFull(t *testing.T) {
 	// Fill the channel buffer
 	for i := 0; i < 100; i++ {
 		pr := &models.PRRecord{
-			ID:       "pr-full",
+			ID:        "pr-full",
 			RepoGroup: "main",
 			Platform:  "github",
 			PRNumber:  i,
@@ -179,7 +179,7 @@ func TestPublishBufferFull(t *testing.T) {
 
 	// Publish the 101st event, should not block (will be dropped)
 	pr := &models.PRRecord{
-		ID:       "pr-overflow",
+		ID:        "pr-overflow",
 		RepoGroup: "main",
 		Platform:  "github",
 		PRNumber:  101,

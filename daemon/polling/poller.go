@@ -231,5 +231,3 @@ func (p *Poller) pollPlatform(client platforms.PlatformClient, repoGroup, platfo
 	}
 	return
 }
-
-

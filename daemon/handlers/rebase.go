@@ -206,8 +206,6 @@ func findPRForRebase(prID string) (*models.PRRecord, error) {
 	return found, nil
 }
 
-
-
 // CherryPickRequest represents a cherry-pick operation request
 type CherryPickRequest struct {
 	TargetBranch string `json:"target_branch" binding:"required"`
@@ -312,10 +310,10 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 	db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 
 	db.AppendAuditLog("info", "PR cherry-picked successfully", map[string]interface{}{
-		"pr_id":        prID,
-		"repo_group":   repoGroup,
-		"platform":     platform,
-		"merge_commit": pr.MergeCommitSHA,
+		"pr_id":         prID,
+		"repo_group":    repoGroup,
+		"platform":      platform,
+		"merge_commit":  pr.MergeCommitSHA,
 		"target_branch": targetBranch,
 	})
 

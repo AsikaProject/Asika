@@ -168,7 +168,7 @@ func TestPollPlatform_WithPRs(t *testing.T) {
 	client := &testutil.MockPlatformClient{
 		PRs: map[string]*models.PRRecord{
 			"owner/repo#1": {
-				ID:       "test-pr-1",
+				ID:        "test-pr-1",
 				RepoGroup: "main",
 				Platform:  "github",
 				PRNumber:  1,

@@ -64,16 +64,16 @@ func (c *BitbucketClient) doRequest(ctx context.Context, method, url string, bod
 
 // bbPullRequest represents a Bitbucket pull request response
 type bbPullRequest struct {
-	ID          int       `json:"id"`
-	Title       string    `json:"title"`
-	State       string    `json:"state"`
-	Description string    `json:"description"`
-	Links       bbLinks   `json:"links"`
-	Author      *bbUser   `json:"author"`
-	Source      *bbBranch `json:"source"`
-	Destination *bbBranch `json:"destination"`
-	CreatedOn   string    `json:"created_on"`
-	UpdatedOn   string    `json:"updated_on"`
+	ID           int             `json:"id"`
+	Title        string          `json:"title"`
+	State        string          `json:"state"`
+	Description  string          `json:"description"`
+	Links        bbLinks         `json:"links"`
+	Author       *bbUser         `json:"author"`
+	Source       *bbBranch       `json:"source"`
+	Destination  *bbBranch       `json:"destination"`
+	CreatedOn    string          `json:"created_on"`
+	UpdatedOn    string          `json:"updated_on"`
 	Participants []bbParticipant `json:"participants"`
 }
 
@@ -91,7 +91,7 @@ type bbUser struct {
 }
 
 type bbBranch struct {
-	Branch bbRef   `json:"branch"`
+	Branch bbRef    `json:"branch"`
 	Commit bbCommit `json:"commit"`
 }
 
@@ -104,7 +104,7 @@ type bbCommit struct {
 }
 
 type bbParticipant struct {
-	Approved bool   `json:"approved"`
+	Approved bool    `json:"approved"`
 	User     *bbUser `json:"user"`
 }
 
@@ -114,13 +114,13 @@ type bbPullRequestList struct {
 
 func (c *BitbucketClient) bbToRecord(pr *bbPullRequest, owner, repo string) *models.PRRecord {
 	record := &models.PRRecord{
-		ID:        fmt.Sprintf("%d", pr.ID),
-		Platform:  "bitbucket",
-		PRNumber:  pr.ID,
-		Title:     pr.Title,
-		State:     bbStateToPRState(pr.State),
-		HTMLURL:   pr.Links.HTML.Href,
-		Events:    []models.PREvent{},
+		ID:       fmt.Sprintf("%d", pr.ID),
+		Platform: "bitbucket",
+		PRNumber: pr.ID,
+		Title:    pr.Title,
+		State:    bbStateToPRState(pr.State),
+		HTMLURL:  pr.Links.HTML.Href,
+		Events:   []models.PREvent{},
 	}
 
 	if pr.Author != nil {

@@ -294,6 +294,3 @@ func (c *Checker) tryAutoRebase(ctx context.Context, pr *models.PRRecord, group 
 	slog.Info("auto-rebase: succeeded", "pr_id", pr.ID, "head_branch", branchInfo.HeadBranch, "base_branch", branchInfo.BaseBranch)
 	return true
 }
-
-
-

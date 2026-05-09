@@ -95,19 +95,19 @@ func WebhookHandler(c *gin.Context) {
 // processWebhook processes a webhook and returns eventType, PR record, and error.
 // This is used by both the webhook handler and the retry worker.
 func processWebhook(platform, repoGroup string, body []byte) (eventType string, pr *models.PRRecord, err error) {
-    eventType, pr, err = parseWebhookEvent(platform, body, repoGroup)
-    if err != nil {
-        return
-    }
-    if eventType != "" && pr != nil {
-        var payload interface{}
-        if events.EventType(eventType) == events.EventPRComment {
-            payload = extractCommentPayload(platform, body)
-        }
-        events.PublishPR(events.EventType(eventType), repoGroup, platform, pr, payload)
-        slog.Info("webhook event published", "type", eventType, "repo_group", repoGroup, "platform", platform, "pr", pr.PRNumber)
-    }
-    return
+	eventType, pr, err = parseWebhookEvent(platform, body, repoGroup)
+	if err != nil {
+		return
+	}
+	if eventType != "" && pr != nil {
+		var payload interface{}
+		if events.EventType(eventType) == events.EventPRComment {
+			payload = extractCommentPayload(platform, body)
+		}
+		events.PublishPR(events.EventType(eventType), repoGroup, platform, pr, payload)
+		slog.Info("webhook event published", "type", eventType, "repo_group", repoGroup, "platform", platform, "pr", pr.PRNumber)
+	}
+	return
 }
 
 // verifyWebhookSignature verifies the webhook signature based on platform
@@ -159,16 +159,16 @@ func parseWebhookEvent(platform string, body []byte, repoGroup string) (string, 
 func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
 	// Single unmarshal to detect event type and extract common fields
 	var eventDetect struct {
-		Action      string `json:"action"`
-		Comment     struct {
+		Action  string `json:"action"`
+		Comment struct {
 			Body string `json:"body"`
 		} `json:"comment"`
-		Issue       struct {
+		Issue struct {
 			PullRequest struct {
 				URL string `json:"url"`
 			} `json:"pull_request"`
 		} `json:"issue"`
-		Review      struct {
+		Review struct {
 			State string `json:"state"`
 		} `json:"review"`
 	}
@@ -184,8 +184,8 @@ func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 	if eventDetect.Review.State != "" {
 		// This is a pull_request_review event — parse full payload once
 		var reviewPayload struct {
-			Action      string `json:"action"`
-			Review      struct {
+			Action string `json:"action"`
+			Review struct {
 				State string `json:"state"`
 				User  struct {
 					Login string `json:"login"`
@@ -319,12 +319,12 @@ func parseGitHubIssueComment(body []byte, repoGroup string) (string, *models.PRR
 	var payload struct {
 		Action string `json:"action"`
 		Issue  struct {
-			Number     int    `json:"number"`
-			Title      string `json:"title"`
-			State      string `json:"state"`
-			Draft      bool   `json:"draft"`
-			HTMLURL    string `json:"html_url"`
-			User       struct {
+			Number  int    `json:"number"`
+			Title   string `json:"title"`
+			State   string `json:"state"`
+			Draft   bool   `json:"draft"`
+			HTMLURL string `json:"html_url"`
+			User    struct {
 				Login string `json:"login"`
 			} `json:"user"`
 			PullRequest struct {
@@ -388,8 +388,8 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 	}
 
 	var payload struct {
-		ObjectKind string `json:"object_kind"`
-		EventName  string `json:"event_name"`
+		ObjectKind       string `json:"object_kind"`
+		EventName        string `json:"event_name"`
 		ObjectAttributes struct {
 			IID    int    `json:"iid"`
 			Title  string `json:"title"`
@@ -457,12 +457,12 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 // parseGitLabNoteWebhook handles GitLab Note Hook events for MR comments
 func parseGitLabNoteWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
 	var payload struct {
-		ObjectKind string `json:"object_kind"`
+		ObjectKind       string `json:"object_kind"`
 		ObjectAttributes struct {
-			ID        int    `json:"id"`
-			Note      string `json:"note"`
+			ID           int    `json:"id"`
+			Note         string `json:"note"`
 			NoteableType string `json:"noteable_type"`
-			Action    string `json:"action"`
+			Action       string `json:"action"`
 		} `json:"object_attributes"`
 		MergeRequest struct {
 			IID   int    `json:"iid"`
@@ -516,8 +516,8 @@ func parseGiteaWebhook(body []byte, repoGroup string, platform string) (string, 
 	}
 
 	var payload struct {
-		Action     string `json:"action"`
-		Number     int    `json:"number"`
+		Action      string `json:"action"`
+		Number      int    `json:"number"`
 		PullRequest struct {
 			Title  string `json:"title"`
 			State  string `json:"state"`
@@ -649,9 +649,9 @@ func parseBitbucketWebhook(body []byte, repoGroup string) (string, *models.PRRec
 			} `json:"user"`
 		} `json:"comment"`
 		PullRequest struct {
-			ID    int    `json:"id"`
-			Title string `json:"title"`
-			State string `json:"state"`
+			ID     int    `json:"id"`
+			Title  string `json:"title"`
+			State  string `json:"state"`
 			Author struct {
 				DisplayName string `json:"display_name"`
 			} `json:"author"`
@@ -792,7 +792,7 @@ func StartWebhookRetryWorker() {
 			}
 		}
 	}()
- 	slog.Info("webhook retry worker started")
+	slog.Info("webhook retry worker started")
 }
 
 func notifyWebhookPermanentFailure(retry *models.WebhookRetry) {

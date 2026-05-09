@@ -24,7 +24,7 @@ const (
 // Formatter formats output
 type Formatter struct {
 	format OutputFormat
-	writer  io.Writer
+	writer io.Writer
 }
 
 // NewFormatter creates a new formatter
@@ -32,7 +32,7 @@ func NewFormatter(format string, writer io.Writer) *Formatter {
 	f := ParseFormat(format)
 	return &Formatter{
 		format: f,
-		writer:  writer,
+		writer: writer,
 	}
 }
 

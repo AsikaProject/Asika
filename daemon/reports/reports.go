@@ -245,8 +245,6 @@ func cronToInterval(cron string) time.Duration {
 		if d, err := time.ParseDuration(cron); err == nil {
 			return d
 		}
- 		return 7 * 24 * time.Hour
+		return 7 * 24 * time.Hour
 	}
 }
-
-

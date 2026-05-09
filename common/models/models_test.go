@@ -80,7 +80,7 @@ func TestPREvent(t *testing.T) {
 func TestQueueItem(t *testing.T) {
 	item := QueueItem{
 		PRID:      "pr-123",
-		RepoGroup:  "main",
+		RepoGroup: "main",
 		Status:    "waiting",
 		AddedAt:   time.Now(),
 		Criteria: MergeCriteria{
@@ -132,11 +132,11 @@ func TestLabelRule(t *testing.T) {
 
 func TestSpamConfig(t *testing.T) {
 	spam := SpamConfig{
-		Enabled:           true,
-		TimeWindow:        "5m",
-		Threshold:         5,
-		TriggerOnAuthor:   true,
-		TriggerOnTitleKw:  []string{"spam"},
+		Enabled:          true,
+		TimeWindow:       "5m",
+		Threshold:        5,
+		TriggerOnAuthor:  true,
+		TriggerOnTitleKw: []string{"spam"},
 	}
 
 	if !spam.Enabled {

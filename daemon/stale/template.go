@@ -7,8 +7,8 @@ import (
 )
 
 type commentData struct {
-	Days       int
-	CloseIn    string
+	Days        int
+	CloseIn     string
 	ExemptLabel string
 }
 

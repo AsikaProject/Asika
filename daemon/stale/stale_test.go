@@ -23,12 +23,12 @@ func TestNewManager(t *testing.T) {
 func TestInactivityDays(t *testing.T) {
 	tests := []struct {
 		lastActive time.Time
-		want        int
+		want       int
 	}{
-		{time.Now().Add(-24 * time.Hour), 1},      // 1 day ago
-		{time.Now().Add(-72 * time.Hour), 3},      // 3 days ago
+		{time.Now().Add(-24 * time.Hour), 1}, // 1 day ago
+		{time.Now().Add(-72 * time.Hour), 3}, // 3 days ago
 		{time.Time{}, 0},                     // zero time
-		{time.Now().Add(24 * time.Hour), 0},       // future (should be 0 or negative, but we return 0)
+		{time.Now().Add(24 * time.Hour), 0},  // future (should be 0 or negative, but we return 0)
 	}
 
 	for _, tt := range tests {
@@ -142,7 +142,7 @@ func TestManager_CheckRepoGroup_Enabled(t *testing.T) {
 		PRs: map[string]*models.PRRecord{
 			"owner/repo#1": {
 				ID:       "pr-1",
-				PRNumber:  1,
+				PRNumber: 1,
 				Title:    "Test PR",
 				State:    "open",
 				Author:   "user1",

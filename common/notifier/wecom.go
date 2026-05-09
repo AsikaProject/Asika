@@ -31,19 +31,19 @@ const (
 //  2. App mode: corp_id + corp_secret + agent_id for proactive messaging
 type WeComNotifier struct {
 	// Webhook mode
-	webhookURLs    []string
-	webhookSecret  string // optional, for signature
-	mentionedList  []string
+	webhookURLs      []string
+	webhookSecret    string // optional, for signature
+	mentionedList    []string
 	mentionedMobiles []string
 
 	// App mode
-	corpID     string
-	corpSecret string
-	agentID    int64
-	toUsers    []string
-	toParties  []string
-	toTags     []string
-	tokenMu    sync.Mutex
+	corpID      string
+	corpSecret  string
+	agentID     int64
+	toUsers     []string
+	toParties   []string
+	toTags      []string
+	tokenMu     sync.Mutex
 	accessToken string
 	tokenExpiry time.Time
 

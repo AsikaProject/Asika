@@ -1,25 +1,25 @@
 package handlers
 
 import (
-    "context"
+	"context"
 	"crypto/sha256"
-    "encoding/hex"
-    "fmt"
-    "io"
-    "log/slog"
-    "net/http"
-    "os"
-    "path/filepath"
-    "runtime"
-    "strings"
-    "time"
+	"encoding/hex"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"time"
 
-    "github.com/gin-gonic/gin"
-    "github.com/google/go-github/v69/github"
-    "golang.org/x/oauth2"
+	"github.com/gin-gonic/gin"
+	"github.com/google/go-github/v69/github"
+	"golang.org/x/oauth2"
 
-    "asika/common/config"
-    "asika/common/version"
+	"asika/common/config"
+	"asika/common/version"
 )
 
 var httpUpdateClient = &http.Client{Timeout: 60 * time.Second}
@@ -30,10 +30,10 @@ const githubRepo = "asika"
 var updateProgressMap = make(map[string]chan UpdateProgress)
 
 type UpdateProgress struct {
-	Status    string `json:"status"`    // "downloading", "verifying", "installing", "done", "error"
-	Progress  int    `json:"progress"`  // 0-100
-	Message   string `json:"message"`
-	Error     string `json:"error,omitempty"`
+	Status   string `json:"status"`   // "downloading", "verifying", "installing", "done", "error"
+	Progress int    `json:"progress"` // 0-100
+	Message  string `json:"message"`
+	Error    string `json:"error,omitempty"`
 }
 
 // CheckForUpdate checks GitHub for a newer version.
@@ -58,10 +58,10 @@ func CheckForUpdate(c *gin.Context) {
 	latestVersion := strings.TrimPrefix(release.GetTagName(), "v")
 
 	c.JSON(http.StatusOK, gin.H{
-		"current":  version.Version,
-		"latest":   latestVersion,
-		"upgradable": version.Version != "dev" && latestVersion != version.Version,
-		"url":      release.GetHTMLURL(),
+		"current":      version.Version,
+		"latest":       latestVersion,
+		"upgradable":   version.Version != "dev" && latestVersion != version.Version,
+		"url":          release.GetHTMLURL(),
 		"published_at": release.GetPublishedAt(),
 	})
 }
@@ -193,23 +193,23 @@ func PerformWebUpdate(c *gin.Context) {
 		return
 	}
 
-in, err := os.Open(binaryPath)
-    if err != nil {
-        sendEvent("error", fmt.Sprintf(`{"error":"failed to open downloaded binary: %s"}`, err.Error()))
-        return
-    }
-    out, err := os.Create(currentPath)
-    if err != nil {
-        in.Close()
-        // Restore backup
-        os.Rename(backupPath, currentPath)
-        sendEvent("error", fmt.Sprintf(`{"error":"failed to create target binary: %s"}`, err.Error()))
-        return
-    }
-    io.Copy(out, in)
-    in.Close()
-    out.Close()
-    os.Chmod(currentPath, 0755)
+	in, err := os.Open(binaryPath)
+	if err != nil {
+		sendEvent("error", fmt.Sprintf(`{"error":"failed to open downloaded binary: %s"}`, err.Error()))
+		return
+	}
+	out, err := os.Create(currentPath)
+	if err != nil {
+		in.Close()
+		// Restore backup
+		os.Rename(backupPath, currentPath)
+		sendEvent("error", fmt.Sprintf(`{"error":"failed to create target binary: %s"}`, err.Error()))
+		return
+	}
+	io.Copy(out, in)
+	in.Close()
+	out.Close()
+	os.Chmod(currentPath, 0755)
 
 	slog.Info("self-update", "version", release.GetTagName(), "from", "webui")
 	sendEvent("done", `{"status":"done","progress":100,"message":"Update complete. Service restarting..."}`)
@@ -220,7 +220,7 @@ in, err := os.Open(binaryPath)
 }
 
 func downloadWithProgress(url, dest string, sendEvent func(string, string)) error {
-    resp, err := httpUpdateClient.Get(url)
+	resp, err := httpUpdateClient.Get(url)
 	if err != nil {
 		return err
 	}
@@ -301,5 +301,3 @@ func parseSha256sumFile(path string) (string, error) {
 func isValidGitHubDownloadURL(url string) bool {
 	return strings.HasPrefix(url, "https://github.com/") || strings.HasPrefix(url, "https://objects.githubusercontent.com/")
 }
-
-

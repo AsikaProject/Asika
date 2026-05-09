@@ -84,7 +84,7 @@ func (b *Bot) Stop() {
 func (b *Bot) HandleEvent(ctx context.Context, body []byte) (interface{}, error) {
 	var event struct {
 		Schema string `json:"schema"`
-	Header struct {
+		Header struct {
 			EventType string `json:"event_type"`
 			Token     string `json:"token"`
 		} `json:"header"`

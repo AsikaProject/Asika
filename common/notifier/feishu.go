@@ -16,12 +16,12 @@ import (
 
 // FeishuNotifier sends notifications via Feishu/Lark
 type FeishuNotifier struct {
-	webhookURL      string
-	appID           string
-	appSecret       string
-	chatIDs         []string
-	client          *lark.Client
-	receiveIDType   string
+	webhookURL    string
+	appID         string
+	appSecret     string
+	chatIDs       []string
+	client        *lark.Client
+	receiveIDType string
 }
 
 // NewFeishuNotifier creates a new Feishu notifier.
