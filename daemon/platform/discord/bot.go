@@ -105,7 +105,7 @@ func (b *Bot) isOperator(userID string) bool {
 		return true
 	}
 	if len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
-		return true
+		return false
 	}
 	return b.operatorIDs[userID]
 }

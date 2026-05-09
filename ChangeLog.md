@@ -40,6 +40,12 @@
   - `/deluser <username>` — Delete user (admin only)
   - `/listusers` — List all users (operator+)
   - Supported on all 4 platforms (Telegram/Discord/Feishu/Slack)
+  - Each platform has its own `users.go` file for user management handlers
+- **Refactor: extract user management to per-platform users.go files:**
+  - `telegram/users.go`, `discord/users.go`, `feishu/users.go`, `slack/users.go`
+  - Fix isOperator logic: when only adminIDs configured, non-admins are rejected (not granted operator)
+  - Feishu processCommand: require isOperator instead of isAdmin (listusers needs operator+)
+  - Slack handleMessage: require isOperator instead of isAdmin
 - **Performance optimizations:**
   - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
   - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration

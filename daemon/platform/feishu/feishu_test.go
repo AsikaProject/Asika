@@ -120,7 +120,7 @@ func TestFeishuProcessCommand_Unauthorized(t *testing.T) {
 	bot, cleanup := setupFeishuTest(t)
 	defer cleanup()
 	result := bot.processCommand("random_user", "help")
-	if result != "Access denied. Admin only." {
+	if result != "Access denied. Operator or Admin only." {
 		t.Errorf("expected access denied, got %q", result)
 	}
 }

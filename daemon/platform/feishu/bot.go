@@ -181,8 +181,9 @@ func (b *Bot) isOperator(userID string) bool {
 	if b.isAdmin(userID) {
 		return true
 	}
+	// If only adminIDs are configured (no operator/viewer IDs), nobody else is operator
 	if len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
-		return true
+		return false
 	}
 	return b.operatorIDs[userID]
 }
