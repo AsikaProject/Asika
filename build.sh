@@ -56,11 +56,11 @@ distclean() {
 }
 
 serve() {
-	sudo nohup ./asikad > asikad.log 2>&1 & echo ok
+	SU nohup ./asikad > asikad.log 2>&1 & echo ok
 }
 
 stop() {
-	sudo killall asikad
+	SU killall asikad
 }
 
 lint () {
@@ -75,7 +75,7 @@ test () {
 # Parse command line arguments
 case "${1:-build}" in
 	build)
-		build && lint
+		build
 		;;
 	dep)
 		dep
@@ -93,7 +93,7 @@ case "${1:-build}" in
 		stop
 		;;
 	test)
-		test
+		lint && test
 		;;
 	*)
 		error "Unknown command: $1 (use: build, dep, clean, distclean)"

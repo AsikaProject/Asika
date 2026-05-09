@@ -231,8 +231,8 @@ func UpdateUser(c *gin.Context) {
 		}
 		user.Role = *req.Role
 		// viewer has no extra permissions; admin has all implicitly
-		// only operator can have granular permissions
-		if *req.Role != "operator" {
+		// only operator can have granular permissions configured
+		if *req.Role == "viewer" {
 			user.Permissions = models.UserPermissions{}
 		}
 	}

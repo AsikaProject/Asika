@@ -17,7 +17,7 @@
   - Replace all `b.cfg.Auth.JWTSecret` usages in bot API calls with `b.internalToken`
 - **Fix: add missing utils.ToFloat64 conversion in telegram handleStats**
 - **Add real-time system usage monitoring:**
-  - New `GET /api/v1/usage` endpoint returning CPU%, memory alloc/total/sys, GOMEMLIMIT, goroutines, CPU cores
+  - New `GET /api/v1/usage` endpoint returning CPU%, memory alloc/total/sys, GOMEMLIMIT, goroutines, CPU cores, PID
   - CPU measured via `/proc/stat` + `/proc/self/stat` (Linux, zero extra deps)
   - Memory from `runtime.ReadMemStats`; GOMEMLIMIT from env var
   - New `/usage` WebUI page with auto-refresh (5s), progress bar, color-coded thresholds
@@ -25,6 +25,11 @@
   - Implement Slack `stats` command (was previously a stub)
   - Add `nav.usage` / `usage.*` i18n keys (en + zh)
   - Add `internalToken` to Slack bot struct (was missing)
+- **Fix: restrict granular permissions to operator role only:**
+  - viewer should have no extra permissions; admin has all implicitly
+  - Only operator can have granular permissions (can_approve, can_merge, etc.)
+  - WebUI: hide permission checkboxes for viewer and admin, show only for operator
+  - Backend: clear permissions when role is set to viewer; ignore permissions payload for non-operator roles
 - **Performance optimizations:**
   - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
   - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration
