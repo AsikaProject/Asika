@@ -539,6 +539,9 @@ func (b *Bot) handleUsage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if v, ok := result["goroutines"]; ok {
 		sb.WriteString(fmt.Sprintf("🧵 Goroutines: **%v**\n", v))
 	}
+	if v, ok := result["pid"]; ok {
+		sb.WriteString(fmt.Sprintf("🔢 PID: **%v**\n", v))
+	}
 	sb.WriteString("\n**Memory**\n")
 	if v, ok := result["mem_alloc_mb"]; ok {
 		sb.WriteString(fmt.Sprintf("📦 Alloc: **%s**\n", formatMemMB(utils.ToFloat64(v))))

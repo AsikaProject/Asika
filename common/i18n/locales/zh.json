@@ -153,6 +153,7 @@
 	"usage.cpu_percent": "CPU 占用",
 	"usage.num_cpu": "CPU 核心数",
 	"usage.goroutines": "Goroutines",
+	"usage.pid": "PID",
 	"usage.memory": "内存",
 	"usage.mem_alloc": "当前分配",
 	"usage.mem_total": "累计分配",

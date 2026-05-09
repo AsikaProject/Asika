@@ -26,6 +26,10 @@
         <h3>{{t "usage.goroutines"}}</h3>
         <p id="goroutines">-</p>
     </div>
+    <div class="stat-card">
+        <h3>{{t "usage.pid"}}</h3>
+        <p id="pid">-</p>
+    </div>
 </div>
 
 <h2 style="margin-top:20px;">{{t "usage.memory"}}</h2>
@@ -85,6 +89,7 @@
             document.getElementById('cpuPercent').textContent = s.cpu_percent.toFixed(1) + '%';
             document.getElementById('numCPU').textContent = s.num_cpu || 0;
             document.getElementById('goroutines').textContent = s.goroutines || 0;
+            document.getElementById('pid').textContent = s.pid || 0;
 
             document.getElementById('memAlloc').textContent = formatMB(s.mem_alloc_mb);
             document.getElementById('memTotal').textContent = formatMB(s.mem_total_mb);

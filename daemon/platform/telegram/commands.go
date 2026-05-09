@@ -751,6 +751,9 @@ func (b *Bot) handleUsage(c telebot.Context) error {
 	if v, ok := result["goroutines"]; ok {
 		sb.WriteString(fmt.Sprintf("🧵 Goroutines: <b>%v</b>\n", v))
 	}
+	if v, ok := result["pid"]; ok {
+		sb.WriteString(fmt.Sprintf("🔢 PID: <b>%v</b>\n", v))
+	}
 	sb.WriteString("\n<b>Memory</b>\n")
 	if v, ok := result["mem_alloc_mb"]; ok {
 		sb.WriteString(fmt.Sprintf("📦 Alloc: <b>%s</b>\n", formatMemMB(utils.ToFloat64(v))))

@@ -636,6 +636,9 @@ func (b *Bot) showUsageText() string {
 	if v, ok := result["goroutines"]; ok {
 		lines = append(lines, fmt.Sprintf("Goroutines: %v", v))
 	}
+	if v, ok := result["pid"]; ok {
+		lines = append(lines, fmt.Sprintf("PID: %v", v))
+	}
 	lines = append(lines, "", "Memory", "─────────────")
 	if v, ok := result["mem_alloc_mb"]; ok {
 		lines = append(lines, fmt.Sprintf("Alloc: %s", formatMemMB(utils.ToFloat64(v))))

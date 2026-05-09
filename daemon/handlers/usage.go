@@ -19,6 +19,7 @@ type UsageResponse struct {
 	MemPercent    float64 `json:"mem_percent"`
 	Goroutines    int     `json:"goroutines"`
 	NumCPU        int     `json:"num_cpu"`
+	PID           int     `json:"pid"`
 }
 
 // GetUsage handles GET /api/v1/usage
@@ -53,6 +54,7 @@ func GetUsage(c *gin.Context) {
 		MemPercent: memPercent,
 		Goroutines: runtime.NumGoroutine(),
 		NumCPU:     runtime.NumCPU(),
+		PID:        os.Getpid(),
 	}
 
 	c.JSON(http.StatusOK, resp)
