@@ -221,11 +221,15 @@ func (b *Bot) doAPIKeyAPI(c telebot.Context, method, path string, bodyData inter
 	}
 	if method == "POST" {
 		if key, ok := result["key"].(string); ok {
+			// Save chat info before sending
+			chatID := c.Chat().ID
+			msgID := c.Message().ID
 			err := c.Send(successMsg+"\n\n<code>"+key+"</code>\n\n⚠️ Copy it now, it won't be shown again!",
 				&telebot.SendOptions{ParseMode: telebot.ModeHTML})
+			// Auto-delete the user's command message after 2 minutes
 			go func() {
 				time.Sleep(2 * time.Minute)
-				b.bot.Delete(c.Message())
+				b.bot.Delete(&telebot.Message{Chat: &telebot.Chat{ID: chatID}, ID: msgID})
 			}()
 			return err
 		}
