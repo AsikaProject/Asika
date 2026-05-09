@@ -256,6 +256,8 @@ func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, rep
 		repoPath = group.Codeberg
 	case "bitbucket":
 		repoPath = group.Bitbucket
+	case "gerrit":
+		repoPath = group.Gerrit
 	}
 	if repoPath == "" {
 		return "", ""
@@ -292,6 +294,9 @@ func GetPlatformForGroup(group *models.RepoGroup) string {
 	}
 	if group.Bitbucket != "" {
 		return "bitbucket"
+	}
+	if group.Gerrit != "" {
+		return "gerrit"
 	}
 	return ""
 }

@@ -108,6 +108,11 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	if cfg.Tokens.Bitbucket != "" {
 		clients[platforms.PlatformBitbucket] = platforms.NewBitbucketClient(cfg.Tokens.Bitbucket, cfg.Events.WebhookSecret)
 	}
+	if cfg.Tokens.Gerrit.URL != "" && cfg.Tokens.Gerrit.Username != "" && cfg.Tokens.Gerrit.Password != "" {
+		clients[platforms.PlatformGerrit] = platforms.NewGerritClient(
+			cfg.Tokens.Gerrit.URL, cfg.Tokens.Gerrit.Username, cfg.Tokens.Gerrit.Password, cfg.Events.WebhookSecret,
+		)
+	}
 
 	events.Init()
 

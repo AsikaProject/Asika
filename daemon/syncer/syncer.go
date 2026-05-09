@@ -60,6 +60,9 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 	// Get source repo URL
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	sourceRepo := owner + "/" + repo
+	if sourceRepo == "" || sourceRepo == "/" {
+		sourceRepo = group.Gerrit
+	}
 	if sourceRepo == "" {
 		return fmt.Errorf("no repo configured for source platform %s", pr.Platform)
 	}
@@ -235,6 +238,13 @@ func (s *Syncer) getRepoURL(platform, repo string) string {
 		return fmt.Sprintf("https://codeberg.org/%s/%s.git", parts[0], parts[1])
 	case platforms.PlatformBitbucket:
 		return fmt.Sprintf("https://bitbucket.org/%s/%s.git", parts[0], parts[1])
+	case platforms.PlatformGerrit:
+		base := s.cfg.Tokens.Gerrit.URL
+		if base == "" {
+			return ""
+		}
+		base = strings.TrimSuffix(base, "/")
+		return fmt.Sprintf("%s/%s", base, repo)
 	}
 	return ""
 }

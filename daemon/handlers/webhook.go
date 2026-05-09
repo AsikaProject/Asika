@@ -22,7 +22,7 @@ func WebhookHandler(c *gin.Context) {
 	repoGroup := c.Param("repo_group")
 	platform := c.Param("platform")
 
-	validPlatforms := map[string]bool{"github": true, "gitlab": true, "gitea": true, "forgejo": true, "codeberg": true, "bitbucket": true}
+	validPlatforms := map[string]bool{"github": true, "gitlab": true, "gitea": true, "forgejo": true, "codeberg": true, "bitbucket": true, "gerrit": true}
 	if !validPlatforms[platform] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported platform: " + platform})
 		return
@@ -134,6 +134,9 @@ func verifyWebhookSignature(platform string, client platforms.PlatformClient, bo
 	case "bitbucket":
 		sig := c.GetHeader("X-Hub-Signature")
 		return client.VerifyWebhookSignature(body, sig)
+	case "gerrit":
+		sig := c.GetHeader("X-Gerrit-Signature")
+		return client.VerifyWebhookSignature(body, sig)
 	}
 	return false
 }
@@ -149,6 +152,8 @@ func parseWebhookEvent(platform string, body []byte, repoGroup string) (string, 
 		return parseGiteaWebhook(body, repoGroup, platform)
 	case "bitbucket":
 		return parseBitbucketWebhook(body, repoGroup)
+	case "gerrit":
+		return parseGerritWebhook(body, repoGroup)
 	}
 	return "", nil, nil
 }
@@ -800,4 +805,73 @@ func notifyWebhookPermanentFailure(retry *models.WebhookRetry) {
 	body := fmt.Sprintf("Webhook processing has permanently failed after %d retries.\n\nRepo Group: %s\nPlatform: %s\nWebhook ID: %s\nLast Error: %s\nFailed At: %s",
 		retry.FailCount, retry.RepoGroup, retry.Platform, retry.ID, retry.LastError, retry.LastFailed.Format(time.RFC3339))
 	sendNotifications(title, body)
+}
+
+func parseGerritWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
+	var event struct {
+		Type    string `json:"type"`
+		Change  struct {
+			Project string `json:"project"`
+			Number  int    `json:"number"`
+			Subject string `json:"subject"`
+			Status  string `json:"status"`
+			Branch  string `json:"branch"`
+			Owner   struct {
+				Name     string `json:"name"`
+				Username string `json:"username"`
+				Email    string `json:"email"`
+			} `json:"owner"`
+		} `json:"change"`
+		PatchSet struct {
+			Number int    `json:"number"`
+			Ref    string `json:"ref"`
+		} `json:"patchSet"`
+		Author struct {
+			Name     string `json:"name"`
+			Username string `json:"username"`
+			Email    string `json:"email"`
+		} `json:"author"`
+		Comment string `json:"comment"`
+	}
+	if err := json.Unmarshal(body, &event); err != nil {
+		return "", nil, fmt.Errorf("failed to parse gerrit webhook: %w", err)
+	}
+
+	pr := &models.PRRecord{
+		RepoGroup: repoGroup,
+		Platform:  "gerrit",
+		PRNumber:  event.Change.Number,
+		Title:     event.Change.Subject,
+	}
+	if event.Change.Owner.Name != "" {
+		pr.Author = event.Change.Owner.Name
+	} else if event.Change.Owner.Username != "" {
+		pr.Author = event.Change.Owner.Username
+	}
+
+	switch event.Change.Status {
+	case "NEW", "DRAFT":
+		pr.State = "open"
+	case "MERGED":
+		pr.State = "merged"
+	case "ABANDONED":
+		pr.State = "closed"
+	}
+
+	switch event.Type {
+	case "patchset-created":
+		return string(events.EventPROpened), pr, nil
+	case "change-merged":
+		return string(events.EventPRMerged), pr, nil
+	case "change-abandoned":
+		return string(events.EventPRClosed), pr, nil
+	case "change-restored":
+		return string(events.EventPRReopened), pr, nil
+	case "comment-added":
+		if event.Comment != "" {
+			return string(events.EventPRComment), pr, nil
+		}
+	}
+
+	return "", nil, nil
 }

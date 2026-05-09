@@ -48,6 +48,7 @@ type RepoGroup struct {
 	Forgejo        string           `json:"forgejo"`
 	Codeberg       string           `json:"codeberg"`
 	Bitbucket      string           `json:"bitbucket"`
+	Gerrit         string           `json:"gerrit"`
 	DefaultBranch  string           `json:"default_branch"`
 	HookPath       string           `json:"hookpath"`
 	CIProvider     string           `json:"ci_provider"`
@@ -254,12 +255,20 @@ type GitConfig struct {
 
 // TokensConfig represents platform token configuration
 type TokensConfig struct {
-	GitHub    string `toml:"github"`
-	GitLab    string `toml:"gitlab"`
-	Gitea     string `toml:"gitea"`
-	Forgejo   string `toml:"forgejo"`
-	Codeberg  string `toml:"codeberg"`
-	Bitbucket string `toml:"bitbucket"`
+	GitHub    string      `toml:"github"`
+	GitLab    string      `toml:"gitlab"`
+	Gitea     string      `toml:"gitea"`
+	Forgejo   string      `toml:"forgejo"`
+	Codeberg  string      `toml:"codeberg"`
+	Bitbucket string      `toml:"bitbucket"`
+	Gerrit    GerritAuth  `toml:"gerrit"`
+}
+
+// GerritAuth holds Gerrit authentication credentials
+type GerritAuth struct {
+	URL      string `toml:"url"`
+	Username string `toml:"username"`
+	Password string `toml:"password"`
 }
 
 // RepoGroupConfig represents repository group configuration (TOML mapping)
@@ -273,6 +282,7 @@ type RepoGroupConfig struct {
 	Forgejo        string           `toml:"forgejo" json:"forgejo"`
 	Codeberg       string           `toml:"codeberg" json:"codeberg"`
 	Bitbucket      string           `toml:"bitbucket" json:"bitbucket"`
+	Gerrit         string           `toml:"gerrit" json:"gerrit"`
 	DefaultBranch  string           `toml:"default_branch" json:"default_branch"`
 	HookPath       string           `toml:"hookpath" json:"hookpath"`
 	CIProvider     string           `toml:"ci_provider" json:"ci_provider"`

@@ -74,6 +74,13 @@ func checkRepoMergeMethod(cfg *models.Config, clients map[PlatformType]PlatformC
 		}
 	}
 
+	// Check Gerrit
+	if repo.Gerrit != "" && clients[PlatformGerrit] != nil {
+		if err := checkGerritMergeMethod(ctx, clients[PlatformGerrit], repo.Gerrit); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -101,6 +108,23 @@ func checkPlatformMergeMethod(ctx context.Context, client PlatformClient, platfo
 			"default", defaultMethod)
 	}
 
+	return nil
+}
+
+// checkGerritMergeMethod checks Gerrit merge method (Gerrit uses project-level submit type config)
+func checkGerritMergeMethod(ctx context.Context, client PlatformClient, project string) error {
+	hasMultiple, err := client.HasMultipleMergeMethods(ctx, project, "")
+	if err != nil {
+		slog.Warn("cannot check gerrit merge methods, skipping", "project", project, "error", err)
+		return nil
+	}
+	if hasMultiple {
+		defaultMethod, err := client.GetDefaultMergeMethod(ctx, project, "")
+		if err != nil || defaultMethod == "" {
+			return fmt.Errorf("gerrit project %s has multiple merge methods but cannot determine default: %v", project, err)
+		}
+		slog.Info("gerrit project uses merge method", "project", project, "default", defaultMethod)
+	}
 	return nil
 }
 

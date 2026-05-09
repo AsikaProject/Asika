@@ -16,6 +16,7 @@ const (
 	PlatformForgejo   PlatformType = "forgejo"
 	PlatformCodeberg  PlatformType = "codeberg"
 	PlatformBitbucket PlatformType = "bitbucket"
+	PlatformGerrit    PlatformType = "gerrit"
 )
 
 // PlatformClient defines the unified platform operation interface

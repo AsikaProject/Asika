@@ -23,5 +23,8 @@ func GroupPlatforms(group *models.RepoGroup) []PlatformType {
 	if group.Bitbucket != "" {
 		result = append(result, PlatformBitbucket)
 	}
+	if group.Gerrit != "" {
+		result = append(result, PlatformGerrit)
+	}
 	return result
 }
