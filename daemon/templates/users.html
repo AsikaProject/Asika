@@ -44,7 +44,7 @@
         </div>
         <div class="form-group" style="margin:0;">
             <label>{{t "users.th.role"}}</label>
-            <select id="newRole">
+            <select id="newRole" onchange="togglePerms('new')">
                 <option value="viewer">{{t "users.role.viewer"}}</option>
                 <option value="operator">{{t "users.role.operator"}}</option>
                 <option value="admin">{{t "users.role.admin"}}</option>
@@ -57,8 +57,8 @@
         <input id="newGroupInput" type="text" placeholder="{{t "users.add_group"}}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
         <button class="btn btn-secondary btn-sm" onclick="addNewUserGroup()">{{t "users.add"}}</button>
     </div>
-    <div class="section-title" style="margin:12px 0 8px;">{{t "users.permissions"}}</div>
-    <div id="newUserPerms" class="perm-grid"></div>
+    <div id="newUserPermsSection" class="section-title" style="margin:12px 0 8px;display:none;">{{t "users.permissions"}}</div>
+    <div id="newUserPerms" class="perm-grid" style="display:none;"></div>
     <div style="margin-top:12px;">
         <button class="btn btn-primary" onclick="addUser()">{{t "users.add"}}</button>
     </div>
@@ -106,7 +106,7 @@
             </div>
             <div class="form-group" style="margin:0;">
                 <label>{{t "users.th.role"}}</label>
-                <select id="editRole">
+                <select id="editRole" onchange="togglePerms('edit')">
                     <option value="viewer">{{t "users.role.viewer"}}</option>
                     <option value="operator">{{t "users.role.operator"}}</option>
                     <option value="admin">{{t "users.role.admin"}}</option>
@@ -119,8 +119,8 @@
             <input id="editGroupInput" type="text" placeholder="{{t "users.add_group"}}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
             <button class="btn btn-secondary btn-sm" onclick="addEditUserGroup()">{{t "users.add"}}</button>
         </div>
-        <div class="section-title">{{t "users.permissions"}}</div>
-        <div id="editUserPerms" class="perm-grid"></div>
+    <div id="editUserPermsSection" class="section-title" style="display:none;">{{t "users.permissions"}}</div>
+    <div id="editUserPerms" class="perm-grid" style="display:none;"></div>
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeEditModal()">{{t "common.cancel"}}</button>
             <button class="btn btn-primary" onclick="saveEditUser()">{{t "common.save"}}</button>
@@ -199,6 +199,19 @@
             };
             container.appendChild(div);
         });
+    }
+
+    function togglePerms(prefix) {
+        const role = document.getElementById(prefix + 'Role').value;
+        const section = document.getElementById(prefix + 'UserPermsSection');
+        const grid = document.getElementById(prefix + 'UserPerms');
+        if (role === 'operator') {
+            section.style.display = '';
+            grid.style.display = '';
+        } else {
+            section.style.display = 'none';
+            grid.style.display = 'none';
+        }
     }
 
     function renderPermCheckboxes(containerId, perms) {
@@ -317,6 +330,7 @@
                 can_manage_queue: perms.can_manage_queue || false,
             });
 
+            togglePerms('edit');
             document.getElementById('editMsg').innerHTML = '';
             document.getElementById('editUserModal').classList.add('open');
         } catch(e) {}
@@ -366,6 +380,7 @@
     loadRepoGroups().then(() => {
         renderGroupSelect('newUserGroups', newUserSelectedGroups);
         renderPermCheckboxes('newUserPerms', {});
+        togglePerms('new');
         loadUsers();
     });
 </script>

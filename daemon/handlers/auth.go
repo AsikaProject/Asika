@@ -147,11 +147,19 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
+	// Only operator can have granular permissions; viewer and admin have fixed permissions
+	perms := models.UserPermissions{}
+	if req.Role == "operator" {
+		// Permissions are not set on creation via this handler; they default to false
+		// and must be explicitly enabled via update
+	}
+
 	user := models.User{
 		Username:          req.Username,
 		PasswordHash:      string(hash),
 		Role:              req.Role,
 		AllowedRepoGroups: req.AllowedRepoGroups,
+		Permissions:       perms,
 	}
 
 	data, err := json.Marshal(user)
@@ -222,11 +230,16 @@ func UpdateUser(c *gin.Context) {
 			return
 		}
 		user.Role = *req.Role
+		// viewer has no extra permissions; admin has all implicitly
+		// only operator can have granular permissions
+		if *req.Role != "operator" {
+			user.Permissions = models.UserPermissions{}
+		}
 	}
 	if req.AllowedRepoGroups != nil {
 		user.AllowedRepoGroups = req.AllowedRepoGroups
 	}
-	if req.Permissions != nil {
+	if req.Permissions != nil && user.Role == "operator" {
 		p := req.Permissions
 		if p.CanApprove != nil {
 			user.Permissions.CanApprove = *p.CanApprove
