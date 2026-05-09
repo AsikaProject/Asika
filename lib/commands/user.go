@@ -77,7 +77,7 @@ Examples:
 		}
 		req.Header.Set("Content-Type", "application/json")
 		if token := GetToken(cmd); token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			setAuthHeader(req, token)
 		}
 
 		resp, err := http.DefaultClient.Do(req)
@@ -141,7 +141,7 @@ Examples:
 		}
 		req.Header.Set("Content-Type", "application/json")
 		if token := GetToken(cmd); token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			setAuthHeader(req, token)
 		}
 
 		resp, err := http.DefaultClient.Do(req)
@@ -166,7 +166,7 @@ var userDeleteCmd = &cobra.Command{
 			os.Exit(1)
 		}
 		if token := GetToken(cmd); token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			setAuthHeader(req, token)
 		}
 
 		resp, err := http.DefaultClient.Do(req)

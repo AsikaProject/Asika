@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"asika/common/db"
 	"asika/common/i18n"
 	"asika/common/models"
+	"asika/daemon/handlers"
 )
 
 // Logger is a custom logger middleware
@@ -54,32 +56,39 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		token := extractToken(c)
-		if token == "" {
-			if strings.HasPrefix(path, "/api/") {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token", "code": 401})
-			} else {
-				c.Redirect(http.StatusFound, "/login")
+		if token != "" {
+			claims, err := auth.ValidateJWT(token)
+			if err == nil {
+				c.Set("username", auth.GetUsername(claims))
+				c.Set("role", auth.GetUserRole(claims))
+				c.Set("claims", claims)
+				c.Next()
+				return
 			}
-			c.Abort()
-			return
 		}
 
-        claims, err := auth.ValidateJWT(token)
-        if err != nil {
-            if strings.HasPrefix(path, "/api/") {
-                c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token", "code": 401})
-            } else {
-                c.Redirect(http.StatusFound, "/login")
-            }
-            c.Abort()
-            return
-        }
+		// Try API Key authentication
+		apiKey := extractAPIKey(c)
+		if apiKey != "" {
+			key := handlers.ValidateAPIKey(apiKey)
+			if key != nil {
+				key.LastUsedAt = time.Now()
+				db.PutAPIKey(key)
+				c.Set("username", fmt.Sprintf("apikey:%s", key.Name))
+				c.Set("role", key.Role)
+				c.Set("api_key_id", key.ID)
+				c.Next()
+				return
+			}
+		}
 
-        c.Set("username", auth.GetUsername(claims))
-        c.Set("role", auth.GetUserRole(claims))
-        c.Set("claims", claims)
-
-        c.Next()
+		// No valid auth
+		if strings.HasPrefix(path, "/api/") {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid token/API key", "code": 401})
+		} else {
+			c.Redirect(http.StatusFound, "/login")
+		}
+		c.Abort()
     }
 }
 
@@ -223,7 +232,8 @@ func RequireAnyRole(roles ...string) gin.HandlerFunc {
 }
 
 // RequirePermission checks if the user has a specific granular permission.
-// Admins always pass. For non-admins, checks the user's Permissions field loaded from DB.
+// Admins always pass. For non-admins, checks the user's Permissions field.
+// Supports both JWT users (loaded from DB) and API Keys (permissions stored in key).
 func RequirePermission(permField string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userRole, _ := c.Get("role")
@@ -232,6 +242,43 @@ func RequirePermission(permField string) gin.HandlerFunc {
 			return
 		}
 
+		// Check if this is an API key request
+		if apiKeyName, _ := c.Get("username"); apiKeyName != nil {
+			uname := apiKeyName.(string)
+			if strings.HasPrefix(uname, "apikey:") {
+				// API Key: permissions are embedded in the key
+				apiKeyID, _ := c.Get("api_key_id")
+				if apiKeyID != nil {
+					key, err := db.GetAPIKey(apiKeyID.(string))
+					if err == nil && key != nil {
+						var hasPerm bool
+						switch permField {
+						case "approve":
+							hasPerm = key.Permissions.CanApprove
+						case "merge":
+							hasPerm = key.Permissions.CanMerge
+						case "close":
+							hasPerm = key.Permissions.CanClose
+						case "reopen":
+							hasPerm = key.Permissions.CanReopen
+						case "spam":
+							hasPerm = key.Permissions.CanSpam
+						case "manage_queue":
+							hasPerm = key.Permissions.CanManageQueue
+						}
+						if hasPerm {
+							c.Next()
+							return
+						}
+					}
+				}
+				c.JSON(http.StatusForbidden, gin.H{"error": "权限不够", "code": 403})
+				c.Abort()
+				return
+			}
+		}
+
+		// JWT user: load from DB
 		username, _ := c.Get("username")
 		if username == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
@@ -302,4 +349,9 @@ func splitToken(header string) []string {
         }
     }
     return nil
+}
+
+// extractAPIKey extracts the API key from X-API-Key header
+func extractAPIKey(c *gin.Context) string {
+	return c.GetHeader("X-API-Key")
 }

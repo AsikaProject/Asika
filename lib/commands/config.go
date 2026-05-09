@@ -77,7 +77,7 @@ var configSetCmd = &cobra.Command{
 		}
 		req.Header.Set("Content-Type", "application/json")
 		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			setAuthHeader(req, token)
 		}
 
 		resp, err := http.DefaultClient.Do(req)

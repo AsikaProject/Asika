@@ -25,18 +25,19 @@ func Init(dbPath string) error {
 
     // Create all buckets if they don't exist
     return DB.Update(func(tx *bbolt.Tx) error {
-        buckets := []string{
-            BucketConfig,
-            BucketRepos,
-            BucketPRs,
-            BucketLogs,
-            BucketQueueItems,
-            BucketUsers,
-            BucketSyncHistory,
-            BucketPRIndexByID,
-            BucketPRIndexByRG,
-            BucketWebhookRetries,
-        }
+         buckets := []string{
+             BucketConfig,
+             BucketRepos,
+             BucketPRs,
+             BucketLogs,
+             BucketQueueItems,
+             BucketUsers,
+             BucketSyncHistory,
+             BucketPRIndexByID,
+             BucketPRIndexByRG,
+             BucketWebhookRetries,
+             BucketAPIKeys,
+         }
         for _, bucket := range buckets {
             if _, err := tx.CreateBucketIfNotExists([]byte(bucket)); err != nil {
                 return err
@@ -374,8 +375,51 @@ func AppendAuditLog(level, message string, ctx map[string]interface{}) error {
         return err
     }
      // Use timestamp + random suffix to avoid key collisions
-     var randBytes [4]byte
-     rand.Read(randBytes[:])
-     key := fmt.Sprintf("%d_%08x", log.Timestamp.UnixNano(), binary.BigEndian.Uint32(randBytes[:]))
-     return Put(BucketLogs, key, data)
+	var randBytes [4]byte
+	rand.Read(randBytes[:])
+	key := fmt.Sprintf("%d_%08x", log.Timestamp.UnixNano(), binary.BigEndian.Uint32(randBytes[:]))
+	return Put(BucketLogs, key, data)
+}
+
+// --- API Key operations ---
+
+// PutAPIKey stores an API key record. Key is indexed by APIKey.ID.
+func PutAPIKey(key *models.APIKey) error {
+	data, err := json.Marshal(key)
+	if err != nil {
+		return err
+	}
+	return Put(BucketAPIKeys, key.ID, data)
+}
+
+// GetAPIKey retrieves an API key by its ID.
+func GetAPIKey(id string) (*models.APIKey, error) {
+	data, err := Get(BucketAPIKeys, id)
+	if err != nil {
+		return nil, err
+	}
+	var key models.APIKey
+	if err := json.Unmarshal(data, &key); err != nil {
+		return nil, err
+	}
+	return &key, nil
+}
+
+// DeleteAPIKey removes an API key by its ID.
+func DeleteAPIKey(id string) error {
+	return Delete(BucketAPIKeys, id)
+}
+
+// ListAPIKeys returns all API keys.
+func ListAPIKeys() ([]*models.APIKey, error) {
+	var keys []*models.APIKey
+	err := ForEach(BucketAPIKeys, func(key, value []byte) error {
+		var k models.APIKey
+		if err := json.Unmarshal(value, &k); err != nil {
+			return nil // skip corrupted entries
+		}
+		keys = append(keys, &k)
+		return nil
+	})
+	return keys, err
 }

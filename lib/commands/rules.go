@@ -73,7 +73,7 @@ var rulesAddCmd = &cobra.Command{
 			return
 		}
 		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			setAuthHeader(req, token)
 		}
 		req.Header.Set("Content-Type", "application/json")
 
@@ -145,7 +145,7 @@ var rulesRemoveCmd = &cobra.Command{
 		}
 		token := GetToken(cmd)
 		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			setAuthHeader(req, token)
 		}
 		req.Header.Set("Content-Type", "application/json")
 

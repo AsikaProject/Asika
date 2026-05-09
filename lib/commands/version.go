@@ -31,7 +31,7 @@ var versionServerCmd = &cobra.Command{
 		}
 		token := GetToken(cmd)
 		if token != "" {
-			req.Header.Set("Authorization", "Bearer "+token)
+			setAuthHeader(req, token)
 		}
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {

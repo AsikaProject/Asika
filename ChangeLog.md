@@ -46,6 +46,16 @@
   - Fix isOperator logic: when only adminIDs configured, non-admins are rejected (not granted operator)
   - Feishu processCommand: require isOperator instead of isAdmin (listusers needs operator+)
   - Slack handleMessage: require isOperator instead of isAdmin
+- **Add API Key authentication for external integrations:**
+  - New `APIKey` model with role, permissions, repo group access
+  - `POST /api/v1/apikeys` — Create API key (admin only)
+  - `GET /api/v1/apikeys` — List API keys (admin only)
+  - `DELETE /api/v1/apikeys/:id` — Revoke API key (admin only)
+  - Auth middleware: JWT first, then fallback to `X-API-Key` header
+  - `RequirePermission` middleware: supports API Key permissions (not just DB user)
+  - `asika login --api-key <key>` — Save API key directly
+  - All CLI commands support API key via `setAuthHeader` helper
+  - API key format: `ak_<64 hex chars>`, stored as bcrypt hash
 - **Performance optimizations:**
   - Stats endpoint: merged 5 full bucket scans into single passes (PRs, queue, sync, logs)
   - Queue/GetQueueItems/ClearQueue: replaced full bucket scans with prefix-based iteration

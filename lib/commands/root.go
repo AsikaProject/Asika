@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -56,6 +57,21 @@ func GetToken(cmd *cobra.Command) string {
 		return token
 	}
 	return loadCLIConfig().Token
+}
+
+// isAPIKey returns true if the token looks like an API key (starts with "ak_")
+func isAPIKey(token string) bool {
+	return strings.HasPrefix(token, "ak_")
+}
+
+// setAuthHeader sets the appropriate auth header on a request.
+// API keys use X-API-Key; JWT tokens use Authorization: Bearer.
+func setAuthHeader(req *http.Request, token string) {
+	if isAPIKey(token) {
+		req.Header.Set("X-API-Key", token)
+	} else {
+		setAuthHeader(req, token)
+	}
 }
 
 // GetServer returns server address from flag, env, or saved config

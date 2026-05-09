@@ -14,6 +14,19 @@ type UserPermissions struct {
 	CanManageQueue bool `json:"can_manage_queue" toml:"can_manage_queue"`
 }
 
+// APIKey represents a long-lived API key for external integrations.
+type APIKey struct {
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`               // human-readable label, e.g. "ci-cd-operator"
+	KeyHash           string    `json:"key_hash"`           // bcrypt hash of the raw key
+	Role              string    `json:"role"`               // "admin" | "operator" | "viewer"
+	CreatedAt         time.Time `json:"created_at"`
+	CreatedBy         string    `json:"created_by"`         // username who created it
+	LastUsedAt        time.Time `json:"last_used_at"`
+	AllowedRepoGroups []string  `json:"allowed_repo_groups"` // empty = all groups
+	Permissions       UserPermissions `json:"permissions"`   // only effective when role=operator
+}
+
 // User represents an admin user
 type User struct {
 	Username          string           `json:"username"`

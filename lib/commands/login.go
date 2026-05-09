@@ -12,10 +12,28 @@ import (
 
 var loginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Login to asikad and save token",
+	Short: "Login to asikad and save token (JWT or API key)",
 	Run: func(cmd *cobra.Command, args []string) {
 		server := GetServer(cmd)
+		apiKey, _ := cmd.Flags().GetString("api-key")
 
+		// API Key mode: save directly without JWT login
+		if apiKey != "" {
+			save, _ := cmd.Flags().GetBool("save")
+			if save {
+				saveCLIConfig(cliConfig{
+					Token:  apiKey,
+					Server: server,
+				})
+				fmt.Println("API key saved. Use with --token or ASIKA_TOKEN env.")
+			} else {
+				fmt.Println("API key ready. Use with --token <key> or set ASIKA_TOKEN env.")
+				fmt.Printf("Key: %s\n", apiKey)
+			}
+			return
+		}
+
+		// JWT login mode
 		username, _ := cmd.Flags().GetString("username")
 		password, _ := cmd.Flags().GetString("password")
 		save, _ := cmd.Flags().GetBool("save")
@@ -78,6 +96,7 @@ var loginCmd = &cobra.Command{
 func init() {
 	loginCmd.Flags().StringP("username", "u", "", "Username (prompt if empty)")
 	loginCmd.Flags().StringP("password", "p", "", "Password (prompt if empty)")
+	loginCmd.Flags().String("api-key", "", "Use API key directly instead of JWT login (e.g. from WebUI)")
 	loginCmd.Flags().Bool("save", false, "Save credentials to ~/.config/asika/config.json")
 
 	RootCmd.AddCommand(loginCmd)

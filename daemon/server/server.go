@@ -159,9 +159,19 @@ func (s *Server) setupRoutes() {
 		wizard.POST("/step/:step", handlers.SubmitWizardStep)
 	}
 
-	// Protected routes (require JWT)
+	// Protected routes (require JWT or API Key)
 	protected := api.Group("")
 	protected.Use(RequireAuth())
+	// API key auth runs inside RequireAuth as fallback
+
+	// API Key management (admin only, JWT required — not API key)
+	apiKeys := protected.Group("/apikeys")
+	apiKeys.Use(RequireRole("admin"))
+	{
+		apiKeys.POST("", handlers.CreateAPIKey)
+		apiKeys.GET("", handlers.ListAPIKeys)
+		apiKeys.DELETE("/:id", handlers.RevokeAPIKey)
+	}
 	{
 		// User management (8.1)
 		users := protected.Group("/users")
