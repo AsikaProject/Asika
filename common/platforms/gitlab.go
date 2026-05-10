@@ -5,7 +5,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -522,4 +526,36 @@ func (c *GitLabClient) RequestReview(ctx context.Context, owner, repo string, nu
 		Body: &note,
 	})
 	return err
+}
+
+// RevertPR creates a revert PR for a merged PR on GitLab.
+func (c *GitLabClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
+	project := owner + "/" + repo
+	path := fmt.Sprintf("projects/%s/merge_requests/%d/revert", url.PathEscape(project), number)
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/"+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create revert request: %w", err)
+	}
+	req.Header.Set("PRIVATE-TOKEN", c.token)
+	resp, err := c.client.HTTPClient().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send revert request to gitlab: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("gitlab revert failed (status %d): %s", resp.StatusCode, string(body))
+	}
+	var mr struct {
+		Title string `json:"title"`
+		IID   int64  `json:"iid"`
+	}
+	if err := json.Unmarshal(body, &mr); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal gitlab revert response: %w", err)
+	}
+	return &models.PRRecord{
+		Title:    mr.Title,
+		PRNumber: int(mr.IID),
+		State:    "open",
+	}, nil
 }

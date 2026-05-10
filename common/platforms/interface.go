@@ -61,4 +61,7 @@ type PlatformClient interface {
 
 	// Reviewer assignment
 	RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error
+
+	// Revert creates a revert PR for a merged PR and returns the new PR record
+	RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error)
 }

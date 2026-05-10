@@ -5,7 +5,10 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -17,6 +20,7 @@ import (
 // BitbucketClient implements PlatformClient for Bitbucket Cloud (api.bitbucket.org/2.0)
 type BitbucketClient struct {
 	client        *bitbucket.Client
+	token         string
 	webhookSecret string
 }
 
@@ -28,6 +32,7 @@ func NewBitbucketClient(token string, webhookSecret string) *BitbucketClient {
 	}
 	return &BitbucketClient{
 		client:        c,
+		token:         token,
 		webhookSecret: webhookSecret,
 	}
 }
@@ -488,4 +493,41 @@ func (c *BitbucketClient) RequestReview(ctx context.Context, owner, repo string,
 		}
 	}
 	return nil
+}
+
+// RevertPR creates a revert PR for a merged PR on Bitbucket.
+func (c *BitbucketClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests/%d/revert", owner, repo, number)
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create revert request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.client.HttpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send revert request to bitbucket: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("bitbucket revert failed (status %d): %s", resp.StatusCode, string(body))
+	}
+	var result struct {
+		Type  string `json:"type"`
+		Links struct {
+			HTML struct {
+				Href string `json:"href"`
+			} `json:"html"`
+		} `json:"links"`
+		Title string `json:"title"`
+		ID    int    `json:"id"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal bitbucket revert response: %w", err)
+	}
+	return &models.PRRecord{
+		Title:    result.Title,
+		PRNumber: result.ID,
+		State:    "open",
+	}, nil
 }

@@ -13,6 +13,7 @@ import (
 	"asika/common/db"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/daemon/handlers/pr"
 	"asika/daemon/stale"
 	"asika/testutil"
 )
@@ -25,10 +26,10 @@ func setupStaleTest(t *testing.T, mgr *stale.Manager) (*gin.Engine, func()) {
 
 	auth.Init("stale-test-secret", 72*time.Hour)
 
-	mock := testutil.NewMockPlatformClient()
-	clients = map[platforms.PlatformType]platforms.PlatformClient{
+ 	mock := testutil.NewMockPlatformClient()
+	pr.InitClients(map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: mock,
-	}
+	})
 
 	cfg := &models.Config{
 		Server:   models.ServerConfig{Listen: ":8080"},

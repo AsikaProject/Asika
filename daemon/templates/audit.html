@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="{{currentLang}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{template "pwa"}}
+    {{template "styles"}}
+    <title>{{.title}}</title>
+</head>
+<body>
+{{template "header" .}}
+<div class="container">
+<h1>{{t "audit.title"}}</h1>
+
+<div style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap;">
+    <select id="filterLevel" onchange="loadLogs()">
+        <option value="">All Levels</option>
+        <option value="info">Info</option>
+        <option value="warn">Warn</option>
+        <option value="error">Error</option>
+    </select>
+    <select id="filterCategory" onchange="loadLogs()">
+        <option value="">All Categories</option>
+        <option value="pr">PR</option>
+        <option value="auth">Auth</option>
+        <option value="config">Config</option>
+        <option value="system">System</option>
+    </select>
+    <input id="filterActor" placeholder="Actor" onchange="loadLogs()" />
+    <input id="filterRepoGroup" placeholder="Repo Group" onchange="loadLogs()" />
+    <input id="filterAction" placeholder="Action" onchange="loadLogs()" />
+    <select id="filterSince" onchange="loadLogs()">
+        <option value="">All Time</option>
+        <option value="1h">Last Hour</option>
+        <option value="24h">Last 24h</option>
+        <option value="7d">Last 7 days</option>
+        <option value="30d">Last 30 days</option>
+    </select>
+    <button onclick="loadLogs()">Refresh</button>
+</div>
+
+<table id="logsTable">
+    <thead><tr>
+        <th>Timestamp</th><th>Level</th><th>Category</th><th>Actor</th><th>Action</th><th>Repo Group</th><th>Message</th>
+    </tr></thead>
+    <tbody></tbody>
+</table>
+</div>
+
+<script>
+function loadLogs() {
+    const params = new URLSearchParams();
+    const level = document.getElementById('filterLevel').value;
+    const category = document.getElementById('filterCategory').value;
+    const actor = document.getElementById('filterActor').value;
+    const repoGroup = document.getElementById('filterRepoGroup').value;
+    const action = document.getElementById('filterAction').value;
+    const since = document.getElementById('filterSince').value;
+    if (level) params.set('level', level);
+    if (category) params.set('category', category);
+    if (actor) params.set('actor', actor);
+    if (repoGroup) params.set('repo_group', repoGroup);
+    if (action) params.set('action', action);
+    if (since) params.set('since', since);
+    params.set('limit', '200');
+
+    fetch('/api/v1/logs?' + params.toString())
+        .then(r => r.json())
+        .then(data => renderLogs(data))
+        .catch(err => console.error('Failed to load logs:', err));
+}
+
+function renderLogs(logs) {
+    const tbody = document.querySelector('#logsTable tbody');
+    tbody.innerHTML = '';
+    (logs || []).forEach(l => {
+        const ts = l.timestamp ? new Date(l.timestamp).toLocaleString() : '-';
+        const levelColor = l.level === 'error' ? '#f44336' : l.level === 'warn' ? '#ff9800' : '#4caf50';
+        tbody.innerHTML += '<tr><td>' + ts + '</td><td style="color:' + levelColor + '">' + (l.level || '-') + '</td><td>' + (l.category || '-') + '</td><td>' + (l.actor || '-') + '</td><td>' + (l.action || '-') + '</td><td>' + (l.repo_group || '-') + '</td><td>' + (l.message || '') + '</td></tr>';
+    });
+}
+
+loadLogs();
+</script>
+</body>
+</html>

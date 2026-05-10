@@ -15,6 +15,7 @@ import (
 	"asika/common/db"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/daemon/handlers/pr"
 	"asika/testutil"
 )
 
@@ -28,9 +29,9 @@ func setupHandlerTest(t *testing.T) (*gin.Engine, func()) {
 	auth.Init("test-secret-for-unit-tests", 72*time.Hour)
 
 	mock := testutil.NewMockPlatformClient()
-	clients = map[platforms.PlatformType]platforms.PlatformClient{
+	pr.InitClients(map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: mock,
-	}
+	})
 
 	engine := gin.New()
 
@@ -89,6 +90,8 @@ func setupHandlerTest(t *testing.T) (*gin.Engine, func()) {
 		}
 
 		protected.GET("/stats", GetStats)
+		protected.GET("/stats/team", GetTeamStats)
+		protected.GET("/reports", GetReportHistory)
 	}
 
 	cleanup := func() {
@@ -120,9 +123,9 @@ func setupWebhookTest(t *testing.T) (*gin.Engine, func()) {
 	testutil.NewTestDB(t)
 
 	mock := testutil.NewMockPlatformClient()
-	clients = map[platforms.PlatformType]platforms.PlatformClient{
+	pr.InitClients(map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: mock,
-	}
+	})
 
 	engine := gin.New()
 	engine.POST("/webhook/:repo_group/:platform", WebhookHandler)
@@ -1307,9 +1310,9 @@ func TestRebaseSinglePR_MissingAllowEdit(t *testing.T) {
 
 	noEditMock := testutil.NewMockPlatformClient()
 	noEditMock.MaintainerCanModify = false
-	clients = map[platforms.PlatformType]platforms.PlatformClient{
+	pr.InitClients(map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: noEditMock,
-	}
+	})
 
 	pr := models.PRRecord{
 		ID:          "42",
@@ -1366,9 +1369,9 @@ func TestRebaseSinglePR_PRNotOpen(t *testing.T) {
 	}
 	config.Store(cfg)
 
-	clients = map[platforms.PlatformType]platforms.PlatformClient{
+	pr.InitClients(map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: testutil.NewMockPlatformClient(),
-	}
+	})
 
 	pr := models.PRRecord{
 		ID:        "99",
@@ -1422,9 +1425,9 @@ func TestRebaseQueue_NoConflictedPRs(t *testing.T) {
 	}
 	config.Store(cfg)
 
-	clients = map[platforms.PlatformType]platforms.PlatformClient{
+	pr.InitClients(map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: testutil.NewMockPlatformClient(),
-	}
+	})
 
 	engine := gin.New()
 	api := engine.Group("/api/v1")
@@ -1448,6 +1451,183 @@ func TestRebaseQueue_NoConflictedPRs(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &result)
 	if msg, ok := result["message"].(string); !ok || !strings.Contains(msg, "no conflicted PRs") {
 		t.Errorf("expected 'no conflicted PRs' message, got: %v", result)
+	}
+}
+
+func TestGetTeamStats_Empty(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/stats/team", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	if result["total_authors"].(float64) != 0 {
+		t.Errorf("expected 0 authors, got %v", result["total_authors"])
+	}
+}
+
+func TestGetTeamStats_WithPRs(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	now := time.Now()
+	pr1 := models.PRRecord{
+		ID: "team-pr-1", RepoGroup: "default", Platform: "github",
+		PRNumber: 1, State: "merged", Author: "alice",
+		CreatedAt: now.Add(-48 * time.Hour), MergedAt: now.Add(-24 * time.Hour),
+		Events: []models.PREvent{{Action: "approved", Actor: "bob", Timestamp: now.Add(-30 * time.Hour)}},
+	}
+	pr2 := models.PRRecord{
+		ID: "team-pr-2", RepoGroup: "default", Platform: "github",
+		PRNumber: 2, State: "open", Author: "bob",
+		CreatedAt: now.Add(-12 * time.Hour),
+	}
+	db.PutPRWithIndex("default#github#1", mustMarshal(pr1), "team-pr-1", "default", 1)
+	db.PutPRWithIndex("default#github#2", mustMarshal(pr2), "team-pr-2", "default", 2)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/stats/team", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	if result["total_authors"].(float64) != 2 {
+		t.Errorf("expected 2 authors, got %v", result["total_authors"])
+	}
+
+	authors := result["authors"].([]interface{})
+	if len(authors) != 2 {
+		t.Errorf("expected 2 author entries, got %d", len(authors))
+	}
+
+	top := result["top_contributors"].([]interface{})
+	if len(top) == 0 {
+		t.Error("expected at least 1 top contributor")
+	}
+}
+
+func TestGetReportHistory_Empty(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/reports", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result []interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+	if len(result) != 0 {
+		t.Errorf("expected 0 reports, got %d", len(result))
+	}
+}
+
+func TestGetLogs_FilterByCategory(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "PR approved",
+		Category: "pr", Actor: "alice", Action: "approve", RepoGroup: "default",
+	})
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "User logged in",
+		Category: "auth", Actor: "bob", Action: "login",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs?category=pr", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result []map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	for _, log := range result {
+		if log["category"] != "pr" {
+			t.Errorf("expected only pr category, got %v", log["category"])
+		}
+	}
+}
+
+func TestGetLogs_FilterByActor(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "test1",
+		Actor: "alice", Category: "pr",
+	})
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "test2",
+		Actor: "bob", Category: "pr",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs?actor=alice", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result []map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	for _, log := range result {
+		if log["actor"] != "alice" {
+			t.Errorf("expected only alice, got %v", log["actor"])
+		}
+	}
+}
+
+func TestGetLogs_FilterByAction(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "approved",
+		Action: "approve", Actor: "alice",
+	})
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "closed",
+		Action: "close", Actor: "alice",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs?action=close", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result []map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	for _, log := range result {
+		if log["action"] != "close" {
+			t.Errorf("expected only close action, got %v", log["action"])
+		}
 	}
 }
 

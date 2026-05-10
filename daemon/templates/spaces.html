@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="{{currentLang}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{template "pwa"}}
+    {{template "styles"}}
+    <title>{{.title}}</title>
+</head>
+<body>
+{{template "header" .}}
+<div class="container">
+<h1>{{t "spaces.title"}}</h1>
+
+<div style="margin:12px 0;">
+    <button onclick="document.getElementById('createForm').style.display='block'">Create Space</button>
+</div>
+
+<div id="createForm" style="display:none;margin:12px 0;padding:16px;border:1px solid #ddd;border-radius:8px;">
+    <h3>New Team Space</h3>
+    <input id="spaceName" placeholder="Space name" /><br/><br/>
+    <input id="spaceDesc" placeholder="Description" /><br/><br/>
+    <button onclick="createSpace()">Create</button>
+    <button onclick="document.getElementById('createForm').style.display='none'">Cancel</button>
+</div>
+
+<div id="spaceList"></div>
+</div>
+
+<script>
+function loadSpaces() {
+    fetch('/api/v1/spaces')
+        .then(r => r.json())
+        .then(data => renderSpaces(data))
+        .catch(err => console.error('Failed to load spaces:', err));
+}
+
+function renderSpaces(spaces) {
+    const container = document.getElementById('spaceList');
+    if (!spaces || spaces.length === 0) {
+        container.innerHTML = '<p>No team spaces yet.</p>';
+        return;
+    }
+    let html = '<table><thead><tr><th>Name</th><th>Description</th><th>Created By</th><th>Members</th><th>Actions</th></tr></thead><tbody>';
+    spaces.forEach(s => {
+        html += '<tr><td>' + s.name + '</td><td>' + (s.description || '-') + '</td><td>' + (s.created_by || '-') + '</td><td>' + (s.members ? s.members.length : 0) + '</td><td><button onclick="deleteSpace(\'' + s.name + '\')">Delete</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function createSpace() {
+    const name = document.getElementById('spaceName').value;
+    const desc = document.getElementById('spaceDesc').value;
+    if (!name) { alert('Name required'); return; }
+    fetch('/api/v1/spaces', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name, description: desc})
+    }).then(r => r.ok ? loadSpaces() : alert('Failed'));
+}
+
+function deleteSpace(name) {
+    if (!confirm('Delete space "' + name + '"?')) return;
+    fetch('/api/v1/spaces/' + name, {method: 'DELETE'})
+        .then(r => r.ok ? loadSpaces() : alert('Failed'));
+}
+
+loadSpaces();
+</script>
+</body>
+</html>

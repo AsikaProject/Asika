@@ -190,3 +190,52 @@ func TestPollPlatform_WithPRs(t *testing.T) {
 	// Verify PR is stored to database
 	// Need to check database, but simplify by just verifying no panic
 }
+
+func TestSetForcePoll(t *testing.T) {
+	cfg := &models.Config{
+		Events: models.EventsConfig{PollingInterval: "30s"},
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+
+	p := NewPoller(cfg, clients)
+
+	if p.IsForcePoll("test-group") {
+		t.Fatal("expected false initially")
+	}
+
+	p.SetForcePoll("test-group", true)
+	if !p.IsForcePoll("test-group") {
+		t.Fatal("expected true after SetForcePoll")
+	}
+
+	p.SetForcePoll("test-group", false)
+	if p.IsForcePoll("test-group") {
+		t.Fatal("expected false after SetForcePoll(false)")
+	}
+}
+
+func TestSetForcePoll_MultipleGroups(t *testing.T) {
+	cfg := &models.Config{
+		Events: models.EventsConfig{PollingInterval: "30s"},
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "group-a", Mode: "multi", GitHub: "org/repo"},
+			{Name: "group-b", Mode: "multi", GitHub: "org/repo2"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+
+	p := NewPoller(cfg, clients)
+
+	p.SetForcePoll("group-a", true)
+	p.SetForcePoll("group-b", false)
+
+	if !p.IsForcePoll("group-a") {
+		t.Fatal("expected group-a to be forced")
+	}
+	if p.IsForcePoll("group-b") {
+		t.Fatal("expected group-b to not be forced")
+	}
+}

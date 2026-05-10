@@ -265,6 +265,8 @@ func RequirePermission(permField string) gin.HandlerFunc {
 							hasPerm = key.Permissions.CanSpam
 						case "manage_queue":
 							hasPerm = key.Permissions.CanManageQueue
+						case "revert":
+							hasPerm = key.Permissions.CanRevert
 						}
 						if hasPerm {
 							c.Next()
@@ -313,6 +315,8 @@ func RequirePermission(permField string) gin.HandlerFunc {
 			hasPerm = user.Permissions.CanSpam
 		case "manage_queue":
 			hasPerm = user.Permissions.CanManageQueue
+		case "revert":
+			hasPerm = user.Permissions.CanRevert
 		default:
 			hasPerm = false
 		}

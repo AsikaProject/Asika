@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"asika/common/models"
@@ -28,9 +29,12 @@ func newBboltStorage(dbPath string) (*bboltStorage, error) {
 	}
 	err = d.Update(func(tx *bbolt.Tx) error {
 		buckets := []string{
-			BucketConfig, BucketRepos, BucketPRs, BucketLogs, BucketQueueItems,
-			BucketUsers, BucketSyncHistory, BucketPRIndexByID, BucketPRIndexByRG,
-			BucketWebhookRetries, BucketConfigHistory, BucketAPIKeys,
+		BucketConfig, BucketRepos, BucketPRs, BucketLogs, BucketQueueItems,
+		BucketUsers, BucketSyncHistory, BucketPRIndexByID, BucketPRIndexByRG,
+		BucketWebhookRetries, BucketConfigHistory, BucketAPIKeys, BucketSpamAuthors,
+		BucketWebhookHealth, BucketReportHistory, BucketNotificationPrefs,
+		BucketNotificationDedup, BucketTeamSpaces, BucketSpaceMembers,
+		BucketSpaceSettings,
 		}
 		for _, b := range buckets {
 			if _, err := tx.CreateBucketIfNotExists([]byte(b)); err != nil {
@@ -288,6 +292,20 @@ func (s *bboltStorage) ListConfigSnapshots(limit int) ([]ConfigSnapshotEntry, er
 	return results, err
 }
 
+func (s *bboltStorage) AppendAuditLogEx(entry models.AuditLog) error {
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	if entry.Timestamp.IsZero() {
+		entry.Timestamp = time.Now()
+	}
+	var randBytes [4]byte
+	rand.Read(randBytes[:])
+	key := fmt.Sprintf("%d_%08x", entry.Timestamp.UnixNano(), binary.BigEndian.Uint32(randBytes[:]))
+	return s.Put(BucketLogs, key, data)
+}
+
 func (s *bboltStorage) AppendAuditLog(level, message string, ctx map[string]interface{}) error {
 	log := models.AuditLog{
 		Timestamp: time.Now(),
@@ -340,6 +358,204 @@ func (s *bboltStorage) ListAPIKeys() ([]*models.APIKey, error) {
 		return nil
 	})
 	return keys, err
+}
+
+func (s *bboltStorage) PutNotificationPrefs(username string, data []byte) error {
+	return s.Put(BucketNotificationPrefs, username, data)
+}
+
+func (s *bboltStorage) GetNotificationPrefs(username string) ([]byte, error) {
+	return s.Get(BucketNotificationPrefs, username)
+}
+
+func (s *bboltStorage) PutNotificationDedup(key string, data []byte) error {
+	return s.Put(BucketNotificationDedup, key, data)
+}
+
+func (s *bboltStorage) GetNotificationDedup(key string) ([]byte, error) {
+	return s.Get(BucketNotificationDedup, key)
+}
+
+func (s *bboltStorage) PutTeamSpace(space *models.TeamSpace) error {
+	data, err := json.Marshal(space)
+	if err != nil {
+		return err
+	}
+	return s.Put(BucketTeamSpaces, space.Name, data)
+}
+
+func (s *bboltStorage) GetTeamSpace(name string) (*models.TeamSpace, error) {
+	data, err := s.Get(BucketTeamSpaces, name)
+	if err != nil || data == nil {
+		return nil, err
+	}
+	var space models.TeamSpace
+	if err := json.Unmarshal(data, &space); err != nil {
+		return nil, err
+	}
+	return &space, nil
+}
+
+func (s *bboltStorage) ListTeamSpaces() ([]*models.TeamSpace, error) {
+	var spaces []*models.TeamSpace
+	err := s.ForEach(BucketTeamSpaces, func(key, value []byte) error {
+		var space models.TeamSpace
+		if err := json.Unmarshal(value, &space); err != nil {
+			return nil
+		}
+		spaces = append(spaces, &space)
+		return nil
+	})
+	return spaces, err
+}
+
+func (s *bboltStorage) DeleteTeamSpace(name string) error {
+	return s.Delete(BucketTeamSpaces, name)
+}
+
+func (s *bboltStorage) PutSpaceMember(spaceName, username, role string) error {
+	key := fmt.Sprintf("%s:%s", spaceName, username)
+	member := models.SpaceMember{Username: username, Role: role, JoinedAt: time.Now()}
+	data, err := json.Marshal(member)
+	if err != nil {
+		return err
+	}
+	return s.Put(BucketSpaceMembers, key, data)
+}
+
+func (s *bboltStorage) RemoveSpaceMember(spaceName, username string) error {
+	key := fmt.Sprintf("%s:%s", spaceName, username)
+	return s.Delete(BucketSpaceMembers, key)
+}
+
+func (s *bboltStorage) GetSpaceMembers(spaceName string) ([]models.SpaceMember, error) {
+	var members []models.SpaceMember
+	prefix := spaceName + ":"
+	err := s.BucketForEachPrefix(BucketSpaceMembers, prefix, func(key, value []byte) error {
+		var m models.SpaceMember
+		if err := json.Unmarshal(value, &m); err != nil {
+			return nil
+		}
+		members = append(members, m)
+		return nil
+	})
+	return members, err
+}
+
+func (s *bboltStorage) GetUserSpaces(username string) ([]string, error) {
+	var spaces []string
+	err := s.ForEach(BucketSpaceMembers, func(key, value []byte) error {
+		parts := strings.SplitN(string(key), ":", 2)
+		if len(parts) == 2 && parts[1] == username {
+			spaces = append(spaces, parts[0])
+		}
+		return nil
+	})
+	return spaces, err
+}
+
+func (s *bboltStorage) PutSpaceSetting(spaceName, key string, value []byte) error {
+	fullKey := fmt.Sprintf("%s:%s", spaceName, key)
+	return s.Put(BucketSpaceSettings, fullKey, value)
+}
+
+func (s *bboltStorage) GetSpaceSetting(spaceName, key string) ([]byte, error) {
+	fullKey := fmt.Sprintf("%s:%s", spaceName, key)
+	return s.Get(BucketSpaceSettings, fullKey)
+}
+
+func (s *bboltStorage) DeleteNotificationDedup(key string) error {
+	return s.Delete(BucketNotificationDedup, key)
+}
+
+func (s *bboltStorage) PutReportHistory(id string, data []byte) error {
+	return s.Put(BucketReportHistory, id, data)
+}
+
+func (s *bboltStorage) ListReportHistory(limit int) ([]ReportHistoryEntry, error) {
+	var results []ReportHistoryEntry
+	err := s.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(BucketReportHistory))
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k, v := c.Last(); k != nil; k, v = c.Prev() {
+			if limit > 0 && len(results) >= limit {
+				break
+			}
+			var entry ReportHistoryEntry
+			if err := json.Unmarshal(v, &entry); err != nil {
+				continue
+			}
+			entry.ID = string(k)
+			results = append(results, entry)
+		}
+		return nil
+	})
+	return results, err
+}
+
+func (s *bboltStorage) PutWebhookHealth(repoGroup, platform string, ts time.Time) error {
+	key := fmt.Sprintf("%s:%s", repoGroup, platform)
+	return s.Put(BucketWebhookHealth, key, []byte(ts.Format(time.RFC3339)))
+}
+
+func (s *bboltStorage) GetWebhookHealth(repoGroup, platform string) (time.Time, error) {
+	key := fmt.Sprintf("%s:%s", repoGroup, platform)
+	data, err := s.Get(BucketWebhookHealth, key)
+	if err != nil || data == nil {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339, string(data))
+}
+
+func (s *bboltStorage) ListWebhookHealth() (map[string]time.Time, error) {
+	result := make(map[string]time.Time)
+	err := s.ForEach(BucketWebhookHealth, func(key, value []byte) error {
+		ts, err := time.Parse(time.RFC3339, string(value))
+		if err != nil {
+			return nil
+		}
+		result[string(key)] = ts
+		return nil
+	})
+	return result, err
+}
+
+func (s *bboltStorage) PutSpamAuthor(author *models.SpamAuthor) error {
+	data, err := json.Marshal(author)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("%s:%s", author.Author, author.Platform)
+	return s.Put(BucketSpamAuthors, key, data)
+}
+
+func (s *bboltStorage) GetSpamAuthor(author, platform string) (*models.SpamAuthor, error) {
+	key := fmt.Sprintf("%s:%s", author, platform)
+	data, err := s.Get(BucketSpamAuthors, key)
+	if err != nil || data == nil {
+		return nil, err
+	}
+	var sa models.SpamAuthor
+	if err := json.Unmarshal(data, &sa); err != nil {
+		return nil, err
+	}
+	return &sa, nil
+}
+
+func (s *bboltStorage) ListSpamAuthors() ([]*models.SpamAuthor, error) {
+	var authors []*models.SpamAuthor
+	err := s.ForEach(BucketSpamAuthors, func(key, value []byte) error {
+		var sa models.SpamAuthor
+		if err := json.Unmarshal(value, &sa); err != nil {
+			return nil
+		}
+		authors = append(authors, &sa)
+		return nil
+	})
+	return authors, err
 }
 
 func min(a, b int) int {

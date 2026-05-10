@@ -45,6 +45,9 @@ func (b *Bot) handleCallback(c telebot.Context) error {
 		}
 		return c.Respond(&telebot.CallbackResponse{Text: "No PRs found."})
 	}
+	if strings.HasPrefix(data, "close_reason:") {
+		return b.handleCloseReasonCallback(c, data)
+	}
 	parts := strings.SplitN(data, ":", 2)
 	if len(parts) != 2 {
 		return c.Respond(&telebot.CallbackResponse{Text: "Invalid callback."})
@@ -80,9 +83,65 @@ func (b *Bot) handleCallback(c telebot.Context) error {
 		return b.callbackReopen(c, pr, client, owner, repo, ctx)
 	case "spam":
 		return b.callbackSpam(c, pr, client, owner, repo, ctx)
+	case "revert":
+		return b.callbackRevert(c, pr, client, owner, repo, ctx)
 	default:
 		return c.Respond(&telebot.CallbackResponse{Text: "Unknown action."})
 	}
+}
+
+func (b *Bot) handleCloseReasonCallback(c telebot.Context, data string) error {
+	rest := strings.TrimPrefix(data, "close_reason:")
+	reasonIdx := strings.Index(rest, ":")
+	if reasonIdx < 0 {
+		return c.Respond(&telebot.CallbackResponse{Text: "Invalid close reason callback."})
+	}
+	reason := rest[:reasonIdx]
+	payload := rest[reasonIdx+1:]
+	idx := strings.LastIndex(payload, "#")
+	if idx < 0 {
+		return c.Respond(&telebot.CallbackResponse{Text: "Invalid payload."})
+	}
+	repoGroup := payload[:idx]
+	prID := payload[idx+1:]
+	pr, err := commonutil.GetPRByID(repoGroup, prID)
+	if err != nil || pr == nil {
+		return c.Respond(&telebot.CallbackResponse{Text: "PR not found."})
+	}
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		return c.Respond(&telebot.CallbackResponse{Text: "Repo group not found."})
+	}
+	client := b.clients[platforms.PlatformType(pr.Platform)]
+	if client == nil {
+		return c.Respond(&telebot.CallbackResponse{Text: "No platform client."})
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+	ctx := context.Background()
+	if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
+		db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+		})
+		msg := fmt.Sprintf("Failed: %v", err)
+		if len(msg) > 200 {
+			msg = msg[:197] + "..."
+		}
+		return c.Respond(&telebot.CallbackResponse{Text: msg})
+	}
+	if reason != "custom" && reason != "" {
+		if err := client.AddLabel(ctx, owner, repo, pr.PRNumber, reason, ""); err != nil {
+			slog.Warn("telegram bot: failed to add close reason label", "error", err, "label", reason, "pr_number", pr.PRNumber)
+		}
+	}
+	pr.State = "closed"
+	pr.CloseReason = reason
+	prData, _ := json.Marshal(pr)
+	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
+		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "close_reason": reason,
+	})
+	return c.Respond(&telebot.CallbackResponse{Text: fmt.Sprintf("Closed ❌ Reason: %s", reason)})
 }
 
 func (b *Bot) callbackApprove(c telebot.Context, pr *models.PRRecord, client platforms.PlatformClient, owner, repo string, ctx context.Context) error {
@@ -131,24 +190,35 @@ func (b *Bot) callbackClose(c telebot.Context, pr *models.PRRecord, client platf
 	if pr.State == "closed" || pr.State == "merged" {
 		return c.Respond(&telebot.CallbackResponse{Text: fmt.Sprintf("PR is already %s.", pr.State)})
 	}
-	if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
-		})
-		msg := fmt.Sprintf("Failed: %v", err)
-		if len(msg) > 200 {
-			msg = msg[:197] + "..."
-		}
-		return c.Respond(&telebot.CallbackResponse{Text: msg})
+	cfg := config.Current()
+	reasons := []string{"duplicate", "invalid", "wontfix", "stale"}
+	if cfg != nil && len(cfg.CloseReasons.Reasons) > 0 {
+		reasons = cfg.CloseReasons.Reasons
 	}
-	pr.State = "closed"
-	prData, _ := json.Marshal(pr)
-	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
-	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram",
-	})
-	return c.Respond(&telebot.CallbackResponse{Text: "Closed ❌"})
+	selector := &telebot.ReplyMarkup{}
+	payload := fmt.Sprintf("%s#%s", pr.RepoGroup, pr.ID)
+	var rows []telebot.Row
+	var currentRow []telebot.Btn
+	for _, reason := range reasons {
+		label := strings.ReplaceAll(reason, "_", " ")
+		btn := selector.Data("❌ "+label, "close_reason", fmt.Sprintf("close_reason:%s:%s", reason, payload))
+		currentRow = append(currentRow, btn)
+		if len(currentRow) == 2 {
+			rows = append(rows, selector.Row(currentRow...))
+			currentRow = nil
+		}
+	}
+	btnCustom := selector.Data("✏️ Custom", "close_reason", fmt.Sprintf("close_reason:custom:%s", payload))
+	currentRow = append(currentRow, btnCustom)
+	if len(currentRow) == 2 {
+		rows = append(rows, selector.Row(currentRow...))
+		currentRow = nil
+	}
+	if len(currentRow) > 0 {
+		rows = append(rows, selector.Row(currentRow...))
+	}
+	selector.Inline(rows...)
+	return c.Edit("Select a close reason for the PR:", &telebot.SendOptions{ReplyMarkup: selector})
 }
 
 func (b *Bot) callbackReopen(c telebot.Context, pr *models.PRRecord, client platforms.PlatformClient, owner, repo string, ctx context.Context) error {
@@ -193,6 +263,20 @@ func (b *Bot) callbackSpam(c telebot.Context, pr *models.PRRecord, client platfo
 	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
 		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram",
 	})
+	existing, _ := db.GetSpamAuthor(pr.Author, pr.Platform)
+	if existing != nil {
+		existing.Count++
+		existing.LastSeen = time.Now()
+		db.PutSpamAuthor(existing)
+	} else {
+		db.PutSpamAuthor(&models.SpamAuthor{
+			Author:    pr.Author,
+			Platform:  pr.Platform,
+			FirstSeen: time.Now(),
+			LastSeen:  time.Now(),
+			Count:     1,
+		})
+	}
 	if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
 		db.AppendAuditLog("error", "PR spam close failed", map[string]interface{}{
 			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
@@ -204,6 +288,60 @@ func (b *Bot) callbackSpam(c telebot.Context, pr *models.PRRecord, client platfo
 		return c.Respond(&telebot.CallbackResponse{Text: msg})
 	}
 	return c.Respond(&telebot.CallbackResponse{Text: "Marked as spam 🚫"})
+}
+
+func (b *Bot) callbackRevert(c telebot.Context, pr *models.PRRecord, client platforms.PlatformClient, owner, repo string, ctx context.Context) error {
+	if pr.State != "merged" {
+		return c.Respond(&telebot.CallbackResponse{Text: fmt.Sprintf("Cannot revert %s PR.", pr.State)})
+	}
+	revertPR, err := client.RevertPR(ctx, owner, repo, pr.PRNumber)
+	if err != nil {
+		db.AppendAuditLog("error", "PR revert failed", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+		})
+		msg := fmt.Sprintf("Failed: %v", err)
+		if len(msg) > 200 {
+			msg = msg[:197] + "..."
+		}
+		return c.Respond(&telebot.CallbackResponse{Text: msg})
+	}
+	actor := c.Sender().Username
+	if actor == "" {
+		actor = fmt.Sprintf("%d", c.Sender().ID)
+	}
+	if revertPR != nil {
+		revertPR.RepoGroup = pr.RepoGroup
+		revertPR.Platform = pr.Platform
+		revertPR.ID = fmt.Sprintf("%d", revertPR.PRNumber)
+		revertPRData, _ := json.Marshal(revertPR)
+		revertKey := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, revertPR.PRNumber)
+		db.PutPRWithIndex(revertKey, revertPRData, revertPR.ID, pr.RepoGroup, revertPR.PRNumber)
+		if b.queueMgr != nil {
+			if err := b.queueMgr.AddToQueue(revertPR); err != nil {
+				slog.Warn("telegram bot: failed to add revert PR to queue", "error", err, "pr_number", revertPR.PRNumber)
+			} else {
+				go b.queueMgr.CheckQueue()
+			}
+		}
+		if err := client.CommentPR(ctx, owner, repo, pr.PRNumber,
+			fmt.Sprintf("This PR has been reverted by %s. Revert PR: #%d", actor, revertPR.PRNumber)); err != nil {
+			slog.Warn("telegram bot: failed to comment on reverted PR", "error", err, "pr_number", pr.PRNumber)
+		}
+		if b.notifier != nil {
+			title := fmt.Sprintf("[Revert] PR #%d reverted", pr.PRNumber)
+			body := fmt.Sprintf("PR #%d \"%s\" was reverted by %s.\nRevert PR: #%d\nRepo: %s | Platform: %s",
+				pr.PRNumber, pr.Title, actor, revertPR.PRNumber, pr.RepoGroup, pr.Platform)
+			b.notifier.Send(ctx, title, body)
+		}
+		db.AppendAuditLog("info", "PR reverted", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "revert_pr_number": revertPR.PRNumber,
+		})
+		return c.Respond(&telebot.CallbackResponse{Text: fmt.Sprintf("Reverted ↩️ Revert PR: #%d", revertPR.PRNumber)})
+	}
+	db.AppendAuditLog("info", "PR revert requested", map[string]interface{}{
+		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram",
+	})
+	return c.Respond(&telebot.CallbackResponse{Text: "Revert requested ↩️"})
 }
 
 func (b *Bot) handleText(c telebot.Context) error {

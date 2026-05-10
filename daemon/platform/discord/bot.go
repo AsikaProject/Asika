@@ -167,6 +167,8 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 		b.handleReopenPR(s, m, parts)
 	case "!spam":
 		b.handleMarkSpam(s, m, parts)
+	case "!revert":
+		b.handleRevertPR(s, m, parts)
 	case "!queue":
 		b.handleShowQueue(s, m, parts)
 	case "!recheck":

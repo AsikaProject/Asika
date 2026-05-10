@@ -31,9 +31,11 @@ token_expiry  = "72h"
 
 # Event source: "webhook" or "polling"
 [events]
-mode            = "webhook"
-webhook_secret  = "change-me-webhook-secret"
-polling_interval = "5m"   # only used when mode = "polling"
+mode                  = "webhook"
+webhook_secret        = "change-me-webhook-secret"
+polling_interval       = "5m"   # only used when mode = "polling"
+health_check_interval  = "2m"   # how often to check webhook health
+health_check_threshold = "5m"   # time without webhook before marking unhealthy (triggers polling fallback)
 
 # Git work directory for temp bare repos
 [git]
@@ -58,6 +60,10 @@ required_approvals = 1
 ci_check_required  = true
 core_contributors  = ["admin1", "admin2"]
 fast_forward_only  = false  # if true, auto-rebase PR before merge to ensure linear history
+# expression          = ""     # merge condition expression (empty = use default logic)
+# Supported variables: approvals, required, ci, conflict, draft, core_approved, author, age_hours, label
+# Example: "approvals >= 2 AND ci == success AND NOT conflict"
+# Example: "core_approved >= 1 OR author IN core_contributors"
 
 # Spam detection
 [spam]
@@ -68,6 +74,22 @@ trigger_on_author          = true
 trigger_on_similar_title   = true
 title_similarity_threshold = 0.6
 trigger_on_title_kw        = ["spam", "fix typo", "readme update"]
+
+# Close reasons (optional)
+# These reasons will be available as labels when closing a PR.
+# Each reason is applied as a label to the closed PR.
+[close_reasons]
+reasons = ["no longer needed", "duplicate", "invalid", "won't fix"]
+
+# Quiet hours (optional)
+# During quiet hours, notifications are suppressed or routed to escalation contacts.
+# [quiet_hours]
+# enabled          = false
+# start_time       = "22:00"
+# end_time         = "08:00"
+# timezone         = "Asia/Shanghai"    # empty = local time
+# escalation_role  = "admin"            # role to notify during quiet hours: "admin" | "operator"
+# bypass_for_urgent = ["spam_detected", "sync_failed"]  # event types that bypass quiet hours
 
 # Notification channels
 [[notify]]
@@ -171,6 +193,13 @@ pattern = "docs/**"
 label   = "documentation"
 color   = "#008672"
 
+# Label rules support priority and exclusive flags:
+# [[label_rules]]
+# pattern   = "src/critical/**"
+# label     = "critical"
+# priority  = 10        # higher = evaluated first
+# exclusive = true      # stop after this rule matches
+
 # Repo groups (multi mode)
 [[repo_groups]]
 name           = "my-project"
@@ -185,6 +214,12 @@ gerrit         = "my-project"         # optional: Gerrit project name
 default_branch = "main"
 hookpath       = ""
 ci_provider    = "github_actions"  # "github_actions" | "gitlab_ci" | "gitea_actions" | "none"
+
+# Per-repo-group label rules (merged with global rules, group rules take precedence):
+# [[repo_groups.label_rules]]
+# pattern = "frontend/**"
+# label   = "frontend"
+# color   = "#61DAFB"
 
 [repo_groups.merge_queue]
 required_approvals = 2
@@ -218,6 +253,12 @@ scale_up_pct   = 75
 scale_down_pct = 25
 cooldown_secs  = 30
 stats_interval = "30s"
+
+# Scheduled reports
+# [reports]
+# enabled     = false
+# cron        = "weekly"    # hourly | daily | weekly | monthly | raw duration
+# period_days = 7           # stats period in days
 
 # Self-update configuration
 [updates]

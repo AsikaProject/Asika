@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="{{currentLang}}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{template "pwa"}}
+    {{template "styles"}}
+    <title>{{.title}}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+{{template "header" .}}
+<div class="container">
+<h1>{{t "team.title"}}</h1>
+
+<div style="margin:12px 0;">
+    <label>{{t "team.period"}} </label>
+    <select id="periodSelect" onchange="loadTeamStats()">
+        <option value="7">7 {{t "team.days"}}</option>
+        <option value="30" selected>30 {{t "team.days"}}</option>
+        <option value="90">90 {{t "team.days"}}</option>
+    </select>
+</div>
+
+<div class="stats" id="summaryCards"></div>
+
+<h2 style="margin-top:24px;">{{t "team.top_contributors"}}</h2>
+<div style="max-width:800px;"><canvas id="contributorsChart"></canvas></div>
+
+<h2 style="margin-top:24px;">{{t "team.all_authors"}}</h2>
+<table id="authorsTable">
+    <thead><tr>
+        <th>{{t "team.author"}}</th>
+        <th>{{t "team.prs_opened"}}</th>
+        <th>{{t "team.prs_merged"}}</th>
+        <th>{{t "team.prs_reviewed"}}</th>
+        <th>{{t "team.avg_lead_time"}}</th>
+    </tr></thead>
+    <tbody></tbody>
+</table>
+</div>
+
+<script>
+function loadTeamStats() {
+    const period = document.getElementById('periodSelect').value;
+    fetch('/api/v1/stats/team?period=' + period)
+        .then(r => r.json())
+        .then(data => renderTeamStats(data))
+        .catch(err => console.error('Failed to load team stats:', err));
+}
+
+function renderTeamStats(data) {
+    const cards = document.getElementById('summaryCards');
+    cards.innerHTML = '';
+    const summaryItems = [
+        { label: 'Total Authors', value: data.total_authors },
+    ];
+    summaryItems.forEach(item => {
+        cards.innerHTML += '<div class="stat-card"><h3>' + item.label + '</h3><p>' + item.value + '</p></div>';
+    });
+
+    const tbody = document.querySelector('#authorsTable tbody');
+    tbody.innerHTML = '';
+    (data.authors || []).forEach(a => {
+        tbody.innerHTML += '<tr><td>' + a.author + '</td><td>' + a.prs_opened + '</td><td>' + a.prs_merged + '</td><td>' + a.prs_reviewed + '</td><td>' + (a.avg_lead_time_hours ? a.avg_lead_time_hours.toFixed(1) + 'h' : '-') + '</td></tr>';
+    });
+
+    renderChart(data.top_contributors || []);
+}
+
+let chartInstance = null;
+function renderChart(topContributors) {
+    const ctx = document.getElementById('contributorsChart');
+    if (!ctx) return;
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: topContributors.map(a => a.author),
+            datasets: [
+                { label: 'PRs Merged', data: topContributors.map(a => a.prs_merged), backgroundColor: '#4CAF50' },
+                { label: 'PRs Opened', data: topContributors.map(a => a.prs_opened), backgroundColor: '#2196F3' },
+            ]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+    });
+}
+
+loadTeamStats();
+</script>
+</body>
+</html>

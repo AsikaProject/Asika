@@ -258,6 +258,11 @@ asika config show              # Show current config (secrets masked)
 asika config set --file <path> # Update config from TOML file
 asika config reload            # Hot reload config
 
+# Watch (live terminal monitor)
+asika watch prs [group]        # Watch PR changes (--interval 10)
+asika watch stats              # Watch DORA metrics and queue status
+asika watch team               # Watch team contributor stats
+
 # Version
 asika version                  # Show CLI version
 asika version server           # Show server version
@@ -404,6 +409,22 @@ Spam keywords can be managed individually in the WebUI settings page:
 - Select multiple keywords with checkboxes and batch delete
 - Auto-clean periodically resets the keyword list and author trigger
 
+### Quiet Hours
+
+Suppress or escalate notifications during off-hours:
+
+```toml
+[quiet_hours]
+enabled          = false
+start_time       = "22:00"
+end_time         = "08:00"
+timezone         = "Asia/Shanghai"    # empty = local time
+escalation_role  = "admin"            # role to notify during quiet hours: "admin" | "operator"
+bypass_for_urgent = ["spam_detected", "sync_failed"]  # event types that bypass quiet hours
+```
+
+When quiet hours are active, non-urgent notifications are suppressed. Urgent events (spam, sync failures) bypass quiet hours. Escalation role determines which notifier types remain active.
+
 ### CPU Thread Control
 
 Control the Go runtime's OS thread count via `[server]`:
@@ -507,13 +528,16 @@ Please check this notifier's configuration and connectivity.
 ## WebUI Features
 
 - **Dashboard** — DORA metrics, overview stats, PR breakdowns by repo group/platform, recent activity
+- **Team Stats** — Per-author contribution metrics, top contributors chart, sortable authors table
 - **PR Management** — List, detail view, approve, close, reopen, spam/mark, comment, rebase, cherry-pick
 - **Merge Queue** — View queue status, recheck, clear, remove individual items
+- **Reports** — View generated report history with per-group and per-platform breakdowns
 - **System Usage** — Real-time CPU/memory monitoring with auto-refresh, GOMEMLIMIT tracking, color-coded progress bar
 - **User Management** — Create, edit, delete users with role and permission assignment, repo group access control
 - **Settings** — Merge queue config, spam detection (keyword tags with batch operations), stale PR management, label rules editor, CPU thread control (min_procs / max_procs), config history with rollback
 - **API Keys** — Create, list, revoke API keys with role and permission config; keys delivered via DM with 2-minute auto-delete
-- **Config** — Raw TOML editor, system info, self-update, stale PR check
+- **Config** — Raw TOML editor, dry-run validation, system info, self-update, stale PR check
+- **Webhook Health** — Per-repo-group/platform webhook status monitoring with automatic polling fallback
 - **i18n** — English/Chinese language switcher (cookie-based, instant apply). Default is English.
 - **PWA** — Installable, works offline with service worker
 

@@ -5,7 +5,10 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 
 	"github.com/google/go-github/v69/github"
@@ -427,4 +430,42 @@ func (c *GitHubClient) RequestReview(ctx context.Context, owner, repo string, nu
 		Reviewers: reviewers,
 	})
 	return err
+}
+
+// RevertPR creates a revert PR for a merged PR on GitHub.
+func (c *GitHubClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls/%d/revert", owner, repo, number)
+	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create revert request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.client.Client().Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send revert request: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("github revert failed (status %d): %s", resp.StatusCode, string(body))
+	}
+	var pr github.PullRequest
+	if err := json.Unmarshal(body, &pr); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal revert PR: %w", err)
+	}
+	title := ""
+	if pr.Title != nil {
+		title = *pr.Title
+	}
+	prNumber := 0
+	if pr.Number != nil {
+		prNumber = *pr.Number
+	}
+	return &models.PRRecord{
+		Title:    title,
+		PRNumber: prNumber,
+		State:    "open",
+	}, nil
 }

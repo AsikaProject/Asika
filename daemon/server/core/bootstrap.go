@@ -158,6 +158,7 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	handlers.InitPoller(ic.Poller)
 
 	InitNotifiers(cfg, clients)
+	handlers.SetNotifyUrgentFunc(SendNotificationUrgentSync)
 
 	SetupConfigReload()
 

@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"asika/common/config"
+	"asika/common/db"
 	"asika/common/models"
 	"asika/common/notifier"
 )
 
-// ScheduleConfig is aliased to models.ScheduleConfig for use in this package.
 type ScheduleConfig = models.ScheduleConfig
 
 var defaultSchedule = ScheduleConfig{
@@ -21,26 +21,22 @@ var defaultSchedule = ScheduleConfig{
 	Cron:    "weekly",
 }
 
-// Scheduler manages periodic report generation and delivery.
 type Scheduler struct {
 	cfg    ScheduleConfig
 	ticker *time.Ticker
 	stop   chan struct{}
 }
 
-// NewScheduler creates a new report scheduler.
 func NewScheduler(cfg ScheduleConfig) *Scheduler {
 	if cfg.Cron == "" {
 		cfg.Cron = defaultSchedule.Cron
 	}
-
 	return &Scheduler{
 		cfg:  cfg,
 		stop: make(chan struct{}),
 	}
 }
 
-// Start begins the scheduled report loop.
 func (s *Scheduler) Start() {
 	if !s.cfg.Enabled {
 		slog.Info("scheduled reports disabled")
@@ -51,7 +47,6 @@ func (s *Scheduler) Start() {
 	slog.Info("scheduled reports started", "interval", interval)
 
 	go func() {
-		// Run immediately on start, then on each tick
 		s.runReport()
 		for {
 			select {
@@ -65,19 +60,29 @@ func (s *Scheduler) Start() {
 	}()
 }
 
-// Stop halts the scheduler.
 func (s *Scheduler) Stop() {
 	close(s.stop)
 }
 
 func (s *Scheduler) runReport() {
 	slog.Info("generating scheduled report")
-	report, err := s.generateReport()
+	report, period, err := s.generateReport()
 	if err != nil {
 		slog.Error("failed to generate report", "error", err)
 		return
 	}
 	s.sendReport(report)
+
+	entry := db.ReportHistoryEntry{
+		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
+		Timestamp: time.Now(),
+		Period:    period,
+		Content:   report,
+	}
+	data, _ := json.Marshal(entry)
+	if err := db.PutReportHistory(entry.ID, data); err != nil {
+		slog.Warn("failed to store report history", "error", err)
+	}
 }
 
 func (s *Scheduler) sendReport(body string) {
@@ -86,7 +91,6 @@ func (s *Scheduler) sendReport(body string) {
 		slog.Warn("no notifiers configured for scheduled reports")
 		return
 	}
-	// Create notifiers from config and send
 	notifiers := make([]notifier.Notifier, 0, len(cfg.Notify))
 	for _, nc := range cfg.Notify {
 		n := createNotifier(nc)
@@ -130,13 +134,12 @@ func createNotifier(nc models.NotifyConfig) notifier.Notifier {
 	return nil
 }
 
-func (s *Scheduler) generateReport() (string, error) {
+func (s *Scheduler) generateReport() (string, int, error) {
 	cfg := config.Current()
 	if cfg == nil {
-		return "", fmt.Errorf("config not loaded")
+		return "", 0, fmt.Errorf("config not loaded")
 	}
 
-	// Call the stats API internally via HTTP
 	addr := cfg.Server.Listen
 	if addr == "" {
 		addr = ":8080"
@@ -144,31 +147,65 @@ func (s *Scheduler) generateReport() (string, error) {
 	if addr[0] == ':' {
 		addr = "localhost" + addr
 	}
-	url := fmt.Sprintf("http://localhost%s/api/v1/stats?period=7", addr)
 
+	period := 7
+	if s.cfg.PeriodDays > 0 {
+		period = s.cfg.PeriodDays
+	}
+
+	stats, err := fetchStats(addr, period)
+	if err != nil {
+		return "", period, err
+	}
+
+	teamStats, _ := fetchTeamStats(addr, period)
+
+	report := formatReportHTML(stats, teamStats, period)
+	return report, period, nil
+}
+
+func fetchStats(addr string, period int) (map[string]interface{}, error) {
+	url := fmt.Sprintf("http://localhost%s/api/v1/stats?period=%d", addr, period)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	// Use internal auth bypass
 	req.Header.Set("X-Internal-Report", "true")
-
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("stats request failed: %w", err)
+		return nil, fmt.Errorf("stats request failed: %w", err)
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("stats API returned %d", resp.StatusCode)
+		return nil, fmt.Errorf("stats API returned %d", resp.StatusCode)
 	}
-
 	var stats map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
-		return "", fmt.Errorf("failed to decode stats: %w", err)
+		return nil, fmt.Errorf("failed to decode stats: %w", err)
 	}
+	return stats, nil
+}
 
-	return formatReport(stats), nil
+func fetchTeamStats(addr string, period int) (*models.TeamStats, error) {
+	url := fmt.Sprintf("http://localhost%s/api/v1/stats/team?period=%d", addr, period)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Internal-Report", "true")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+	var ts models.TeamStats
+	if err := json.NewDecoder(resp.Body).Decode(&ts); err != nil {
+		return nil, nil
+	}
+	return &ts, nil
 }
 
 func formatReport(stats map[string]interface{}) string {
@@ -176,7 +213,6 @@ func formatReport(stats map[string]interface{}) string {
 	if v, ok := stats["period_days"].(float64); ok {
 		period = int(v)
 	}
-
 	var deployments, leadTime, failureRate, mttr float64
 	var totalPRs, mergedPRs, openPRs, queueItems, failedQueue int
 
@@ -230,7 +266,75 @@ func formatReport(stats map[string]interface{}) string {
 	return report
 }
 
-// cronToInterval converts a cron-like string to a time.Duration.
+func formatReportHTML(stats map[string]interface{}, teamStats *models.TeamStats, period int) string {
+	var deployments, leadTime, failureRate, mttr float64
+	var totalPRs, mergedPRs, openPRs, queueItems, failedQueue int
+
+	if v, ok := stats["deployment_frequency"].(float64); ok {
+		deployments = v
+	}
+	if v, ok := stats["lead_time_hours"].(float64); ok {
+		leadTime = v
+	}
+	if v, ok := stats["change_failure_rate"].(float64); ok {
+		failureRate = v
+	}
+	if v, ok := stats["mttr_hours"].(float64); ok {
+		mttr = v
+	}
+	if v, ok := stats["total_prs"].(float64); ok {
+		totalPRs = int(v)
+	}
+	if v, ok := stats["merged_prs"].(float64); ok {
+		mergedPRs = int(v)
+	}
+	if v, ok := stats["open_prs"].(float64); ok {
+		openPRs = int(v)
+	}
+	if v, ok := stats["queue_items"].(float64); ok {
+		queueItems = int(v)
+	}
+	if v, ok := stats["failed_queue_items"].(float64); ok {
+		failedQueue = int(v)
+	}
+
+	report := fmt.Sprintf("📊 Asika Weekly Report (last %d days)\n\n", period)
+	report += "DORA Metrics:\n"
+	report += fmt.Sprintf("  Deployments/Day: %.1f\n", deployments)
+	report += fmt.Sprintf("  Lead Time: %.1f hours\n", leadTime)
+	report += fmt.Sprintf("  Failure Rate: %.1f%%\n", failureRate*100)
+	report += fmt.Sprintf("  MTTR: %.1f hours\n\n", mttr)
+	report += "PR Overview:\n"
+	report += fmt.Sprintf("  Total PRs: %d | Open: %d | Merged: %d\n", totalPRs, openPRs, mergedPRs)
+	report += fmt.Sprintf("  Queue Items: %d | Failed Queue: %d\n\n", queueItems, failedQueue)
+
+	if byGroup, ok := stats["prs_by_repo_group"].(map[string]interface{}); ok && len(byGroup) > 0 {
+		report += "By Repo Group:\n"
+		for group, count := range byGroup {
+			report += fmt.Sprintf("  %s: %v\n", group, count)
+		}
+		report += "\n"
+	}
+
+	if byPlatform, ok := stats["prs_by_platform"].(map[string]interface{}); ok && len(byPlatform) > 0 {
+		report += "By Platform:\n"
+		for plat, count := range byPlatform {
+			report += fmt.Sprintf("  %s: %v\n", plat, count)
+		}
+		report += "\n"
+	}
+
+	if teamStats != nil && len(teamStats.TopContributors) > 0 {
+		report += "Top Contributors:\n"
+		for i, a := range teamStats.TopContributors {
+			report += fmt.Sprintf("  %d. %s — opened: %d, merged: %d, reviewed: %d\n",
+				i+1, a.Author, a.PRsOpened, a.PRsMerged, a.PRsReviewed)
+		}
+	}
+
+	return report
+}
+
 func cronToInterval(cron string) time.Duration {
 	switch cron {
 	case "hourly":

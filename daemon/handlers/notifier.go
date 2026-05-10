@@ -14,9 +14,17 @@ import (
 // notifyFunc is an optional external notification sender (set by core).
 var notifyFunc func(title, body string)
 
+// notifyUrgentFunc is an optional external urgent notification sender (bypasses quiet hours).
+var notifyUrgentFunc func(title, body string)
+
 // SetNotifyFunc sets the external notification function.
 func SetNotifyFunc(fn func(title, body string)) {
 	notifyFunc = fn
+}
+
+// SetNotifyUrgentFunc sets the external urgent notification function.
+func SetNotifyUrgentFunc(fn func(title, body string)) {
+	notifyUrgentFunc = fn
 }
 
 var globalNotifiers []notifier.Notifier

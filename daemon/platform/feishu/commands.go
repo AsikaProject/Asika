@@ -48,14 +48,19 @@ func (b *Bot) processCommand(senderID, text string) string {
 		return b.doApprove(senderID, parts[1], parts[2])
 	case strings.HasPrefix(lower, "close ") || strings.HasPrefix(lower, "/close "):
 		if len(parts) < 3 {
-			return "Usage: close <repo_group> <pr_id>"
+			return "Usage: close <repo_group> <pr_id> [reason]"
 		}
-		return b.doClose(senderID, parts[1], parts[2])
+		return b.doClose(senderID, parts[1], parts[2], parts[3:])
 	case strings.HasPrefix(lower, "reopen ") || strings.HasPrefix(lower, "/reopen "):
 		if len(parts) < 3 {
 			return "Usage: reopen <repo_group> <pr_id>"
 		}
 		return b.doReopen(senderID, parts[1], parts[2])
+	case strings.HasPrefix(lower, "revert ") || strings.HasPrefix(lower, "/revert "):
+		if len(parts) < 3 {
+			return "Usage: revert <repo_group> <pr_id>"
+		}
+		return b.doRevert(senderID, parts[1], parts[2])
 	case strings.HasPrefix(lower, "spam ") || strings.HasPrefix(lower, "/spam "):
 		if len(parts) < 3 {
 			return "Usage: spam <repo_group> <pr_id>"
@@ -160,8 +165,9 @@ func (b *Bot) helpText() string {
   approve <group> <id> - Approve PR
   close <group> <id>   - Close PR
   reopen <group> <id>  - Reopen PR
-  spam <group> <id>    - Mark as spam
-  queue [group] - Show merge queue
+   spam <group> <id>    - Mark as spam
+   revert <group> <id>   - Revert a merged PR
+   queue [group] - Show merge queue
   recheck       - Trigger queue recheck
   config        - Show config summary
   stalecheck [group] - Check for stale PRs
@@ -224,11 +230,20 @@ func (b *Bot) showPRText(repoGroup, prID string) string {
 	if pr == nil {
 		return fmt.Sprintf("PR %s not found in %s", prID, repoGroup)
 	}
-	return fmt.Sprintf(
+	msg := fmt.Sprintf(
 		"PR #%d - %s\n  Author: %s | State: %s\n  Platform: %s | Spam: %v\n  Labels: %s",
 		pr.PRNumber, pr.Title, pr.Author, pr.State,
 		pr.Platform, pr.SpamFlag, strings.Join(pr.Labels, ", "),
 	)
+	switch pr.State {
+	case "open":
+		msg += "\nAvailable actions: approve / close [reason] / spam"
+	case "closed", "spam":
+		msg += "\nAvailable actions: reopen"
+	case "merged":
+		msg += "\nAvailable actions: revert"
+	}
+	return msg
 }
 
 func (b *Bot) doApprove(senderID, repoGroup, prID string) string {
@@ -278,7 +293,7 @@ func (b *Bot) doApprove(senderID, repoGroup, prID string) string {
 	return fmt.Sprintf("PR #%d approved.", pr.PRNumber)
 }
 
-func (b *Bot) doClose(senderID, repoGroup, prID string) string {
+func (b *Bot) doClose(senderID, repoGroup, prID string, reasonParts []string) string {
 	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		return "PR not found."
@@ -292,19 +307,29 @@ func (b *Bot) doClose(senderID, repoGroup, prID string) string {
 		return "No client for platform."
 	}
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
-	if err := client.ClosePR(context.Background(), owner, repo, pr.PRNumber); err != nil {
+	ctx := context.Background()
+	if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
 		db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
 			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "error": err.Error(),
 		})
 		return fmt.Sprintf("Failed: %v", err)
 	}
+	reason := strings.Join(reasonParts, " ")
+	if reason != "" {
+		_ = client.CreateLabel(ctx, owner, repo, reason, "ededed", "Close reason: "+reason)
+		_ = client.AddLabel(ctx, owner, repo, pr.PRNumber, reason, "ededed")
+	}
 	pr.State = "closed"
+	pr.CloseReason = reason
 	prData, _ := json.Marshal(pr)
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu",
+		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "reason": reason,
 	})
+	if reason != "" {
+		return fmt.Sprintf("PR #%d closed with reason: %s", pr.PRNumber, reason)
+	}
 	return fmt.Sprintf("PR #%d closed.", pr.PRNumber)
 }
 
@@ -339,6 +364,56 @@ func (b *Bot) doReopen(senderID, repoGroup, prID string) string {
 	return fmt.Sprintf("PR #%d reopened.", pr.PRNumber)
 }
 
+func (b *Bot) doRevert(senderID, repoGroup, prID string) string {
+	pr, _ := commonutil.GetPRByID(repoGroup, prID)
+	if pr == nil {
+		return "PR not found."
+	}
+	if pr.State != "merged" {
+		return fmt.Sprintf("PR #%d is not merged (state: %s)", pr.PRNumber, pr.State)
+	}
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		return "Repo group not found."
+	}
+	client := b.getClient(pr.Platform)
+	if client == nil {
+		return "No client for platform."
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+	ctx := context.Background()
+	revertPR, err := client.RevertPR(ctx, owner, repo, pr.PRNumber)
+	if err != nil {
+		db.AppendAuditLog("error", "PR revert failed", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "error": err.Error(),
+		})
+		return fmt.Sprintf("Failed: %v", err)
+	}
+	if revertPR != nil {
+		revertData, _ := json.Marshal(revertPR)
+		revertKey := fmt.Sprintf("%s#%s#%d", revertPR.RepoGroup, revertPR.Platform, revertPR.PRNumber)
+		db.PutPRWithIndex(revertKey, revertData, revertPR.ID, revertPR.RepoGroup, revertPR.PRNumber)
+		if b.queueMgr != nil {
+			if err := b.queueMgr.AddToQueue(revertPR); err != nil {
+				slog.Warn("feishu bot: failed to add revert PR to queue", "error", err, "pr_number", revertPR.PRNumber)
+			} else {
+				go b.queueMgr.CheckQueue()
+			}
+		}
+	}
+	_ = client.CommentPR(ctx, owner, repo, pr.PRNumber, fmt.Sprintf("Revert PR #%d has been created by %s via Feishu.", pr.PRNumber, senderID))
+	db.AppendAuditLog("info", "PR reverted", map[string]interface{}{
+		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu",
+	})
+	if b.notifier != nil {
+		title := fmt.Sprintf("[Revert] PR #%d reverted", pr.PRNumber)
+		body := fmt.Sprintf("PR #%d \"%s\" reverted by %s via Feishu.\nRepo: %s | Platform: %s",
+			pr.PRNumber, pr.Title, senderID, pr.RepoGroup, pr.Platform)
+		b.notifier.Send(context.Background(), title, body)
+	}
+	return fmt.Sprintf("PR #%d revert initiated.", pr.PRNumber)
+}
+
 func (b *Bot) doMarkSpam(senderID, repoGroup, prID string) string {
 	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
@@ -353,6 +428,20 @@ func (b *Bot) doMarkSpam(senderID, repoGroup, prID string) string {
 	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
 		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu",
 	})
+	existing, _ := db.GetSpamAuthor(pr.Author, pr.Platform)
+	if existing != nil {
+		existing.Count++
+		existing.LastSeen = time.Now()
+		db.PutSpamAuthor(existing)
+	} else {
+		db.PutSpamAuthor(&models.SpamAuthor{
+			Author:    pr.Author,
+			Platform:  pr.Platform,
+			FirstSeen: time.Now(),
+			LastSeen:  time.Now(),
+			Count:     1,
+		})
+	}
 	group := config.GetRepoGroupByName(b.cfg, repoGroup)
 	if group != nil {
 		client := b.getClient(pr.Platform)
@@ -408,7 +497,7 @@ func (b *Bot) showConfigText() string {
 		return "Config not loaded."
 	}
 	groups := config.GetRepoGroups(cfg)
- 	return fmt.Sprintf(
+	return fmt.Sprintf(
 		"Asika Config:\n  Server: %s (%s)\n  CPU Threads: min=%d max=%d\n  DB: %s\n  Events: %s\n  Spam: %v\n  Repo Groups: %d\n  Notify Channels: %d",
 		cfg.Server.Listen, cfg.Server.Mode, cfg.Server.MinProcs, cfg.Server.MaxProcs, cfg.Database.Path,
 		cfg.Events.Mode, cfg.Spam.Enabled, len(groups), len(cfg.Notify),

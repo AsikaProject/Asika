@@ -229,6 +229,12 @@ func (s *Server) setupRoutes() {
 				prsMerge.POST("/:pr_id/cherry-pick", handlers.CherryPickSinglePR)
 			}
 
+			prsRevert := prs.Group("")
+			prsRevert.Use(RequirePermission("revert"))
+			{
+				prsRevert.POST("/:pr_id/revert", handlers.RevertPR)
+			}
+
 			prs.POST("/batch/label", handlers.BatchLabelPR)
 		}
 
@@ -270,6 +276,28 @@ func (s *Server) setupRoutes() {
 		// Stats / DORA metrics
 		protected.GET("/stats", handlers.GetStats)
 
+		// Team stats
+		protected.GET("/stats/team", handlers.GetTeamStats)
+
+		// Report history
+		protected.GET("/reports", handlers.GetReportHistory)
+
+		// Notification preferences
+		notifPrefs := protected.Group("/users/:username/notifications")
+		{
+			notifPrefs.GET("", handlers.GetNotificationPrefs)
+			notifPrefs.PUT("", handlers.UpdateNotificationPrefs)
+		}
+
+		// Audit log viewer
+		protected.GET("/audit", func(c *gin.Context) {
+			user, _ := c.Get("username")
+			c.HTML(http.StatusOK, "audit.html", gin.H{
+				"title":    "Audit Logs - Asika",
+				"username": user,
+			})
+		})
+
 		// Real-time usage (CPU/Memory)
 		protected.GET("/usage", handlers.GetUsage)
 
@@ -288,6 +316,12 @@ func (s *Server) setupRoutes() {
 			test.POST("/notify", handlers.TestNotify)
 		}
 
+		// Webhook health status
+		protected.GET("/webhooks/health", webhook.WebhookHealthHandler)
+
+		// Config dry-run
+		cfgGroup.POST("/dry-run", handlers.DryRunConfig)
+
 		// Admin operations (backup/restore)
 		admin := protected.Group("/admin")
 		admin.Use(RequireRole("admin"))
@@ -295,6 +329,25 @@ func (s *Server) setupRoutes() {
 			admin.POST("/backup", handlers.CreateBackup)
 			admin.GET("/backups", handlers.ListBackups)
 			admin.POST("/restore", handlers.RestoreBackup)
+		}
+
+		// Team spaces
+		spaces := protected.Group("/spaces")
+		spaces.Use(RequireAnyRole("viewer", "operator", "admin"))
+		{
+			spaces.GET("", handlers.ListSpaces)
+			spaces.GET("/:name", handlers.GetSpace)
+			spaces.GET("/:name/members", handlers.GetSpaceMembers)
+
+			spacesWrite := spaces.Group("")
+			spacesWrite.Use(RequireRole("admin"))
+			{
+				spacesWrite.POST("", handlers.CreateSpace)
+				spacesWrite.DELETE("/:name", handlers.DeleteSpace)
+				spacesWrite.PUT("/:name/repo-groups", handlers.UpdateSpaceRepoGroups)
+				spacesWrite.POST("/:name/members", handlers.AddSpaceMember)
+				spacesWrite.DELETE("/:name/members/:username", handlers.RemoveSpaceMember)
+			}
 		}
 
 		// Self-update (admin only)
@@ -410,6 +463,30 @@ func (s *Server) setupRoutes() {
 			user := c.GetString("username")
 			c.HTML(http.StatusOK, "usage.html", gin.H{
 				"title":    "Usage - Asika",
+				"username": user,
+			})
+		})
+
+		ssr.GET("/spaces", func(c *gin.Context) {
+			user := c.GetString("username")
+			c.HTML(http.StatusOK, "spaces.html", gin.H{
+				"title":    "Team Spaces - Asika",
+				"username": user,
+			})
+		})
+
+		ssr.GET("/team", func(c *gin.Context) {
+			user := c.GetString("username")
+			c.HTML(http.StatusOK, "team.html", gin.H{
+				"title":    "Team Stats - Asika",
+				"username": user,
+			})
+		})
+
+		ssr.GET("/reports", func(c *gin.Context) {
+			user := c.GetString("username")
+			c.HTML(http.StatusOK, "reports.html", gin.H{
+				"title":    "Reports - Asika",
 				"username": user,
 			})
 		})

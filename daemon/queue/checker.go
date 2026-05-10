@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"asika/common/config"
 	"asika/common/db"
@@ -50,14 +51,14 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 		return false, err
 	}
 
-	// Get repo group config - falls back to "default" if name not found
 	group := config.GetRepoGroupByName(c.cfg, pr.RepoGroup)
 	if group == nil {
 		return false, fmt.Errorf("repo group not found: %s", pr.RepoGroup)
 	}
 
-	// Check for merge conflicts - attempt auto-rebase if configured
-	if pr.HasConflict {
+	mq := group.MergeQueue
+
+	if pr.HasConflict && mq.Expression == "" {
 		slog.Info("PR has merge conflicts, attempting auto-rebase", "pr_id", pr.ID, "title", pr.Title)
 		if c.tryAutoRebase(ctx, pr, group) {
 			pr.HasConflict = false
@@ -67,25 +68,32 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 		}
 	}
 
-	// Check approvals with retry for transient errors
-	approved, approvals, err := c.checkApprovals(ctx, pr, group)
+	approvals, err := c.fetchApprovals(ctx, pr, group)
 	if err != nil {
 		return false, err
 	}
-	if !approved {
-		return false, nil
+
+	coreApproved := 0
+	coreSet := make(map[string]bool, len(mq.CoreContributors))
+	for _, cc := range mq.CoreContributors {
+		coreSet[cc] = true
+	}
+	for _, a := range approvals {
+		if coreSet[a] {
+			coreApproved++
+		}
 	}
 
-	// Check CI (skip if ci_check_required is false or ci_provider is "none"/empty)
-	if group.MergeQueue.CICheckRequired && group.CIProvider != "none" && group.CIProvider != "" {
-		ciPassed, ciStatus, err := c.checkCI(ctx, pr, group)
+	ciStatus := "none"
+	if mq.CICheckRequired && group.CIProvider != "none" && group.CIProvider != "" {
+		passed, status, err := c.checkCI(ctx, pr, group)
 		if err != nil {
 			return false, &TransientError{Err: err}
 		}
-		if !ciPassed {
-			// Update criteria snapshot
+		ciStatus = status
+		if !passed && mq.Expression == "" {
 			item.Criteria = models.MergeCriteria{
-				RequiredApprovals: group.MergeQueue.RequiredApprovals,
+				RequiredApprovals: mq.RequiredApprovals,
 				ApprovedBy:        approvals,
 				CIStatus:          ciStatus,
 			}
@@ -93,29 +101,83 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 		}
 	}
 
-	// Update criteria snapshot
+	labelSet := make(map[string]bool)
+	for _, l := range pr.Labels {
+		labelSet[l] = true
+	}
+
+	coreContribMap := make(map[string]bool)
+	for _, cc := range mq.CoreContributors {
+		coreContribMap[cc] = true
+	}
+
+	ageHours := 0.0
+	if !pr.CreatedAt.IsZero() {
+		ageHours = time.Since(pr.CreatedAt).Hours()
+	}
+
+	evalCtx := EvalContext{
+		Approvals:        len(approvals),
+		Required:         mq.RequiredApprovals,
+		CIStatus:         ciStatus,
+		HasConflict:      pr.HasConflict,
+		IsDraft:          pr.IsDraft,
+		CoreApproved:     coreApproved,
+		Author:           pr.Author,
+		CoreContributors: coreContribMap,
+		AgeHours:         ageHours,
+		Labels:           labelSet,
+	}
+
+	if mq.Expression != "" {
+		result, err := Eval(mq.Expression, evalCtx)
+		if err != nil {
+			slog.Error("merge expression evaluation failed", "error", err, "expression", mq.Expression, "pr_id", pr.ID)
+			return false, fmt.Errorf("merge expression error: %w", err)
+		}
+		item.Criteria = models.MergeCriteria{
+			RequiredApprovals: mq.RequiredApprovals,
+			ApprovedBy:        approvals,
+			CIStatus:          ciStatus,
+		}
+		return result, nil
+	}
+
+	if len(approvals) < mq.RequiredApprovals {
+		item.Criteria = models.MergeCriteria{
+			RequiredApprovals: mq.RequiredApprovals,
+			ApprovedBy:        approvals,
+			CIStatus:          ciStatus,
+		}
+		return false, nil
+	}
+
+	if ciStatus != "none" && ciStatus != "success" {
+		item.Criteria = models.MergeCriteria{
+			RequiredApprovals: mq.RequiredApprovals,
+			ApprovedBy:        approvals,
+			CIStatus:          ciStatus,
+		}
+		return false, nil
+	}
+
 	item.Criteria = models.MergeCriteria{
-		RequiredApprovals: group.MergeQueue.RequiredApprovals,
+		RequiredApprovals: mq.RequiredApprovals,
 		ApprovedBy:        approvals,
 		CIStatus:          "success",
 	}
-
 	return true, nil
 }
 
-// checkApprovals checks if the PR has enough approvals from core contributors
-func (c *Checker) checkApprovals(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) (bool, []string, error) {
+func (c *Checker) fetchApprovals(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) ([]string, error) {
 	client := c.clients[platforms.PlatformType(pr.Platform)]
 	if client == nil {
-		return false, nil, fmt.Errorf("no client for platform: %s", pr.Platform)
+		return nil, fmt.Errorf("no client for platform: %s", pr.Platform)
 	}
-
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	if owner == "" || repo == "" {
-		return false, nil, fmt.Errorf("cannot resolve repo for platform %s in group %s", pr.Platform, group.Name)
+		return nil, fmt.Errorf("cannot resolve repo for platform %s in group %s", pr.Platform, group.Name)
 	}
-
-	// Retry transient network errors
 	var approvals []string
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
@@ -124,44 +186,16 @@ func (c *Checker) checkApprovals(ctx context.Context, pr *models.PRRecord, group
 			break
 		}
 		if !isTransientError(err) {
-			return false, nil, err
+			return nil, err
 		}
 		if attempt < 2 {
 			slog.Warn("transient error fetching approvals, retrying", "pr_id", pr.ID, "attempt", attempt+1, "error", err)
 		}
 	}
 	if err != nil {
-		return false, nil, &TransientError{Err: err}
+		return nil, &TransientError{Err: err}
 	}
-
-	// Check if core contributors approved
-	coreApproved := make([]string, 0)
-	isCoreListEmpty := len(group.MergeQueue.CoreContributors) == 0
-	seen := make(map[string]bool)
-	if !isCoreListEmpty {
-		coreSet := make(map[string]bool, len(group.MergeQueue.CoreContributors))
-		for _, c := range group.MergeQueue.CoreContributors {
-			coreSet[c] = true
-		}
-		for _, approver := range approvals {
-			if seen[approver] {
-				continue
-			}
-			if coreSet[approver] {
-				coreApproved = append(coreApproved, approver)
-				seen[approver] = true
-			}
-		}
-	} else {
-		for _, approver := range approvals {
-			if !seen[approver] {
-				coreApproved = append(coreApproved, approver)
-				seen[approver] = true
-			}
-		}
-	}
-
-	return len(coreApproved) >= group.MergeQueue.RequiredApprovals, coreApproved, nil
+	return approvals, nil
 }
 
 // checkCI checks if CI passed

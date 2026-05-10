@@ -139,6 +139,17 @@ func (m *MockPlatformClient) RequestReview(ctx context.Context, owner, repo stri
 	return m.Err
 }
 
+func (m *MockPlatformClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
+	if m.Err != nil {
+		return nil, m.Err
+	}
+	return &models.PRRecord{
+		Title:    "Revert of PR #" + fmt.Sprintf("%d", number),
+		PRNumber: number + 1000,
+		State:    "open",
+	}, nil
+}
+
 func (m *MockPlatformClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
 	if m.Err != nil {
 		return nil, m.Err

@@ -23,6 +23,8 @@ const (
 	EventBranchDeleted EventType = "branch_deleted"
 	EventSyncCompleted EventType = "sync_completed"
 	EventSyncFailed    EventType = "sync_failed"
+	EventPRReverted          EventType = "pr_reverted"
+	EventNotificationEscalated EventType = "notification_escalated"
 )
 
 // Event is the internal unified event

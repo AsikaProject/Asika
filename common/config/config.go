@@ -92,6 +92,28 @@ func Load(path string) (*models.Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	if cfg.QuietHours.Enabled {
+		if cfg.QuietHours.StartTime == "" {
+			cfg.QuietHours.StartTime = "22:00"
+		}
+		if cfg.QuietHours.EndTime == "" {
+			cfg.QuietHours.EndTime = "08:00"
+		}
+		if cfg.QuietHours.EscalationRole == "" {
+			cfg.QuietHours.EscalationRole = "admin"
+		}
+		if len(cfg.QuietHours.BypassForUrgent) == 0 {
+			cfg.QuietHours.BypassForUrgent = []string{"spam_detected", "sync_failed"}
+		}
+	}
+
+	if cfg.Events.HealthCheckInterval == "" {
+		cfg.Events.HealthCheckInterval = "2m"
+	}
+	if cfg.Events.HealthCheckThreshold == "" {
+		cfg.Events.HealthCheckThreshold = "5m"
+	}
+
 	// Apply environment variable overrides for tokens
 	if token := os.Getenv("ASIKA_GITHUB_TOKEN"); token != "" {
 		cfg.Tokens.GitHub = token
@@ -111,6 +133,47 @@ func Load(path string) (*models.Config, error) {
 	Store(cfg)
 	ConfigPath = path
 	return cfg, nil
+}
+
+// DryRun parses and validates a config patch without applying it.
+// Returns the merged config and any validation error.
+func DryRun(patchTOML string) (*models.Config, error) {
+	cfg := Current()
+	if cfg == nil {
+		return nil, fmt.Errorf("no current config loaded")
+	}
+
+	var patch map[string]interface{}
+	if err := toml.Unmarshal([]byte(patchTOML), &patch); err != nil {
+		return nil, fmt.Errorf("invalid TOML: %w", err)
+	}
+
+	merged := *cfg
+	mergedTOML, err := toml.Marshal(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal current config: %w", err)
+	}
+	var existing map[string]interface{}
+	if err := toml.Unmarshal(mergedTOML, &existing); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal current config: %w", err)
+	}
+
+	for k, v := range patch {
+		existing[k] = v
+	}
+
+	mergedData, err := toml.Marshal(&existing)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
+	}
+	if err := toml.Unmarshal(mergedData, &merged); err != nil {
+		return nil, fmt.Errorf("failed to parse merged config: %w", err)
+	}
+
+	if err := validate(&merged); err != nil {
+		return nil, err
+	}
+	return &merged, nil
 }
 
 // validate validates the configuration
@@ -165,6 +228,10 @@ func validate(cfg *models.Config) error {
 		return fmt.Errorf("auth.jwt_secret is required")
 	}
 
+	if len(cfg.CloseReasons.Reasons) == 0 {
+		cfg.CloseReasons.Reasons = []string{"no longer needed", "duplicate", "invalid", "won't fix"}
+	}
+
 	if cfg.Spam.Enabled {
 		if cfg.Spam.Threshold <= 0 {
 			return fmt.Errorf("spam.threshold must be greater than 0 when spam is enabled")
@@ -213,6 +280,7 @@ func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 			HookPath:       rg.HookPath,
 			CIProvider:     rg.CIProvider,
 			MergeQueue:     rg.MergeQueue,
+			LabelRules:     rg.LabelRules,
 		}
 	}
 	return groups
@@ -242,6 +310,7 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 				HookPath:       rg.HookPath,
 				CIProvider:     rg.CIProvider,
 				MergeQueue:     rg.MergeQueue,
+				LabelRules:     rg.LabelRules,
 			}
 		}
 		if rg.Name == "default" {
@@ -259,6 +328,7 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 				HookPath:       rg.HookPath,
 				CIProvider:     rg.CIProvider,
 				MergeQueue:     rg.MergeQueue,
+				LabelRules:     rg.LabelRules,
 			}
 		}
 	}
@@ -437,6 +507,11 @@ func SaveToFile(cfg models.Config) error {
 }
 
 const configVersionKey = "__config_version__"
+
+// CurrentCfgVersion returns the latest stored config version number.
+func CurrentCfgVersion() int {
+	return currentConfigVersion()
+}
 
 // currentConfigVersion returns the latest stored config version number.
 func currentConfigVersion() int {

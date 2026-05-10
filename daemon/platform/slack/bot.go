@@ -186,6 +186,8 @@ func (b *Bot) handleMessage(ev *slack.MessageEvent, client *socketmode.Client) {
 		b.handleReopenPR(ev, client, parts)
 	case "spam":
 		b.handleMarkSpam(ev, client, parts)
+	case "revert":
+		b.handleRevertPR(ev, client, parts)
 	case "queue":
 		b.handleShowQueue(ev, client, parts)
 	case "recheck":

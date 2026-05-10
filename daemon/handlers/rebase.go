@@ -13,6 +13,7 @@ import (
 	"asika/common/db"
 	"asika/common/gitutil"
 	"asika/common/models"
+	handlerspr "asika/daemon/handlers/pr"
 )
 
 // RebaseResponse represents the result of a rebase operation
@@ -119,7 +120,7 @@ func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID
 	if platform == "" {
 		platform = config.GetPlatformForGroup(group)
 	}
-	client := getClientForGroup(group, platform)
+	client := handlerspr.GetClientForGroup(group, platform)
 	if client == nil {
 		return nil, fmt.Errorf("platform client not available: %s", platform)
 	}
@@ -268,7 +269,7 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 	if platform == "" {
 		platform = config.GetPlatformForGroup(group)
 	}
-	client := getClientForGroup(group, platform)
+	client := handlerspr.GetClientForGroup(group, platform)
 	if client == nil {
 		return nil, fmt.Errorf("platform client not available: %s", platform)
 	}

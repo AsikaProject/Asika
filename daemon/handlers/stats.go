@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -192,4 +193,113 @@ func GetStats(c *gin.Context) {
 
 	c.Header("Cache-Control", "private, max-age=30")
 	c.JSON(http.StatusOK, resp)
+}
+
+// GetTeamStats handles GET /api/v1/stats/team
+func GetTeamStats(c *gin.Context) {
+	periodDays := 30
+	if p := c.Query("period"); p != "" {
+		if n, err := fmt.Sscanf(p, "%d", &periodDays); err != nil || n != 1 || periodDays <= 0 {
+			periodDays = 30
+		}
+	}
+	cutoff := time.Now().AddDate(0, 0, -periodDays)
+
+	type authorData struct {
+		opened       int
+		merged       int
+		leadTimeSum  float64
+		leadTimeCnt  int
+		reviewEvents int
+	}
+
+	authors := make(map[string]*authorData)
+
+	db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		var pr models.PRRecord
+		if err := json.Unmarshal(value, &pr); err != nil {
+			return nil
+		}
+		if pr.Author == "" {
+			return nil
+		}
+		ad, ok := authors[pr.Author]
+		if !ok {
+			ad = &authorData{}
+			authors[pr.Author] = ad
+		}
+		if pr.CreatedAt.After(cutoff) {
+			ad.opened++
+		}
+		if pr.State == "merged" && !pr.MergedAt.IsZero() && pr.MergedAt.After(cutoff) {
+			ad.merged++
+			if !pr.CreatedAt.IsZero() {
+				d := pr.MergedAt.Sub(pr.CreatedAt)
+				if d > 0 {
+					ad.leadTimeSum += d.Hours()
+					ad.leadTimeCnt++
+				}
+			}
+		}
+		for _, ev := range pr.Events {
+			if ev.Action == "approved" && ev.Timestamp.After(cutoff) {
+				reviewerAd, ok := authors[ev.Actor]
+				if !ok {
+					reviewerAd = &authorData{}
+					authors[ev.Actor] = reviewerAd
+				}
+				reviewerAd.reviewEvents++
+			}
+		}
+		return nil
+	})
+
+	stats := make([]models.AuthorStats, 0, len(authors))
+	for name, ad := range authors {
+		avgLead := 0.0
+		if ad.leadTimeCnt > 0 {
+			avgLead = ad.leadTimeSum / float64(ad.leadTimeCnt)
+		}
+		stats = append(stats, models.AuthorStats{
+			Author:           name,
+			PRsOpened:        ad.opened,
+			PRsMerged:        ad.merged,
+			PRsReviewed:      ad.reviewEvents,
+			AvgLeadTimeHrs:   avgLead,
+		})
+	}
+
+	sort.Slice(stats, func(i, j int) bool {
+		return stats[i].PRsMerged > stats[j].PRsMerged
+	})
+
+	topN := 5
+	if len(stats) < topN {
+		topN = len(stats)
+	}
+
+	c.Header("Cache-Control", "private, max-age=60")
+	c.JSON(http.StatusOK, models.TeamStats{
+		PeriodDays:      periodDays,
+		TotalAuthors:    len(stats),
+		Authors:         stats,
+		TopContributors: stats[:topN],
+	})
+}
+
+// GetReportHistory handles GET /api/v1/reports
+func GetReportHistory(c *gin.Context) {
+	limit := 20
+	if l := c.Query("limit"); l != "" {
+		if n, err := fmt.Sscanf(l, "%d", &limit); err != nil || n != 1 || limit <= 0 {
+			limit = 20
+		}
+	}
+	entries, err := db.ListReportHistory(limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list report history"})
+		return
+	}
+	c.Header("Cache-Control", "private, max-age=30")
+	c.JSON(http.StatusOK, entries)
 }

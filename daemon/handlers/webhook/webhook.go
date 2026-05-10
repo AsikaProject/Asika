@@ -92,6 +92,7 @@ func WebhookHandler(c *gin.Context) {
 	}
 
 	db.DeleteWebhookRetry(webhookID)
+	db.PutWebhookHealth(repoGroup, platform, time.Now())
 	c.JSON(http.StatusOK, gin.H{"message": "webhook received", "event": eventType})
 }
 

@@ -99,6 +99,7 @@ func (b *Bot) handleHelp(c telebot.Context) error {
 /approve repo_group pr_id — Approve a PR
 /close repo_group pr_id — Close a PR
 /reopen repo_group pr_id — Reopen a PR (spam recovery)
+/revert repo_group pr_number — Revert a merged PR
 /spam repo_group pr_id — Mark PR as spam
 
 📊 <b>Queue</b>
@@ -193,11 +194,20 @@ func (b *Bot) handleShowPR(c telebot.Context) error {
 		found.SpamFlag, found.CreatedAt.Format(time.RFC3339),
 	)
 	selector := &telebot.ReplyMarkup{}
-	btnApprove := selector.Data("✅ Approve", "approve", fmt.Sprintf("approve:%s#%s", repoGroup, found.ID))
-	btnClose := selector.Data("❌ Close", "close", fmt.Sprintf("close:%s#%s", repoGroup, found.ID))
-	btnSpam := selector.Data("🚫 Spam", "spam", fmt.Sprintf("spam:%s#%s", repoGroup, found.ID))
-	btnReopen := selector.Data("🔄 Reopen", "reopen", fmt.Sprintf("reopen:%s#%s", repoGroup, found.ID))
-	selector.Inline(selector.Row(btnApprove, btnClose), selector.Row(btnSpam, btnReopen))
+	payload := fmt.Sprintf("%s#%s", repoGroup, found.ID)
+	switch found.State {
+	case "open":
+		btnApprove := selector.Data("✅ Approve", "approve", "approve:"+payload)
+		btnClose := selector.Data("❌ Close", "close", "close:"+payload)
+		btnSpam := selector.Data("🚫 Spam", "spam", "spam:"+payload)
+		selector.Inline(selector.Row(btnApprove, btnClose), selector.Row(btnSpam))
+	case "closed", "spam":
+		btnReopen := selector.Data("🔄 Reopen", "reopen", "reopen:"+payload)
+		selector.Inline(selector.Row(btnReopen))
+	case "merged":
+		btnRevert := selector.Data("↩️ Revert", "revert", "revert:"+payload)
+		selector.Inline(selector.Row(btnRevert))
+	}
 	return c.Send(msg, &telebot.SendOptions{ParseMode: telebot.ModeHTML, ReplyMarkup: selector})
 }
 
@@ -342,6 +352,93 @@ func (b *Bot) handleReopenPR(c telebot.Context) error {
 	return c.Send(fmt.Sprintf("PR #%d reopened.", pr.PRNumber))
 }
 
+func (b *Bot) handleRevertPR(c telebot.Context) error {
+	if !b.requireAdmin(c) {
+		return nil
+	}
+	args := strings.Fields(c.Text())
+	if len(args) < 3 {
+		return c.Send("Usage: /revert repo_group pr_number")
+	}
+	repoGroup := args[1]
+	prNumber, err := strconv.Atoi(args[2])
+	if err != nil {
+		return c.Send("Invalid PR number.")
+	}
+	var found *models.PRRecord
+	db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		var pr models.PRRecord
+		if json.Unmarshal(value, &pr) != nil {
+			return nil
+		}
+		if pr.RepoGroup == repoGroup && pr.PRNumber == prNumber {
+			found = &pr
+		}
+		return nil
+	})
+	if found == nil {
+		return c.Send(fmt.Sprintf("PR #%d not found in repo group <b>%s</b>.", prNumber, html.EscapeString(repoGroup)),
+			&telebot.SendOptions{ParseMode: telebot.ModeHTML})
+	}
+	if found.State != "merged" {
+		return c.Send(fmt.Sprintf("PR #%d is not merged (state: %s).", prNumber, found.State))
+	}
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		return c.Send("Repo group not found.")
+	}
+	client := b.clients[platforms.PlatformType(found.Platform)]
+	if client == nil {
+		return c.Send("No client configured for platform.")
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, found.Platform)
+	ctx := context.Background()
+	revertPR, err := client.RevertPR(ctx, owner, repo, found.PRNumber)
+	if err != nil {
+		db.AppendAuditLog("error", "PR revert failed", map[string]interface{}{
+			"pr_number": found.PRNumber, "repo_group": found.RepoGroup, "platform": found.Platform, "actor": "telegram", "error": err.Error(),
+		})
+		return c.Send(fmt.Sprintf("Failed to revert PR: %v", err))
+	}
+	actor := c.Sender().Username
+	if actor == "" {
+		actor = fmt.Sprintf("%d", c.Sender().ID)
+	}
+	if revertPR != nil {
+		revertPR.RepoGroup = repoGroup
+		revertPR.Platform = found.Platform
+		revertPR.ID = fmt.Sprintf("%d", revertPR.PRNumber)
+		revertPRData, _ := json.Marshal(revertPR)
+		revertKey := fmt.Sprintf("%s#%s#%d", repoGroup, found.Platform, revertPR.PRNumber)
+		db.PutPRWithIndex(revertKey, revertPRData, revertPR.ID, repoGroup, revertPR.PRNumber)
+		if b.queueMgr != nil {
+			if err := b.queueMgr.AddToQueue(revertPR); err != nil {
+				slog.Warn("telegram bot: failed to add revert PR to queue", "error", err, "pr_number", revertPR.PRNumber)
+			} else {
+				go b.queueMgr.CheckQueue()
+			}
+		}
+		if err := client.CommentPR(ctx, owner, repo, found.PRNumber,
+			fmt.Sprintf("This PR has been reverted by %s. Revert PR: #%d", actor, revertPR.PRNumber)); err != nil {
+			slog.Warn("telegram bot: failed to comment on reverted PR", "error", err, "pr_number", found.PRNumber)
+		}
+		if b.notifier != nil {
+			title := fmt.Sprintf("[Revert] PR #%d reverted", found.PRNumber)
+			body := fmt.Sprintf("PR #%d \"%s\" was reverted by %s.\nRevert PR: #%d\nRepo: %s | Platform: %s",
+				found.PRNumber, found.Title, actor, revertPR.PRNumber, repoGroup, found.Platform)
+			b.notifier.Send(ctx, title, body)
+		}
+		db.AppendAuditLog("info", "PR reverted", map[string]interface{}{
+			"pr_number": found.PRNumber, "repo_group": found.RepoGroup, "platform": found.Platform, "actor": "telegram", "revert_pr_number": revertPR.PRNumber,
+		})
+		return c.Send(fmt.Sprintf("PR #%d reverted. Revert PR: #%d", found.PRNumber, revertPR.PRNumber))
+	}
+	db.AppendAuditLog("info", "PR revert requested", map[string]interface{}{
+		"pr_number": found.PRNumber, "repo_group": found.RepoGroup, "platform": found.Platform, "actor": "telegram",
+	})
+	return c.Send(fmt.Sprintf("PR #%d revert requested.", found.PRNumber))
+}
+
 func (b *Bot) handleMarkSpam(c telebot.Context) error {
 	if !b.requireAdmin(c) {
 		return nil
@@ -365,6 +462,20 @@ func (b *Bot) handleMarkSpam(c telebot.Context) error {
 	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
 		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram",
 	})
+	existing, _ := db.GetSpamAuthor(pr.Author, pr.Platform)
+	if existing != nil {
+		existing.Count++
+		existing.LastSeen = time.Now()
+		db.PutSpamAuthor(existing)
+	} else {
+		db.PutSpamAuthor(&models.SpamAuthor{
+			Author:    pr.Author,
+			Platform:  pr.Platform,
+			FirstSeen: time.Now(),
+			LastSeen:  time.Now(),
+			Count:     1,
+		})
+	}
 	group := config.GetRepoGroupByName(b.cfg, repoGroup)
 	if group != nil {
 		client := b.clients[platforms.PlatformType(pr.Platform)]
@@ -500,7 +611,7 @@ func (b *Bot) handleShowConfig(c telebot.Context) error {
 	groups := config.GetRepoGroups(cfg)
 	var sb strings.Builder
 	sb.WriteString("<b>Current Config</b>\n\n")
- 	sb.WriteString(fmt.Sprintf("  Server: %s (%s)\n", cfg.Server.Listen, cfg.Server.Mode))
+	sb.WriteString(fmt.Sprintf("  Server: %s (%s)\n", cfg.Server.Listen, cfg.Server.Mode))
 	sb.WriteString(fmt.Sprintf("  CPU Threads: min=%d max=%d\n", cfg.Server.MinProcs, cfg.Server.MaxProcs))
 	sb.WriteString(fmt.Sprintf("  DB: %s\n", cfg.Database.Path))
 	sb.WriteString(fmt.Sprintf("  Events: %s\n", cfg.Events.Mode))

@@ -99,6 +99,7 @@ func (b *Bot) registerCommands() {
 	b.bot.Handle("/close", b.handleClosePR)
 	b.bot.Handle("/reopen", b.handleReopenPR)
 	b.bot.Handle("/spam", b.handleMarkSpam)
+	b.bot.Handle("/revert", b.handleRevertPR)
 	b.bot.Handle("/queue", b.handleShowQueue)
 	b.bot.Handle("/recheck", b.handleRecheckQueue)
 	b.bot.Handle("/queue_clear", b.handleClearQueue)
@@ -129,6 +130,7 @@ func (b *Bot) registerBotMenu() {
 		{Text: "close", Description: "Close a PR"},
 		{Text: "reopen", Description: "Reopen a PR"},
 		{Text: "spam", Description: "Mark PR as spam"},
+		{Text: "revert", Description: "Revert a merged PR"},
 		{Text: "queue", Description: "Show merge queue"},
 		{Text: "recheck", Description: "Trigger queue recheck"},
 		{Text: "config", Description: "Show current config"},

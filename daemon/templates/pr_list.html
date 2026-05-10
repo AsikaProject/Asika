@@ -116,11 +116,16 @@
                 let actions = '';
                 if (pr.state === 'open') {
                     if (!pr.is_approved) {
-                        actions += '<button class="btn btn-success" onclick="approvePR('+pr.pr_number+')" style="padding: 4px 8px; font-size: 12px;">{{t "pr_list.approve"}}</button> ';
+                        actions += '<button class="btn btn-success" onclick="approvePR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;">{{t "pr_list.approve"}}</button> ';
                     } else {
-                        actions += '<span style="color: #28a745; font-size: 12px; padding: 4px 8px;">✓ {{t "pr_list.approved"}}</span> ';
+                        actions += '<span style="color:#28a745;font-size:12px;padding:4px 8px;">✓ {{t "pr_list.approved"}}</span> ';
                     }
-                    actions += '<button class="btn btn-danger" onclick="closePR('+pr.pr_number+')" style="padding: 4px 8px; font-size: 12px;">{{t "pr_list.close"}}</button>';
+                    actions += '<button class="btn btn-danger" onclick="closePR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;">{{t "pr_list.close"}}</button> ';
+                    actions += '<button class="btn" onclick="spamPR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;background:#ffc107;color:black;">{{t "pr_detail.mark_spam"}}</button>';
+                } else if (pr.state === 'merged') {
+                    actions += '<button class="btn btn-warning" onclick="revertPR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;">{{t "pr_detail.revert"}}</button>';
+                } else {
+                    actions += '<button class="btn btn-secondary" onclick="reopenPR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;">{{t "pr_detail.reopen"}}</button>';
                 }
                 return '<tr><td>'+pr.pr_number+'</td><td><a href="/repos/'+repoGroup+'/prs/'+pr.pr_number+'" style="color: #0066cc; text-decoration: none;">'+escapeHtml(pr.title)+'</a></td><td>'+escapeHtml(pr.author)+'</td><td>'+(pr.html_url?'<a href="'+escapeHtml(pr.html_url)+'" target="_blank" title="View on platform">'+escapeHtml(pr.platform)+' ↗</a>':escapeHtml(pr.platform))+'</td><td class="status-'+escapeHtml(pr.state)+'">'+escapeHtml(pr.state)+'</td><td>'+(pr.labels||[]).map(l=>'<span class="label">'+escapeHtml(l)+'</span>').join('')+'</td><td>'+actions+'</td></tr>';
             }).join('');
@@ -164,7 +169,25 @@
         if(confirm('{{t "pr_list.confirm_approve"}}'.replace('%d',n))){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/approve',{method:'POST'}); loadPRs(); } }
     async function closePR(n) {
         const repoGroup = document.getElementById('repoGroupSelect').value;
-        if(confirm('{{t "pr_list.confirm_close"}}'.replace('%d',n))){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/close',{method:'POST'}); loadPRs(); } }
+        var reason = prompt('Close PR #' + n + '\n\nEnter close reason (or leave blank for default):', '');
+        if (reason === null) return;
+        reason = reason.trim();
+        var url = '/api/v1/repos/'+repoGroup+'/prs/'+n+'/close';
+        if(reason){ url += '?reason='+encodeURIComponent(reason); }
+        await apiRequest(url,{method:'POST'}); loadPRs();
+    }
+    async function spamPR(n) {
+        const repoGroup = document.getElementById('repoGroupSelect').value;
+        if(confirm('Mark PR #' + n + ' as spam?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/spam',{method:'POST'}); loadPRs(); }
+    }
+    async function revertPR(n) {
+        const repoGroup = document.getElementById('repoGroupSelect').value;
+        if(confirm('Revert PR #' + n + '?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/revert',{method:'POST'}); loadPRs(); }
+    }
+    async function reopenPR(n) {
+        const repoGroup = document.getElementById('repoGroupSelect').value;
+        await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/reopen',{method:'POST'}); loadPRs();
+    }
     loadRepoGroups();
 </script>
 {{template "client_auth"}}

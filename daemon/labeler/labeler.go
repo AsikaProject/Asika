@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 
 	"asika/common/config"
@@ -28,10 +29,6 @@ func NewLabeler(clients map[platforms.PlatformType]platforms.PlatformClient) *La
 func (l *Labeler) HandlePROpened(pr *models.PRRecord, repoGroup string) {
 	cfg := config.Current()
 	if cfg == nil {
-		return
-	}
-	rules := cfg.LabelRules
-	if len(rules) == 0 {
 		return
 	}
 
@@ -59,7 +56,25 @@ func (l *Labeler) HandlePROpened(pr *models.PRRecord, repoGroup string) {
 		return
 	}
 
-	l.ApplyRules(pr, repoGroup, files)
+	rules := mergeRules(cfg.LabelRules, group.LabelRules)
+	sort.Slice(rules, func(i, j int) bool { return rules[i].Priority > rules[j].Priority })
+
+	for _, rule := range rules {
+		if matchCompoundRule(rule, files, pr.Title, pr.Author) {
+			slog.Info("adding label", "label", rule.Label, "pr", pr.PRNumber, "rule_priority", rule.Priority)
+			color := rule.Color
+			if color == "" {
+				color = "ededed"
+			}
+			if err := client.AddLabel(ctx, owner, repo, pr.PRNumber, rule.Label, color); err != nil {
+				slog.Error("failed to add label", "error", err, "label", rule.Label)
+			}
+			if rule.Exclusive {
+				slog.Info("exclusive rule matched, stopping further labeling", "label", rule.Label, "pr", pr.PRNumber)
+				break
+			}
+		}
+	}
 }
 
 // ApplyRules applies label rules to a PR based on its changed files, title, and description
@@ -68,7 +83,6 @@ func (l *Labeler) ApplyRules(pr *models.PRRecord, repoGroup string, files []stri
 	if cfg == nil {
 		return
 	}
-	rules := cfg.LabelRules
 
 	client, ok := l.clients[platforms.PlatformType(pr.Platform)]
 	if !ok {
@@ -86,6 +100,9 @@ func (l *Labeler) ApplyRules(pr *models.PRRecord, repoGroup string, files []stri
 		return
 	}
 
+	rules := mergeRules(cfg.LabelRules, group.LabelRules)
+	sort.Slice(rules, func(i, j int) bool { return rules[i].Priority > rules[j].Priority })
+
 	ctx := context.Background()
 	for _, rule := range rules {
 		if matchCompoundRule(rule, files, pr.Title, pr.Author) {
@@ -97,8 +114,18 @@ func (l *Labeler) ApplyRules(pr *models.PRRecord, repoGroup string, files []stri
 			if err := client.AddLabel(ctx, owner, repo, pr.PRNumber, rule.Label, color); err != nil {
 				slog.Error("failed to add label", "error", err, "label", rule.Label)
 			}
+			if rule.Exclusive {
+				break
+			}
 		}
 	}
+}
+
+func mergeRules(global, group []models.LabelRule) []models.LabelRule {
+	merged := make([]models.LabelRule, 0, len(global)+len(group))
+	merged = append(merged, group...)
+	merged = append(merged, global...)
+	return merged
 }
 
 // matchCompoundRule evaluates a label rule against PR data.

@@ -392,6 +392,25 @@ func (s *mongoStorage) ListConfigSnapshots(limit int) ([]ConfigSnapshotEntry, er
 	return results, cursor.Err()
 }
 
+func (s *mongoStorage) AppendAuditLogEx(entry models.AuditLog) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	data, err := bson.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	var doc bson.M
+	if err := bson.Unmarshal(data, &doc); err != nil {
+		return err
+	}
+	doc["_id"] = bson.NewObjectID()
+	if entry.Timestamp.IsZero() {
+		doc["timestamp"] = time.Now()
+	}
+	_, err = s.coll(BucketLogs).InsertOne(ctx, doc)
+	return err
+}
+
 func (s *mongoStorage) AppendAuditLog(level, message string, ctxMap map[string]interface{}) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -478,6 +497,386 @@ func (s *mongoStorage) ListAPIKeys() ([]*models.APIKey, error) {
 	return keys, cursor.Err()
 }
 
+func (s *mongoStorage) PutNotificationPrefs(username string, data []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	doc := bson.M{"_id": username, "data": string(data)}
+	_, err := s.coll(BucketNotificationPrefs).ReplaceOne(ctx, bson.M{"_id": username}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) GetNotificationPrefs(username string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var doc bson.M
+	err := s.coll(BucketNotificationPrefs).FindOne(ctx, bson.M{"_id": username}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	data, _ := doc["data"].(string)
+	return []byte(data), nil
+}
+
+func (s *mongoStorage) PutNotificationDedup(key string, data []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	doc := bson.M{"_id": key, "data": string(data)}
+	_, err := s.coll(BucketNotificationDedup).ReplaceOne(ctx, bson.M{"_id": key}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) GetNotificationDedup(key string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var doc bson.M
+	err := s.coll(BucketNotificationDedup).FindOne(ctx, bson.M{"_id": key}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	data, _ := doc["data"].(string)
+	return []byte(data), nil
+}
+
+func (s *mongoStorage) PutTeamSpace(space *models.TeamSpace) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	data, err := bson.Marshal(space)
+	if err != nil {
+		return err
+	}
+	var doc bson.M
+	if err := bson.Unmarshal(data, &doc); err != nil {
+		return err
+	}
+	doc["_id"] = space.Name
+	_, err = s.coll(BucketTeamSpaces).ReplaceOne(ctx, bson.M{"_id": space.Name}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) GetTeamSpace(name string) (*models.TeamSpace, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var doc bson.M
+	err := s.coll(BucketTeamSpaces).FindOne(ctx, bson.M{"_id": name}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	data, err := bson.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	var space models.TeamSpace
+	if err := bson.Unmarshal(data, &space); err != nil {
+		return nil, err
+	}
+	return &space, nil
+}
+
+func (s *mongoStorage) ListTeamSpaces() ([]*models.TeamSpace, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketTeamSpaces).Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var spaces []*models.TeamSpace
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		data, err := bson.Marshal(doc)
+		if err != nil {
+			continue
+		}
+		var space models.TeamSpace
+		if err := bson.Unmarshal(data, &space); err != nil {
+			continue
+		}
+		spaces = append(spaces, &space)
+	}
+	return spaces, cursor.Err()
+}
+
+func (s *mongoStorage) DeleteTeamSpace(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := s.coll(BucketTeamSpaces).DeleteOne(ctx, bson.M{"_id": name})
+	return err
+}
+
+func (s *mongoStorage) PutSpaceMember(spaceName, username, role string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	key := fmt.Sprintf("%s:%s", spaceName, username)
+	doc := bson.M{"_id": key, "space_name": spaceName, "username": username, "role": role, "joined_at": time.Now()}
+	_, err := s.coll(BucketSpaceMembers).ReplaceOne(ctx, bson.M{"_id": key}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) RemoveSpaceMember(spaceName, username string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	key := fmt.Sprintf("%s:%s", spaceName, username)
+	_, err := s.coll(BucketSpaceMembers).DeleteOne(ctx, bson.M{"_id": key})
+	return err
+}
+
+func (s *mongoStorage) GetSpaceMembers(spaceName string) ([]models.SpaceMember, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketSpaceMembers).Find(ctx, bson.M{"space_name": spaceName})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var members []models.SpaceMember
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		data, err := bson.Marshal(doc)
+		if err != nil {
+			continue
+		}
+		var m models.SpaceMember
+		if err := bson.Unmarshal(data, &m); err != nil {
+			continue
+		}
+		members = append(members, m)
+	}
+	return members, cursor.Err()
+}
+
+func (s *mongoStorage) GetUserSpaces(username string) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketSpaceMembers).Find(ctx, bson.M{"username": username})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var spaces []string
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		sn, _ := doc["space_name"].(string)
+		if sn != "" {
+			spaces = append(spaces, sn)
+		}
+	}
+	return spaces, cursor.Err()
+}
+
+func (s *mongoStorage) PutSpaceSetting(spaceName, key string, value []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	fullKey := fmt.Sprintf("%s:%s", spaceName, key)
+	doc := bson.M{"_id": fullKey, "value": string(value)}
+	_, err := s.coll(BucketSpaceSettings).ReplaceOne(ctx, bson.M{"_id": fullKey}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) GetSpaceSetting(spaceName, key string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	fullKey := fmt.Sprintf("%s:%s", spaceName, key)
+	var doc bson.M
+	err := s.coll(BucketSpaceSettings).FindOne(ctx, bson.M{"_id": fullKey}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	val, _ := doc["value"].(string)
+	return []byte(val), nil
+}
+
+func (s *mongoStorage) DeleteNotificationDedup(key string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := s.coll(BucketNotificationDedup).DeleteOne(ctx, bson.M{"_id": key})
+	return err
+}
+
+func (s *mongoStorage) PutReportHistory(id string, data []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var doc bson.M
+	if err := bson.Unmarshal(data, &doc); err != nil {
+		doc = bson.M{"_id": id, "data": string(data)}
+	}
+	doc["_id"] = id
+	_, err := s.coll(BucketReportHistory).ReplaceOne(ctx, bson.M{"_id": id}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) ListReportHistory(limit int) ([]ReportHistoryEntry, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	opts := options.Find().SetSort(bson.D{{Key: "timestamp", Value: -1}})
+	if limit > 0 {
+		opts.SetLimit(int64(limit))
+	}
+	cursor, err := s.coll(BucketReportHistory).Find(ctx, bson.M{}, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var results []ReportHistoryEntry
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		data, err := bson.Marshal(doc)
+		if err != nil {
+			continue
+		}
+		var entry ReportHistoryEntry
+		if err := bson.Unmarshal(data, &entry); err != nil {
+			continue
+		}
+		if entry.ID == "" {
+			entry.ID, _ = doc["_id"].(string)
+		}
+		results = append(results, entry)
+	}
+	return results, cursor.Err()
+}
+
+func (s *mongoStorage) PutWebhookHealth(repoGroup, platform string, ts time.Time) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	key := fmt.Sprintf("%s:%s", repoGroup, platform)
+	doc := bson.M{"_id": key, "ts": ts}
+	_, err := s.coll(BucketWebhookHealth).ReplaceOne(ctx, bson.M{"_id": key}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) GetWebhookHealth(repoGroup, platform string) (time.Time, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	key := fmt.Sprintf("%s:%s", repoGroup, platform)
+	var doc bson.M
+	err := s.coll(BucketWebhookHealth).FindOne(ctx, bson.M{"_id": key}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	ts, ok := doc["ts"].(bson.DateTime)
+	if !ok {
+		return time.Time{}, nil
+	}
+	return ts.Time(), nil
+}
+
+func (s *mongoStorage) ListWebhookHealth() (map[string]time.Time, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketWebhookHealth).Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	result := make(map[string]time.Time)
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		key, _ := doc["_id"].(string)
+		ts, ok := doc["ts"].(bson.DateTime)
+		if !ok {
+			continue
+		}
+		result[key] = ts.Time()
+	}
+	return result, cursor.Err()
+}
+
+func (s *mongoStorage) PutSpamAuthor(author *models.SpamAuthor) error {
+	data, err := bson.Marshal(author)
+	if err != nil {
+		return err
+	}
+	var doc bson.M
+	if err := bson.Unmarshal(data, &doc); err != nil {
+		return err
+	}
+	doc["_id"] = fmt.Sprintf("%s:%s", author.Author, author.Platform)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err = s.coll(BucketSpamAuthors).ReplaceOne(ctx, bson.M{"_id": doc["_id"]}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) GetSpamAuthor(author, platform string) (*models.SpamAuthor, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	id := fmt.Sprintf("%s:%s", author, platform)
+	var doc bson.M
+	err := s.coll(BucketSpamAuthors).FindOne(ctx, bson.M{"_id": id}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	data, err := bson.Marshal(doc)
+	if err != nil {
+		return nil, err
+	}
+	var sa models.SpamAuthor
+	if err := bson.Unmarshal(data, &sa); err != nil {
+		return nil, err
+	}
+	return &sa, nil
+}
+
+func (s *mongoStorage) ListSpamAuthors() ([]*models.SpamAuthor, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketSpamAuthors).Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var authors []*models.SpamAuthor
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		data, err := bson.Marshal(doc)
+		if err != nil {
+			continue
+		}
+		var sa models.SpamAuthor
+		if err := bson.Unmarshal(data, &sa); err != nil {
+			continue
+		}
+		authors = append(authors, &sa)
+	}
+	return authors, cursor.Err()
+}
+
 func ensureID(doc bson.D, key string) bson.D {
 	for _, elem := range doc {
 		if elem.Key == "_id" {
@@ -511,7 +910,10 @@ func MigrateBboltToMongo(ctx context.Context, bboltPath, mongoConnStr, mongoDBNa
 	buckets := []string{
 		BucketConfig, BucketRepos, BucketPRs, BucketLogs, BucketQueueItems,
 		BucketUsers, BucketSyncHistory, BucketWebhookRetries, BucketConfigHistory,
-		BucketAPIKeys, BucketPRIndexByID, BucketPRIndexByRG,
+		BucketAPIKeys, BucketPRIndexByID, BucketPRIndexByRG, BucketSpamAuthors,
+		BucketWebhookHealth, BucketReportHistory, BucketNotificationPrefs,
+		BucketNotificationDedup, BucketTeamSpaces, BucketSpaceMembers,
+		BucketSpaceSettings,
 	}
 
 	for _, bucket := range buckets {
@@ -545,7 +947,8 @@ func MigrateMongoToBbolt(ctx context.Context, mongoConnStr, mongoDBName, bboltPa
 	buckets := []string{
 		BucketConfig, BucketRepos, BucketPRs, BucketLogs, BucketQueueItems,
 		BucketUsers, BucketSyncHistory, BucketWebhookRetries, BucketConfigHistory,
-		BucketAPIKeys,
+		BucketAPIKeys, BucketSpamAuthors, BucketWebhookHealth, BucketReportHistory,
+		BucketNotificationPrefs, BucketNotificationDedup,
 	}
 
 	for _, bucket := range buckets {

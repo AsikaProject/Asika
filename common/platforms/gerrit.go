@@ -404,3 +404,19 @@ func (c *GerritClient) RequestReview(ctx context.Context, owner, repo string, nu
 	}
 	return nil
 }
+
+// RevertPR reverts a merged change on Gerrit.
+func (c *GerritClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
+	changeID := fmt.Sprintf("%s~%d", owner, number)
+	revertResult, _, err := c.client.Changes.RevertChange(ctx, changeID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to revert change on gerrit: %w", err)
+	}
+	title := revertResult.Subject
+	prNumber := revertResult.Number
+	return &models.PRRecord{
+		Title:    title,
+		PRNumber: prNumber,
+		State:    "open",
+	}, nil
+}

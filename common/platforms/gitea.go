@@ -509,3 +509,22 @@ func (c *GiteaClient) RequestReview(ctx context.Context, owner, repo string, num
 	})
 	return err
 }
+
+// RevertPR creates a revert PR for a merged PR on Gitea/Forgejo.
+func (c *GiteaClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
+	opts := gitea.CreatePullRequestOption{
+		Title: fmt.Sprintf("Revert #%d", number),
+		Head:  fmt.Sprintf("revert-%d", number),
+		Base:  "",
+		Body:  fmt.Sprintf("Revert of PR #%d", number),
+	}
+	revertPR, _, err := c.client.CreatePullRequest(owner, repo, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create revert PR on gitea: %w", err)
+	}
+	return &models.PRRecord{
+		Title:    revertPR.Title,
+		PRNumber: int(revertPR.Index),
+		State:    "open",
+	}, nil
+}

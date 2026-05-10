@@ -12,6 +12,19 @@
 <div class="container">
 <div id="prDetail">{{t "common.loading"}}</div>
 <div style="margin: 20px 0;" id="actions"></div>
+<div id="closeReasonModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
+    <div style="background:#fff;padding:24px;border-radius:8px;max-width:400px;width:90%;box-shadow:0 4px 16px rgba(0,0,0,0.2);">
+        <h3 style="margin-top:0;">{{t "pr_detail.close"}}</h3>
+        <div id="closeReasonButtons" style="margin-bottom:12px;"></div>
+        <div style="margin-bottom:12px;">
+            <input type="text" id="customCloseReason" placeholder="Custom reason..." style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;">
+        </div>
+        <div style="text-align:right;">
+            <button class="btn btn-secondary" onclick="document.getElementById('closeReasonModal').style.display='none'" style="margin-right:8px;">Cancel</button>
+            <button class="btn btn-danger" id="confirmCloseBtn">Close</button>
+        </div>
+    </div>
+</div>
 <div class="card" style="margin-top: 20px;">
     <h2>{{t "pr_detail.events"}}</h2>
     <div id="eventList">{{t "common.loading"}}</div>
@@ -20,23 +33,36 @@
 {{template "scripts"}}
 <script>
     var repoGroup='{{.repo_group}}',prId='{{.pr_id}}';
+    var closeReasons = [];
+    async function fetchCloseReasons(){
+        try{
+            var r = await apiRequest('/api/v1/config');
+            if(r.ok){
+                var cfg = await r.json();
+                if(cfg.close_reasons && cfg.close_reasons.reasons){
+                    closeReasons = cfg.close_reasons.reasons;
+                }
+            }
+        }catch(e){}
+    }
+    fetchCloseReasons();
     async function L(){
         try {
             var r = await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId);
             if(!r.ok){ D('err:load'); return; }
             var p = await r.json();
-            
-            var platformLink = p.html_url 
-                ? '<a href="'+escapeHtml(p.html_url)+'" target="_blank" style="color: #0066cc;">'+escapeHtml(p.platform)+' ↗</a>' 
+
+            var platformLink = p.html_url
+                ? '<a href="'+escapeHtml(p.html_url)+'" target="_blank" style="color: #0066cc;">'+escapeHtml(p.platform)+' ↗</a>'
                 : escapeHtml(p.platform);
-            
-            document.getElementById('prDetail').innerHTML = 
+
+            document.getElementById('prDetail').innerHTML =
                 '<h1>'+escapeHtml(p.title)+' <span style="font-size:14px;color:#666;">#'+p.pr_number+'</span></h1>' +
                 '<p><strong>{{t "pr_detail.author"}} </strong> '+escapeHtml(p.author)+'</p>' +
                 '<p><strong>{{t "pr_detail.state"}} </strong> <span class="status-'+escapeHtml(p.state)+'">'+escapeHtml(p.state)+'</span></p>' +
                 '<p><strong>{{t "pr_detail.platform"}} </strong> '+platformLink+'</p>' +
                 '<p><strong>{{t "pr_detail.labels"}} </strong> '+(p.labels||[]).map(function(l){return'<span class="label">'+escapeHtml(l)+'</span>'}).join('')+'</p>';
-            
+
             var a = '';
             if(p.state === 'open'){
                 if(!p.is_approved){
@@ -45,11 +71,14 @@
                     a += '<span style="color: #28a745; font-weight: 600; padding: 8px 14px; display: inline-block;">✓ {{t "pr_list.approved"}}</span> ';
                 }
                 a += '<button class="btn btn-danger" onclick="C()">{{t "pr_detail.close"}}</button> ';
+                a += '<button class="btn" onclick="S()" style="background:#ffc107;color:black;">{{t "pr_detail.mark_spam"}}</button> ';
+            } else if(p.state === 'merged'){
+                a += '<button class="btn btn-warning" onclick="RV()">{{t "pr_detail.revert"}}</button> ';
+            } else {
+                a += '<button class="btn btn-secondary" onclick="R()">{{t "pr_detail.reopen"}}</button> ';
             }
-            a += '<button class="btn btn-secondary" onclick="R()">{{t "pr_detail.reopen"}}</button> ';
-            a += '<button class="btn" onclick="S()" style="background:#ffc107;color:black;">{{t "pr_detail.mark_spam"}}</button>';
             document.getElementById('actions').innerHTML = a;
-            
+
             if(p.events && p.events.length > 0){
                 document.getElementById('eventList').innerHTML = p.events.map(function(e){
                     return '<div style="padding:10px;border-left:3px solid #0066cc;margin:10px 0;">' +
@@ -66,9 +95,33 @@
         }
     }
     async function A(){ if(confirm('Approve?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/approve',{method:'POST'}); L(); } }
-    async function C(){ if(confirm('Close?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/close',{method:'POST'}); L(); } }
+    function C(){
+        var modal = document.getElementById('closeReasonModal');
+        var btnContainer = document.getElementById('closeReasonButtons');
+        btnContainer.innerHTML = '';
+        closeReasons.forEach(function(reason){
+            var btn = document.createElement('button');
+            btn.className = 'btn btn-secondary';
+            btn.style.margin = '0 4px 4px 0';
+            btn.style.padding = '4px 10px';
+            btn.textContent = reason;
+            btn.onclick = function(){
+                document.getElementById('customCloseReason').value = reason;
+            };
+            btnContainer.appendChild(btn);
+        });
+        document.getElementById('customCloseReason').value = '';
+        modal.style.display = 'flex';
+        document.getElementById('confirmCloseBtn').onclick = function(){
+            var reason = document.getElementById('customCloseReason').value.trim();
+            if(!reason){ reason = 'closed'; }
+            modal.style.display = 'none';
+            apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/close?reason='+encodeURIComponent(reason),{method:'POST'}).then(function(){ L(); });
+        };
+    }
     async function R(){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/reopen',{method:'POST'}); L(); }
     async function S(){ if(confirm('Mark spam?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/spam',{method:'POST'}); L(); } }
+    async function RV(){ if(confirm('Revert this merged PR?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/revert',{method:'POST'}); L(); } }
     function D(m){ document.getElementById('prDetail').innerHTML = '<p class="error">'+m+'</p>'; }
     L();
 </script>

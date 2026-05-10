@@ -1,12 +1,14 @@
 package core
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
 
+	"asika/common/db"
 	"asika/common/models"
 	"asika/common/platforms"
 	"asika/common/utils"
@@ -117,6 +119,9 @@ func StartWorkers(
 	eventConsumer.SetStaleManager(staleMgr)
 	startStaleCheck(cfg, staleMgr)
 
+	// Webhook health checker
+	startWebhookHealthChecker(cfg, poller)
+
 	return
 }
 
@@ -166,4 +171,79 @@ func startStaleCheck(cfg *models.Config, mgr *stale.Manager) {
 		}
 	}()
 	slog.Info("stale checker started", "interval", interval)
+}
+
+func startWebhookHealthChecker(cfg *models.Config, poller *polling.Poller) {
+	healthCheckInterval := utils.ParseDuration(cfg.Events.HealthCheckInterval, 2*time.Minute)
+	threshold := utils.ParseDuration(cfg.Events.HealthCheckThreshold, 5*time.Minute)
+
+	go func() {
+		ticker := time.NewTicker(healthCheckInterval)
+		defer ticker.Stop()
+		for range ticker.C {
+			checkWebhookHealth(cfg, poller, threshold)
+		}
+	}()
+	slog.Info("webhook health checker started", "interval", healthCheckInterval, "threshold", threshold)
+}
+
+func checkWebhookHealth(cfg *models.Config, poller *polling.Poller, threshold time.Duration) {
+	healthData, err := db.ListWebhookHealth()
+	if err != nil {
+		slog.Warn("webhook health check: failed to read health data", "error", err)
+		return
+	}
+
+	for _, rg := range cfg.RepoGroups {
+		platforms := webhookPlatforms(rg)
+		if len(platforms) == 0 {
+			continue
+		}
+
+		unhealthyCount := 0
+		for _, plat := range platforms {
+			key := fmt.Sprintf("%s:%s", rg.Name, plat)
+			lastSeen, exists := healthData[key]
+			if !exists || time.Since(lastSeen) > threshold {
+				unhealthyCount++
+			}
+		}
+
+		shouldForce := unhealthyCount > 0
+		wasForce := poller.IsForcePoll(rg.Name)
+		if shouldForce != wasForce {
+			poller.SetForcePoll(rg.Name, shouldForce)
+			if shouldForce {
+				slog.Warn("webhook unhealthy, enabling forced polling", "repo_group", rg.Name, "unhealthy_platforms", unhealthyCount)
+			} else {
+				slog.Info("webhook recovered, disabling forced polling", "repo_group", rg.Name)
+			}
+		}
+	}
+}
+
+func webhookPlatforms(rg models.RepoGroupConfig) []string {
+	p := make([]string, 0)
+	if rg.GitHub != "" {
+		p = append(p, "github")
+	}
+	if rg.GitLab != "" {
+		p = append(p, "gitlab")
+	}
+	if rg.Gitea != "" {
+		p = append(p, "gitea")
+	}
+	if rg.Forgejo != "" {
+		p = append(p, "forgejo")
+	}
+	if rg.Codeberg != "" {
+		p = append(p, "codeberg")
+	}
+	if rg.Bitbucket != "" {
+		p = append(p, "bitbucket")
+	}
+	if rg.Gerrit != "" {
+		p = append(p, "gerrit")
+	}
+	return p
 }

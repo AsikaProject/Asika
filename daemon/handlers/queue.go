@@ -10,16 +10,8 @@ import (
 	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
-	"asika/daemon/queue"
+	"asika/daemon/handlers/pr"
 )
-
-// queueMgr is a package-level variable to access the queue manager
-var queueMgr *queue.Manager
-
-// InitQueueMgr initializes the queue manager for handlers
-func InitQueueMgr(mgr *queue.Manager) {
-	queueMgr = mgr
-}
 
 // GetQueue handles GET /api/v1/queue/:repo_group (8.3)
 func GetQueue(c *gin.Context) {
@@ -62,12 +54,7 @@ func RecheckQueue(c *gin.Context) {
 		return
 	}
 
-	if queueMgr == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "queue manager not initialized"})
-		return
-	}
-
-	go queueMgr.CheckQueue()
+	pr.RecheckQueue()
 	slog.Info("queue recheck triggered", "repo_group", repoGroup)
 
 	c.JSON(http.StatusOK, gin.H{"message": "queue recheck triggered"})
@@ -83,12 +70,7 @@ func RemoveFromQueue(c *gin.Context) {
 		return
 	}
 
-	if queueMgr == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "queue manager not initialized"})
-		return
-	}
-
-	if err := queueMgr.RemoveFromQueue(repoGroup, prID); err != nil {
+	if err := pr.RemoveFromQueue(repoGroup, prID); err != nil {
 		slog.Error("failed to remove queue item", "repo_group", repoGroup, "pr_id", prID, "error", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
@@ -109,12 +91,7 @@ func ClearQueue(c *gin.Context) {
 		return
 	}
 
-	if queueMgr == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "queue manager not initialized"})
-		return
-	}
-
-	count, err := queueMgr.ClearQueue(repoGroup)
+	count, err := pr.ClearQueue(repoGroup)
 	if err != nil {
 		slog.Error("failed to clear queue", "repo_group", repoGroup, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear queue"})

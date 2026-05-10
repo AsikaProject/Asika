@@ -71,9 +71,13 @@ var prCloseCmd = &cobra.Command{
 	Short: "Close a pull request",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
+		reason, _ := cmd.Flags().GetString("reason")
 		url := fmt.Sprintf("%s/api/v1/repos/%s/prs/%s/close",
 			GetServer(cmd), args[0], args[1],
 		)
+		if reason != "" {
+			url += "?reason=" + reason
+		}
 		resp := doRequest("POST", url, cmd)
 		if resp == nil {
 			return
@@ -98,9 +102,25 @@ var prReopenCmd = &cobra.Command{
 	},
 }
 
+var prRevertCmd = &cobra.Command{
+	Use:   "revert [repo_group] [pr_id]",
+	Short: "Revert a merged pull request",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		url := fmt.Sprintf("%s/api/v1/repos/%s/prs/%s/revert",
+			GetServer(cmd), args[0], args[1],
+		)
+		resp := doRequest("POST", url, cmd)
+		if resp == nil {
+			return
+		}
+		handleWriteResponse(resp, "PR reverted successfully")
+	},
+}
+
 var prSpamCmd = &cobra.Command{
 	Use:   "spam [repo_group] [pr_id]",
-	Short: "Mark/unmark spam",
+	Short: "Mark/unmark spam (closes PR and records author)",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		undo, _ := cmd.Flags().GetBool("undo")
@@ -202,9 +222,11 @@ func init() {
 	prCmd.AddCommand(prBatchApproveCmd)
 	prCmd.AddCommand(prBatchCloseCmd)
 	prCmd.AddCommand(prBatchLabelCmd)
+	prCmd.AddCommand(prRevertCmd)
 
 	prListCmd.Flags().String("state", "", "Filter by state")
 	prListCmd.Flags().String("platform", "", "Filter by platform")
+	prCloseCmd.Flags().String("reason", "", "Close reason (will be applied as a label)")
 	prSpamCmd.Flags().Bool("undo", false, "Remove spam mark")
 	prBatchLabelCmd.Flags().String("label", "", "Label to add (required)")
 	prBatchLabelCmd.Flags().String("color", "", "Label color (optional)")

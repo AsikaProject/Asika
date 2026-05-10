@@ -12,6 +12,7 @@ import (
 	"os"
 
 	"asika/common/config"
+	"asika/common/db"
 	"asika/common/models"
 )
 
@@ -104,6 +105,8 @@ func UpdateConfig(c *gin.Context) {
 		return
 	}
 
+	autoRollbackVer := config.CurrentCfgVersion()
+
 	// Save snapshot before applying changes
 	if err := config.SaveConfigSnapshot(); err != nil {
 		slog.Warn("failed to save config snapshot", "error", err)
@@ -147,8 +150,14 @@ func UpdateConfig(c *gin.Context) {
 	if reviewRules, ok := patch["review_rules"]; ok {
 		existing["review_rules"] = reviewRules
 	}
+ 	if closeReasons, ok := patch["close_reasons"]; ok {
+ 		existing["close_reasons"] = closeReasons
+ 	}
 	if workerPool, ok := patch["worker_pool"]; ok {
 		existing["worker_pool"] = workerPool
+	}
+	if quietHours, ok := patch["quiet_hours"]; ok {
+		existing["quiet_hours"] = quietHours
 	}
 	if hookpath, ok := patch["hookpath"]; ok {
 		hp, ok := hookpath.(string)
@@ -185,8 +194,40 @@ func UpdateConfig(c *gin.Context) {
 	notifyWorkerPoolConfig()
 	notifyProcs(*reloadedCfg)
 
+	go startAutoRollbackWatch(configPath, autoRollbackVer)
+
 	slog.Info("config updated", "path", configPath)
 	c.JSON(http.StatusOK, gin.H{"message": "config updated successfully"})
+}
+
+// DryRunConfig handles POST /api/v1/config/dry-run
+func DryRunConfig(c *gin.Context) {
+	var req struct {
+		Toml string `json:"toml"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	merged, err := config.DryRun(req.Toml)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "dry-run failed", "detail": err.Error()})
+		return
+	}
+
+	masked := *merged
+	masked.Tokens = models.TokensConfig{
+		GitHub: maskToken(merged.Tokens.GitHub),
+		GitLab: maskToken(merged.Tokens.GitLab),
+		Gitea:  maskToken(merged.Tokens.Gitea),
+	}
+	masked.Auth.JWTSecret = maskSecret(merged.Auth.JWTSecret)
+
+	c.JSON(http.StatusOK, gin.H{
+		"valid":  true,
+		"config": masked,
+	})
 }
 
 // maskToken masks a token for display
@@ -261,4 +302,26 @@ func RollbackConfig(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "config rolled back", "version": req.Version})
+}
+
+func startAutoRollbackWatch(configPath string, rollbackVersion int) {
+	time.Sleep(60 * time.Second)
+
+	if db.Ping() != nil {
+		slog.Error("post-config-change health check failed (DB), auto-rolling back", "version", rollbackVersion)
+		rollbackAndReload(configPath, rollbackVersion)
+		return
+	}
+}
+
+func rollbackAndReload(configPath string, version int) {
+	if err := config.RollbackConfig(version); err != nil {
+		slog.Error("auto-rollback failed", "error", err)
+		return
+	}
+	if _, err := config.Load(configPath); err != nil {
+		slog.Error("auto-rollback reload failed", "error", err)
+		return
+	}
+	slog.Info("auto-rollback completed", "version", version)
 }

@@ -12,6 +12,7 @@ type UserPermissions struct {
 	CanReopen      bool `json:"can_reopen" toml:"can_reopen"`
 	CanSpam        bool `json:"can_spam" toml:"can_spam"`
 	CanManageQueue bool `json:"can_manage_queue" toml:"can_manage_queue"`
+	CanRevert      bool `json:"can_revert" toml:"can_revert"`
 }
 
 // APIKey represents a long-lived API key for external integrations.
@@ -53,6 +54,7 @@ type RepoGroup struct {
 	HookPath       string           `json:"hookpath"`
 	CIProvider     string           `json:"ci_provider"`
 	MergeQueue     MergeQueueConfig `json:"merge_queue"`
+	LabelRules     []LabelRule      `json:"label_rules,omitempty"`
 }
 
 // PRBranchInfo holds branch metadata for rebase operations
@@ -79,12 +81,13 @@ type PRRecord struct {
 	UpdatedAt      time.Time     `json:"updated_at"`
 	DiffFiles      []string      `json:"diff_files"` // changed file list for label rules
 	Events         []PREvent     `json:"events"`
-	IsDraft        bool          `json:"is_draft"`              // true if PR is a draft (GitHub) or WIP (GitLab)
-	HasConflict    bool          `json:"has_conflict"`          // true if PR has merge conflicts
-	IsApproved     bool          `json:"is_approved"`           // true if PR has been approved by at least one reviewer
-	HTMLURL        string        `json:"html_url"`              // URL to the PR on the platform
-	MergedAt       time.Time     `json:"merged_at"`             // when the PR was merged (zero if not merged)
-	BranchInfo     *PRBranchInfo `json:"branch_info,omitempty"` // branch metadata for rebase
+	IsDraft        bool          `json:"is_draft"`               // true if PR is a draft (GitHub) or WIP (GitLab)
+	HasConflict    bool          `json:"has_conflict"`           // true if PR has merge conflicts
+	IsApproved     bool          `json:"is_approved"`            // true if PR has been approved by at least one reviewer
+	HTMLURL        string        `json:"html_url"`               // URL to the PR on the platform
+	MergedAt       time.Time     `json:"merged_at"`              // when the PR was merged (zero if not merged)
+	BranchInfo     *PRBranchInfo `json:"branch_info,omitempty"`  // branch metadata for rebase
+	CloseReason    string        `json:"close_reason,omitempty"` // reason for closing (empty, a predefined reason, or custom text)
 }
 
 // PREvent represents a pull request event
@@ -121,10 +124,18 @@ type MergeCriteria struct {
 
 // AuditLog represents an audit log entry
 type AuditLog struct {
-	Timestamp time.Time              `json:"timestamp"`
-	Level     string                 `json:"level"` // "info"|"warn"|"error"
-	Message   string                 `json:"message"`
-	Context   map[string]interface{} `json:"context,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+	Level      string                 `json:"level"` // "info"|"warn"|"error"
+	Message    string                 `json:"message"`
+	Context    map[string]interface{} `json:"context,omitempty"`
+	Category   string                 `json:"category,omitempty"`   // "pr"|"auth"|"config"|"system"
+	Actor      string                 `json:"actor,omitempty"`      // username or "system"
+	RepoGroup  string                 `json:"repo_group,omitempty"` // repo group name
+	PRNumber   int                    `json:"pr_number,omitempty"`  // PR number if applicable
+	Platform   string                 `json:"platform,omitempty"`   // platform name
+	Action     string                 `json:"action,omitempty"`     // specific action: "approve"|"close"|"merge"|"reopen"|"spam"|"revert"|"login"|"config_change"
+	Before     map[string]interface{} `json:"before,omitempty"`    // state before change
+	After      map[string]interface{} `json:"after,omitempty"`     // state after change
 }
 
 // SyncRecord represents a sync history record
@@ -148,6 +159,7 @@ type MergeQueueConfig struct {
 	CoreContributors  []string `json:"core_contributors" toml:"core_contributors"`
 	CIProvider        string   `json:"ci_provider" toml:"ci_provider"`             // per-repo-group override
 	FastForwardOnly   bool     `json:"fast_forward_only" toml:"fast_forward_only"` // if true, auto-rebase before merge
+	Expression        string   `json:"expression" toml:"expression"`               // merge condition expression (empty = use default logic)
 }
 
 // LabelCondition represents a single condition within a compound rule.
@@ -164,7 +176,9 @@ type LabelRule struct {
 	Color       string           `json:"color,omitempty" toml:"color"`
 	Description string           `json:"description,omitempty" toml:"description"`
 	Conditions  []LabelCondition `json:"conditions,omitempty" toml:"conditions"`
-	Logic       string           `json:"logic,omitempty" toml:"logic"` // "and" or "or", default "and"
+	Logic       string           `json:"logic,omitempty" toml:"logic"`   // "and" or "or", default "and"
+	Priority    int              `json:"priority,omitempty" toml:"priority"` // higher = evaluated first
+	Exclusive   bool             `json:"exclusive,omitempty" toml:"exclusive"` // if true, stop after this rule matches
 }
 
 // ReviewRule represents an automatic reviewer assignment rule.
@@ -172,6 +186,7 @@ type LabelRule struct {
 type ReviewRule struct {
 	Pattern   string   `json:"pattern" toml:"pattern"`
 	Reviewers []string `json:"reviewers" toml:"reviewers"`
+	Priority  int      `json:"priority,omitempty" toml:"priority"`
 }
 
 // SpamConfig represents spam detection configuration
@@ -249,9 +264,11 @@ type AuthConfig struct {
 
 // EventsConfig represents events configuration
 type EventsConfig struct {
-	Mode            string `toml:"mode"`
-	WebhookSecret   string `toml:"webhook_secret"`
-	PollingInterval string `toml:"polling_interval"`
+	Mode                string `toml:"mode"`
+	WebhookSecret       string `toml:"webhook_secret"`
+	PollingInterval     string `toml:"polling_interval"`
+	HealthCheckInterval string `toml:"health_check_interval"`
+	HealthCheckThreshold string `toml:"health_check_threshold"`
 }
 
 // GitConfig represents git configuration
@@ -294,6 +311,7 @@ type RepoGroupConfig struct {
 	HookPath       string           `toml:"hookpath" json:"hookpath"`
 	CIProvider     string           `toml:"ci_provider" json:"ci_provider"`
 	MergeQueue     MergeQueueConfig `toml:"merge_queue" json:"merge_queue"`
+	LabelRules     []LabelRule      `toml:"label_rules" json:"label_rules,omitempty"`
 }
 
 // SingleRepoConfig represents single repository configuration
@@ -317,38 +335,41 @@ type WorkerPoolConfig struct {
 
 // Config represents the main configuration structure
 type Config struct {
-	Server         ServerConfig      `toml:"server" json:"server"`
-	Database       DatabaseConfig    `toml:"database" json:"database"`
-	Auth           AuthConfig        `toml:"auth" json:"auth"`
-	Notify         []NotifyConfig    `toml:"notify" json:"notify"`
-	Events         EventsConfig      `toml:"events" json:"events"`
-	Git            GitConfig         `toml:"git" json:"git"`
-	Tokens         TokensConfig      `toml:"tokens" json:"tokens"`
-	LabelRules     []LabelRule       `toml:"label_rules" json:"label_rules"`
-	ReviewRules    []ReviewRule      `toml:"review_rules" json:"review_rules"`
-	Spam           SpamConfig        `toml:"spam" json:"spam"`
-	MergeQueue     MergeQueueConfig  `toml:"merge_queue" json:"merge_queue"`
-	HookPath       string            `toml:"hookpath" json:"hookpath"`
-	RepoGroups     []RepoGroupConfig `toml:"repo_groups" json:"repo_groups"`
-	SingleRepo     SingleRepoConfig  `toml:"single_repo" json:"single_repo"`
-	GitLabBaseURL  string            `toml:"gitlab_base_url" json:"gitlab_base_url"`
-	GiteaBaseURL   string            `toml:"gitea_base_url" json:"gitea_base_url"`
-	ForgejoBaseURL string            `toml:"forgejo_base_url" json:"forgejo_base_url"`
-	GitHubBaseURL  string            `toml:"github_base_url" json:"github_base_url"`
-	Telegram       TelegramConfig    `toml:"telegram" json:"telegram"`
-	Feishu         FeishuConfig      `toml:"feishu" json:"feishu"`
-	Discord        DiscordConfig     `toml:"discord" json:"discord"`
-	Slack          SlackConfig       `toml:"slack" json:"slack"`
-	Updates        UpdatesConfig     `toml:"updates" json:"updates"`
-	Stale          StaleConfig       `toml:"stale" json:"stale"`
-	Reports        ScheduleConfig    `toml:"reports" json:"reports"`
-	WorkerPool     WorkerPoolConfig  `toml:"worker_pool" json:"worker_pool"`
+	Server         ServerConfig       `toml:"server" json:"server"`
+	Database       DatabaseConfig     `toml:"database" json:"database"`
+	Auth           AuthConfig         `toml:"auth" json:"auth"`
+	Notify         []NotifyConfig     `toml:"notify" json:"notify"`
+	Events         EventsConfig       `toml:"events" json:"events"`
+	Git            GitConfig          `toml:"git" json:"git"`
+	Tokens         TokensConfig       `toml:"tokens" json:"tokens"`
+	LabelRules     []LabelRule        `toml:"label_rules" json:"label_rules"`
+	ReviewRules    []ReviewRule       `toml:"review_rules" json:"review_rules"`
+	Spam           SpamConfig         `toml:"spam" json:"spam"`
+	MergeQueue     MergeQueueConfig   `toml:"merge_queue" json:"merge_queue"`
+	HookPath       string             `toml:"hookpath" json:"hookpath"`
+	RepoGroups     []RepoGroupConfig  `toml:"repo_groups" json:"repo_groups"`
+	SingleRepo     SingleRepoConfig   `toml:"single_repo" json:"single_repo"`
+	GitLabBaseURL  string             `toml:"gitlab_base_url" json:"gitlab_base_url"`
+	GiteaBaseURL   string             `toml:"gitea_base_url" json:"gitea_base_url"`
+	ForgejoBaseURL string             `toml:"forgejo_base_url" json:"forgejo_base_url"`
+	GitHubBaseURL  string             `toml:"github_base_url" json:"github_base_url"`
+	Telegram       TelegramConfig     `toml:"telegram" json:"telegram"`
+	Feishu         FeishuConfig       `toml:"feishu" json:"feishu"`
+	Discord        DiscordConfig      `toml:"discord" json:"discord"`
+	Slack          SlackConfig        `toml:"slack" json:"slack"`
+	Updates        UpdatesConfig      `toml:"updates" json:"updates"`
+	Stale          StaleConfig        `toml:"stale" json:"stale"`
+	Reports        ScheduleConfig     `toml:"reports" json:"reports"`
+	WorkerPool     WorkerPoolConfig   `toml:"worker_pool" json:"worker_pool"`
+	CloseReasons   CloseReasonsConfig `toml:"close_reasons" json:"close_reasons"`
+	QuietHours     QuietHoursConfig   `toml:"quiet_hours" json:"quiet_hours"`
 }
 
 // ScheduleConfig defines scheduled report configuration.
 type ScheduleConfig struct {
-	Enabled bool   `toml:"enabled" json:"enabled"`
-	Cron    string `toml:"cron" json:"cron"`
+	Enabled   bool   `toml:"enabled" json:"enabled"`
+	Cron      string `toml:"cron" json:"cron"`
+	PeriodDays int   `toml:"period_days" json:"period_days"`
 }
 
 // TelegramConfig represents Telegram bot configuration
@@ -404,4 +425,74 @@ type SlackConfig struct {
 	AdminIDs    []string `toml:"admin_ids" json:"admin_ids"`
 	OperatorIDs []string `toml:"operator_ids" json:"operator_ids"`
 	ViewerIDs   []string `toml:"viewer_ids" json:"viewer_ids"`
+}
+
+// SpamAuthor tracks a known spam author in the database.
+type SpamAuthor struct {
+	Author    string    `json:"author"`
+	Platform  string    `json:"platform"`
+	FirstSeen time.Time `json:"first_seen"`
+	LastSeen  time.Time `json:"last_seen"`
+	Count     int       `json:"count"`
+}
+
+// QuietHoursConfig defines notification quiet hours and escalation rules.
+type QuietHoursConfig struct {
+	Enabled        bool     `toml:"enabled" json:"enabled"`
+	StartTime      string   `toml:"start_time" json:"start_time"`       // e.g. "22:00"
+	EndTime        string   `toml:"end_time" json:"end_time"`           // e.g. "08:00"
+	Timezone       string   `toml:"timezone" json:"timezone"`           // e.g. "Asia/Shanghai"; empty = local
+	EscalationRole string   `toml:"escalation_role" json:"escalation_role"` // role to notify during quiet hours: "admin"|"operator"
+	BypassForUrgent []string `toml:"bypass_for_urgent" json:"bypass_for_urgent"` // event types that bypass quiet hours
+}
+
+// AuthorStats holds per-author contribution metrics.
+type AuthorStats struct {
+	Author          string  `json:"author"`
+	PRsOpened       int     `json:"prs_opened"`
+	PRsMerged       int     `json:"prs_merged"`
+	PRsReviewed     int     `json:"prs_reviewed"`
+	AvgLeadTimeHrs  float64 `json:"avg_lead_time_hours"`
+	AvgReviewTimeHrs float64 `json:"avg_review_time_hours"`
+}
+
+// TeamStats holds aggregated team metrics.
+type TeamStats struct {
+	PeriodDays     int           `json:"period_days"`
+	TotalAuthors   int           `json:"total_authors"`
+	Authors        []AuthorStats `json:"authors"`
+	TopContributors []AuthorStats `json:"top_contributors"`
+}
+
+// TeamSpace represents an isolated team space with its own repos and members.
+type TeamSpace struct {
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	CreatedAt   time.Time        `json:"created_at"`
+	CreatedBy   string           `json:"created_by"`
+	Members     []SpaceMember    `json:"members,omitempty"`
+	RepoGroups  []string         `json:"repo_groups"` // repo group names belonging to this space
+}
+
+// SpaceMember represents a member of a team space.
+type SpaceMember struct {
+	Username  string    `json:"username"`
+	Role      string    `json:"role"` // "space_admin" | "space_operator" | "space_viewer"
+	JoinedAt  time.Time `json:"joined_at"`
+}
+
+// NotificationPreferences defines per-user notification settings.
+type NotificationPreferences struct {
+	Username         string            `json:"username"`
+	Enabled          bool              `json:"enabled"`                           // master switch
+	EnabledNotifiers []string          `json:"enabled_notifiers"`                 // which notifier types to use
+	EventPrefs       map[string]bool   `json:"event_prefs"`                       // event_type -> enabled
+	DigestMode       string            `json:"digest_mode"`                       // "realtime" | "hourly" | "daily"
+	QuietHoursOverride *QuietHoursConfig `json:"quiet_hours_override,omitempty"`  // per-user quiet hours
+}
+
+// CloseReasonsConfig holds the predefined close reasons.
+// Each reason automatically maps to a label with the same name.
+type CloseReasonsConfig struct {
+	Reasons []string `json:"reasons" toml:"reasons"`
 }

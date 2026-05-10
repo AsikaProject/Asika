@@ -15,6 +15,7 @@ import (
 	"asika/common/db"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/daemon/handlers/pr"
 	"asika/daemon/queue"
 	"asika/testutil"
 )
@@ -25,8 +26,8 @@ func setupQueueHandlerTest(t *testing.T) (*gin.Engine, func()) {
 
 	testutil.NewTestDB(t)
 
-	mock := testutil.NewMockPlatformClient()
-	clients := map[platforms.PlatformType]platforms.PlatformClient{
+ 	mock := testutil.NewMockPlatformClient()
+	testClients := map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: mock,
 	}
 
@@ -37,7 +38,7 @@ func setupQueueHandlerTest(t *testing.T) (*gin.Engine, func()) {
 	}
 	config.Store(cfg)
 
-	qMgr := queue.NewManager(cfg, clients)
+	qMgr := queue.NewManager(cfg, testClients)
 	InitQueueMgr(qMgr)
 
 	engine := gin.New()
@@ -124,9 +125,9 @@ func TestPRHandlers_SingleMode(t *testing.T) {
 	config.Store(cfg)
 
 	mock := testutil.NewMockPlatformClient()
-	clients = map[platforms.PlatformType]platforms.PlatformClient{
+	pr.InitClients(map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: mock,
-	}
+	})
 
 	engine := gin.New()
 	api := engine.Group("/api/v1")

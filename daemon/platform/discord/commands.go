@@ -31,6 +31,7 @@ func (b *Bot) handleHelp(s *discordgo.Session, m *discordgo.MessageCreate) {
 !close <repo_group> <pr_id> — Close a PR
 !reopen <repo_group> <pr_id> — Reopen a PR (spam recovery)
 !spam <repo_group> <pr_id> — Mark PR as spam
+!revert <repo_group> <pr_id> — Revert a merged PR
 
 **Queue**
 !queue [repo_group] — Show merge queue
@@ -124,6 +125,14 @@ func (b *Bot) handleShowPR(s *discordgo.Session, m *discordgo.MessageCreate, arg
 		found.PRNumber, found.Title, found.Author, found.State, found.Platform,
 		found.RepoGroup, strings.Join(found.Labels, ", "), found.SpamFlag, found.CreatedAt.Format(time.RFC3339),
 	)
+	switch found.State {
+	case "open":
+		msg += "\nAvailable actions: `!approve` / `!close [reason]` / `!spam`"
+	case "closed", "spam":
+		msg += "\nAvailable actions: `!reopen`"
+	case "merged":
+		msg += "\nAvailable actions: `!revert`"
+	}
 	s.ChannelMessageSend(m.ChannelID, msg)
 }
 
@@ -189,11 +198,15 @@ func (b *Bot) handleApprovePR(s *discordgo.Session, m *discordgo.MessageCreate, 
 
 func (b *Bot) handleClosePR(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 	if len(args) < 3 {
-		s.ChannelMessageSend(m.ChannelID, "Usage: `!close <repo_group> <pr_id>`")
+		s.ChannelMessageSend(m.ChannelID, "Usage: `!close <repo_group> <pr_id> [reason]`")
 		return
 	}
 	repoGroup := args[1]
 	prID := args[2]
+	reason := ""
+	if len(args) > 3 {
+		reason = strings.Join(args[3:], " ")
+	}
 	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		s.ChannelMessageSend(m.ChannelID, "PR not found.")
@@ -218,14 +231,23 @@ func (b *Bot) handleClosePR(s *discordgo.Session, m *discordgo.MessageCreate, ar
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to close PR: %v", err))
 		return
 	}
+	if reason != "" {
+		_ = client.CreateLabel(ctx, owner, repo, reason, "ededed", "Close reason: "+reason)
+		_ = client.AddLabel(ctx, owner, repo, pr.PRNumber, reason, "ededed")
+	}
 	pr.State = "closed"
+	pr.CloseReason = reason
 	prData, _ := json.Marshal(pr)
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
+		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord", "reason": reason,
 	})
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d closed.", pr.PRNumber))
+	if reason != "" {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d closed with reason: %s", pr.PRNumber, reason))
+	} else {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d closed.", pr.PRNumber))
+	}
 }
 
 func (b *Bot) handleReopenPR(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
@@ -270,6 +292,67 @@ func (b *Bot) handleReopenPR(s *discordgo.Session, m *discordgo.MessageCreate, a
 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d reopened.", pr.PRNumber))
 }
 
+func (b *Bot) handleRevertPR(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if len(args) < 3 {
+		s.ChannelMessageSend(m.ChannelID, "Usage: `!revert <repo_group> <pr_id>`")
+		return
+	}
+	repoGroup := args[1]
+	prID := args[2]
+	pr, _ := commonutil.GetPRByID(repoGroup, prID)
+	if pr == nil {
+		s.ChannelMessageSend(m.ChannelID, "PR not found.")
+		return
+	}
+	if pr.State != "merged" {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d is not merged (state: %s).", pr.PRNumber, pr.State))
+		return
+	}
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		s.ChannelMessageSend(m.ChannelID, "Repo group not found.")
+		return
+	}
+	client := b.getClientForPlatform(pr.Platform)
+	if client == nil {
+		s.ChannelMessageSend(m.ChannelID, "No client configured for platform.")
+		return
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+	ctx := context.Background()
+	revertPR, err := client.RevertPR(ctx, owner, repo, pr.PRNumber)
+	if err != nil {
+		db.AppendAuditLog("error", "PR revert failed", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord", "error": err.Error(),
+		})
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to revert PR: %v", err))
+		return
+	}
+	if revertPR != nil {
+		revertData, _ := json.Marshal(revertPR)
+		revertKey := fmt.Sprintf("%s#%s#%d", revertPR.RepoGroup, revertPR.Platform, revertPR.PRNumber)
+		db.PutPRWithIndex(revertKey, revertData, revertPR.ID, revertPR.RepoGroup, revertPR.PRNumber)
+		if b.queueMgr != nil {
+			if err := b.queueMgr.AddToQueue(revertPR); err != nil {
+				slog.Warn("discord bot: failed to add revert PR to queue", "error", err, "pr_number", revertPR.PRNumber)
+			} else {
+				go b.queueMgr.CheckQueue()
+			}
+		}
+	}
+	_ = client.CommentPR(ctx, owner, repo, pr.PRNumber, fmt.Sprintf("Revert PR #%d has been created by %s via Discord.", pr.PRNumber, m.Author.Username))
+	db.AppendAuditLog("info", "PR reverted", map[string]interface{}{
+		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
+	})
+	if b.notifier != nil {
+		title := fmt.Sprintf("[Revert] PR #%d reverted", pr.PRNumber)
+		body := fmt.Sprintf("PR #%d \"%s\" reverted by %s via Discord.\nRepo: %s | Platform: %s",
+			pr.PRNumber, pr.Title, m.Author.Username, pr.RepoGroup, pr.Platform)
+		b.notifier.Send(context.Background(), title, body)
+	}
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d revert initiated.", pr.PRNumber))
+}
+
 func (b *Bot) handleMarkSpam(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 	if len(args) < 3 {
 		s.ChannelMessageSend(m.ChannelID, "Usage: `!spam <repo_group> <pr_id>`")
@@ -291,6 +374,20 @@ func (b *Bot) handleMarkSpam(s *discordgo.Session, m *discordgo.MessageCreate, a
 	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
 		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
 	})
+	existing, _ := db.GetSpamAuthor(pr.Author, pr.Platform)
+	if existing != nil {
+		existing.Count++
+		existing.LastSeen = time.Now()
+		db.PutSpamAuthor(existing)
+	} else {
+		db.PutSpamAuthor(&models.SpamAuthor{
+			Author:    pr.Author,
+			Platform:  pr.Platform,
+			FirstSeen: time.Now(),
+			LastSeen:  time.Now(),
+			Count:     1,
+		})
+	}
 	group := config.GetRepoGroupByName(b.cfg, repoGroup)
 	if group != nil {
 		client := b.getClientForPlatform(pr.Platform)
@@ -414,7 +511,7 @@ func (b *Bot) handleShowConfig(s *discordgo.Session, m *discordgo.MessageCreate)
 	groups := config.GetRepoGroups(cfg)
 	var sb strings.Builder
 	sb.WriteString("**Current Config**\n\n")
- 	sb.WriteString(fmt.Sprintf("  Server: %s (%s)\n", cfg.Server.Listen, cfg.Server.Mode))
+	sb.WriteString(fmt.Sprintf("  Server: %s (%s)\n", cfg.Server.Listen, cfg.Server.Mode))
 	sb.WriteString(fmt.Sprintf("  CPU Threads: min=%d max=%d\n", cfg.Server.MinProcs, cfg.Server.MaxProcs))
 	sb.WriteString(fmt.Sprintf("  DB: %s\n", cfg.Database.Path))
 	sb.WriteString(fmt.Sprintf("  Events: %s\n", cfg.Events.Mode))

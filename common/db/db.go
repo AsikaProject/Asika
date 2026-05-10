@@ -31,16 +31,48 @@ type Storage interface {
 	GetConfigSnapshot(version int) ([]byte, error)
 	ListConfigSnapshots(limit int) ([]ConfigSnapshotEntry, error)
 	AppendAuditLog(level, message string, ctx map[string]interface{}) error
+	AppendAuditLogEx(entry models.AuditLog) error
 	PutAPIKey(key *models.APIKey) error
 	GetAPIKey(id string) (*models.APIKey, error)
 	DeleteAPIKey(id string) error
 	ListAPIKeys() ([]*models.APIKey, error)
+	PutSpamAuthor(author *models.SpamAuthor) error
+	GetSpamAuthor(author, platform string) (*models.SpamAuthor, error)
+	ListSpamAuthors() ([]*models.SpamAuthor, error)
+	PutWebhookHealth(repoGroup, platform string, ts time.Time) error
+	GetWebhookHealth(repoGroup, platform string) (time.Time, error)
+	ListWebhookHealth() (map[string]time.Time, error)
+	PutReportHistory(id string, data []byte) error
+	ListReportHistory(limit int) ([]ReportHistoryEntry, error)
+	PutNotificationPrefs(username string, data []byte) error
+	GetNotificationPrefs(username string) ([]byte, error)
+	PutNotificationDedup(key string, data []byte) error
+	GetNotificationDedup(key string) ([]byte, error)
+	DeleteNotificationDedup(key string) error
+	PutTeamSpace(space *models.TeamSpace) error
+	GetTeamSpace(name string) (*models.TeamSpace, error)
+	ListTeamSpaces() ([]*models.TeamSpace, error)
+	DeleteTeamSpace(name string) error
+	PutSpaceMember(spaceName, username string, role string) error
+	RemoveSpaceMember(spaceName, username string) error
+	GetSpaceMembers(spaceName string) ([]models.SpaceMember, error)
+	GetUserSpaces(username string) ([]string, error)
+	PutSpaceSetting(spaceName, key string, value []byte) error
+	GetSpaceSetting(spaceName, key string) ([]byte, error)
 }
 
 // ConfigSnapshotEntry represents a stored config version.
 type ConfigSnapshotEntry struct {
 	Version int
 	Data    []byte
+}
+
+// ReportHistoryEntry represents a stored generated report.
+type ReportHistoryEntry struct {
+	ID        string    `json:"id"`
+	Timestamp time.Time `json:"timestamp"`
+	Period    int       `json:"period_days"`
+	Content   string    `json:"content"`
 }
 
 var defaultStorage Storage
@@ -130,7 +162,75 @@ func ListConfigSnapshots(limit int) ([]ConfigSnapshotEntry, error) {
 func AppendAuditLog(level, message string, ctx map[string]interface{}) error {
 	return mustStorage().AppendAuditLog(level, message, ctx)
 }
-func PutAPIKey(key *models.APIKey) error          { return mustStorage().PutAPIKey(key) }
-func GetAPIKey(id string) (*models.APIKey, error) { return mustStorage().GetAPIKey(id) }
-func DeleteAPIKey(id string) error                { return mustStorage().DeleteAPIKey(id) }
-func ListAPIKeys() ([]*models.APIKey, error)      { return mustStorage().ListAPIKeys() }
+func AppendAuditLogEx(entry models.AuditLog) error {
+	return mustStorage().AppendAuditLogEx(entry)
+}
+func PutAPIKey(key *models.APIKey) error            { return mustStorage().PutAPIKey(key) }
+func GetAPIKey(id string) (*models.APIKey, error)   { return mustStorage().GetAPIKey(id) }
+func DeleteAPIKey(id string) error                  { return mustStorage().DeleteAPIKey(id) }
+func ListAPIKeys() ([]*models.APIKey, error)        { return mustStorage().ListAPIKeys() }
+func PutSpamAuthor(author *models.SpamAuthor) error { return mustStorage().PutSpamAuthor(author) }
+func GetSpamAuthor(author, platform string) (*models.SpamAuthor, error) {
+	return mustStorage().GetSpamAuthor(author, platform)
+}
+func ListSpamAuthors() ([]*models.SpamAuthor, error) { return mustStorage().ListSpamAuthors() }
+func PutWebhookHealth(repoGroup, platform string, ts time.Time) error {
+	return mustStorage().PutWebhookHealth(repoGroup, platform, ts)
+}
+func GetWebhookHealth(repoGroup, platform string) (time.Time, error) {
+	return mustStorage().GetWebhookHealth(repoGroup, platform)
+}
+func ListWebhookHealth() (map[string]time.Time, error) {
+	return mustStorage().ListWebhookHealth()
+}
+func PutReportHistory(id string, data []byte) error {
+	return mustStorage().PutReportHistory(id, data)
+}
+func ListReportHistory(limit int) ([]ReportHistoryEntry, error) {
+	return mustStorage().ListReportHistory(limit)
+}
+func PutNotificationPrefs(username string, data []byte) error {
+	return mustStorage().PutNotificationPrefs(username, data)
+}
+func GetNotificationPrefs(username string) ([]byte, error) {
+	return mustStorage().GetNotificationPrefs(username)
+}
+func PutNotificationDedup(key string, data []byte) error {
+	return mustStorage().PutNotificationDedup(key, data)
+}
+func GetNotificationDedup(key string) ([]byte, error) {
+	return mustStorage().GetNotificationDedup(key)
+}
+func DeleteNotificationDedup(key string) error {
+	return mustStorage().DeleteNotificationDedup(key)
+}
+func PutTeamSpace(space *models.TeamSpace) error {
+	return mustStorage().PutTeamSpace(space)
+}
+func GetTeamSpace(name string) (*models.TeamSpace, error) {
+	return mustStorage().GetTeamSpace(name)
+}
+func ListTeamSpaces() ([]*models.TeamSpace, error) {
+	return mustStorage().ListTeamSpaces()
+}
+func DeleteTeamSpace(name string) error {
+	return mustStorage().DeleteTeamSpace(name)
+}
+func PutSpaceMember(spaceName, username, role string) error {
+	return mustStorage().PutSpaceMember(spaceName, username, role)
+}
+func RemoveSpaceMember(spaceName, username string) error {
+	return mustStorage().RemoveSpaceMember(spaceName, username)
+}
+func GetSpaceMembers(spaceName string) ([]models.SpaceMember, error) {
+	return mustStorage().GetSpaceMembers(spaceName)
+}
+func GetUserSpaces(username string) ([]string, error) {
+	return mustStorage().GetUserSpaces(username)
+}
+func PutSpaceSetting(spaceName, key string, value []byte) error {
+	return mustStorage().PutSpaceSetting(spaceName, key, value)
+}
+func GetSpaceSetting(spaceName, key string) ([]byte, error) {
+	return mustStorage().GetSpaceSetting(spaceName, key)
+}

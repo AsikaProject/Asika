@@ -406,3 +406,146 @@ func TestApplyRules_TitleNoMatch(t *testing.T) {
 		t.Errorf("expected no labels for non-matching title, got %v", mock.AppliedLabels)
 	}
 }
+
+func TestApplyRules_PerGroupOverride(t *testing.T) {
+	l, mock := setupLabelerTest(t)
+	defer func() { db.Close() }()
+
+	compiledPatterns = make(map[string]*regexp.Regexp)
+
+	cfg := &models.Config{
+		LabelRules: []models.LabelRule{
+			{Pattern: "**/*.go", Label: "global-go", Color: "00ADD8"},
+		},
+		RepoGroups: []models.RepoGroupConfig{
+			{
+				Name: "test-group", Mode: "single", MirrorPlatform: "github", GitHub: "owner/repo",
+				LabelRules: []models.LabelRule{
+					{Pattern: "**/*.go", Label: "group-go", Color: "FF0000"},
+				},
+			},
+		},
+	}
+	config.Store(cfg)
+
+	pr := &models.PRRecord{
+		ID: "pr-group-1", RepoGroup: "test-group", Platform: "github",
+		PRNumber: 20, Title: "test", Author: "dev1", State: "open",
+	}
+
+	mock.DiffFiles = []string{"src/main.go"}
+	l.ApplyRules(pr, "test-group", mock.DiffFiles)
+
+	if len(mock.AppliedLabels) != 2 {
+		t.Fatalf("expected 2 labels (group + global), got %v", mock.AppliedLabels)
+	}
+
+	hasGroup := false
+	hasGlobal := false
+	for _, l := range mock.AppliedLabels {
+		if l == "group-go" {
+			hasGroup = true
+		}
+		if l == "global-go" {
+			hasGlobal = true
+		}
+	}
+	if !hasGroup || !hasGlobal {
+		t.Errorf("expected both group-go and global-go, got %v", mock.AppliedLabels)
+	}
+}
+
+func TestApplyRules_PrioritySorting(t *testing.T) {
+	l, mock := setupLabelerTest(t)
+	defer func() { db.Close() }()
+
+	compiledPatterns = make(map[string]*regexp.Regexp)
+
+	cfg := &models.Config{
+		LabelRules: []models.LabelRule{
+			{Pattern: "**/*.go", Label: "low-priority", Priority: 1},
+			{Pattern: "**/*.go", Label: "high-priority", Priority: 10},
+		},
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "single", MirrorPlatform: "github", GitHub: "owner/repo"},
+		},
+	}
+	config.Store(cfg)
+
+	pr := &models.PRRecord{
+		ID: "pr-pri-1", RepoGroup: "test-group", Platform: "github",
+		PRNumber: 30, Title: "test", Author: "dev1", State: "open",
+	}
+
+	mock.DiffFiles = []string{"src/main.go"}
+	l.ApplyRules(pr, "test-group", mock.DiffFiles)
+
+	if len(mock.AppliedLabels) != 2 {
+		t.Fatalf("expected 2 labels, got %v", mock.AppliedLabels)
+	}
+
+	if mock.AppliedLabels[0] != "high-priority" {
+		t.Errorf("expected high-priority first, got %v", mock.AppliedLabels)
+	}
+}
+
+func TestApplyRules_Exclusive(t *testing.T) {
+	l, mock := setupLabelerTest(t)
+	defer func() { db.Close() }()
+
+	compiledPatterns = make(map[string]*regexp.Regexp)
+
+	cfg := &models.Config{
+		LabelRules: []models.LabelRule{
+			{Pattern: "**/*.go", Label: "first", Priority: 10, Exclusive: true},
+			{Pattern: "**/*.go", Label: "second", Priority: 5},
+		},
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", Mode: "single", MirrorPlatform: "github", GitHub: "owner/repo"},
+		},
+	}
+	config.Store(cfg)
+
+	pr := &models.PRRecord{
+		ID: "pr-exc-1", RepoGroup: "test-group", Platform: "github",
+		PRNumber: 40, Title: "test", Author: "dev1", State: "open",
+	}
+
+	mock.DiffFiles = []string{"src/main.go"}
+	l.ApplyRules(pr, "test-group", mock.DiffFiles)
+
+	if len(mock.AppliedLabels) != 1 {
+		t.Fatalf("expected 1 label (exclusive), got %v", mock.AppliedLabels)
+	}
+	if mock.AppliedLabels[0] != "first" {
+		t.Errorf("expected 'first', got %v", mock.AppliedLabels)
+	}
+}
+
+func TestMergeRules(t *testing.T) {
+	global := []models.LabelRule{
+		{Pattern: "**/*.go", Label: "go"},
+	}
+	group := []models.LabelRule{
+		{Pattern: "docs/**", Label: "docs"},
+	}
+
+	merged := mergeRules(global, group)
+	if len(merged) != 2 {
+		t.Fatalf("expected 2 merged rules, got %d", len(merged))
+	}
+
+	if merged[0].Label != "docs" {
+		t.Errorf("expected group rule first, got %v", merged[0].Label)
+	}
+	if merged[1].Label != "go" {
+		t.Errorf("expected global rule second, got %v", merged[1].Label)
+	}
+}
+
+func TestMergeRules_Empty(t *testing.T) {
+	merged := mergeRules(nil, nil)
+	if len(merged) != 0 {
+		t.Fatalf("expected 0, got %d", len(merged))
+	}
+}

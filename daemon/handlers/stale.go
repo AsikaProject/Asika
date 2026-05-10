@@ -10,6 +10,7 @@ import (
 	"asika/common/config"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/daemon/handlers/pr"
 	"asika/daemon/stale"
 )
 
@@ -104,7 +105,7 @@ func HandleStaleUnmark(c *gin.Context) {
 
 	removed := false
 	for _, pt := range activePlatforms(group) {
-		client, ok := clients[pt]
+ 		client, ok := pr.GetClients()[pt]
 		if !ok {
 			continue
 		}

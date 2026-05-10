@@ -10,6 +10,7 @@ import (
 
 	"asika/common/db"
 	"asika/common/models"
+	"asika/daemon/handlers/pr"
 )
 
 // GetSyncHistory handles GET /api/v1/sync/history (8.5)
@@ -57,7 +58,8 @@ func RetrySync(c *gin.Context) {
 		return
 	}
 
-	if syncerRef == nil {
+	s := pr.GetSyncer()
+	if s == nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "syncer not initialized"})
 		return
 	}
@@ -77,7 +79,7 @@ func RetrySync(c *gin.Context) {
 	// Trigger the sync
 	go func() {
 		ctx := context.Background()
-		if err := syncerRef.SyncOnMerge(ctx, pr); err != nil {
+		if err := s.SyncOnMerge(ctx, pr); err != nil {
 			slog.Error("retry sync failed", "sync_id", syncID, "error", err)
 		}
 	}()

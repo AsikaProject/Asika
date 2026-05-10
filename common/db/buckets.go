@@ -14,4 +14,12 @@ const (
 	BucketWebhookRetries = "webhook_retries"
 	BucketConfigHistory  = "config_history"
 	BucketAPIKeys        = "api_keys"
+	BucketSpamAuthors    = "spam_authors"
+	BucketWebhookHealth  = "webhook_health"
+	BucketReportHistory     = "report_history"
+	BucketNotificationPrefs = "notification_prefs"
+	BucketNotificationDedup = "notification_dedup"
+	BucketTeamSpaces        = "team_spaces"
+	BucketSpaceMembers      = "space_members"
+	BucketSpaceSettings     = "space_settings"
 )

@@ -135,7 +135,7 @@ Route-specific middleware:
 
 - `RequireRole(role)` — Checks role hierarchy (admin > operator > viewer)
 - `RequireAnyRole(roles...)` — Checks if user has any of the listed roles
-- `RequirePermission(field)` — Checks granular permission (can_approve, can_merge, can_close, can_reopen, can_spam, can_manage_queue)
+- `RequirePermission(field)` — Checks granular permission (can_approve, can_merge, can_close, can_reopen, can_spam, can_manage_queue, can_revert)
 - `RequireRepoGroupAccess()` — Checks user's allowed repo groups against URL parameter
 
 ### Permission Model
@@ -151,6 +151,7 @@ Three-tier role hierarchy with six granular permissions:
 | Reopen PRs | ❌ | Configurable | ✅ |
 | Mark Spam | ❌ | Configurable | ✅ |
 | Manage Queue | ❌ | Configurable | ✅ |
+| Revert PRs | ❌ | Configurable | ✅ |
 | User Management | ❌ | ❌ | ✅ |
 | Config Management | ❌ | ❌ | ✅ |
 
@@ -165,6 +166,7 @@ Non-admin users can be assigned to specific repo groups. Empty `AllowedRepoGroup
 - **Event Consumer** — Dispatches events from the event bus to the worker pool
 - **Stale Checker** — Periodically checks for and handles stale PRs
 - **Webhook Retry Worker** — Retries failed webhook deliveries with exponential backoff
+- **Webhook Health Checker** — Every 2 minutes, checks `webhook_health` bucket per repo group/platform. If no webhook received within threshold, enables forced polling for that repo group (auto-fallback).
 
 ### Actor System (Goroutine Pools)
 
@@ -211,7 +213,7 @@ The project supports two database backends via a pluggable `Storage` interface (
 
 The active backend is selected at startup via `models.DatabaseConfig.Type` (`"bbolt"` or `"mongo"`). Cross-engine migration is available via `MigrateBboltToMongo()` / `MigrateMongoToBbolt()`.
 
-Buckets (13 total, defined in `common/db/buckets.go`):
+Buckets (21 total, defined in `common/db/buckets.go`):
 
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
@@ -227,6 +229,14 @@ Buckets (13 total, defined in `common/db/buckets.go`):
 | `config_history` | `{zeroPadded6DigitVersion}` | ConfigSnapshot (JSON); max 20 snapshots, rollback-capable |
 | `webhook_retries` | `{retryID}` | WebhookRetry (JSON) |
 | `repos` | — | Repository records (used only during cross-engine migration) |
+| `spam_authors` | `{author}:{platform}` | SpamAuthor (JSON); tracks spam PR authors with count and timestamps |
+| `webhook_health` | `{repoGroup}:{platform}` | Last successful webhook timestamp (RFC3339) |
+| `report_history` | `{nanosecondTimestamp}` | ReportHistoryEntry (JSON); generated report content with timestamp and period |
+| `notification_prefs` | `{username}` | NotificationPreferences (JSON); per-user notification settings |
+| `notification_dedup` | `{eventType}:{prID}:{notifierType}` | Dedup timestamp (RFC3339); 5-min TTL |
+| `team_spaces` | `{spaceName}` | TeamSpace (JSON); team space with members and repo groups |
+| `space_members` | `{spaceName}:{username}` | SpaceMember (JSON); space membership with role |
+| `space_settings` | `{spaceName}:{key}` | Setting value (JSON); per-space config overrides |
 
 Performance optimizations:
 - Index-based PR lookups via `PutPRWithIndex` / `GetPRByIndex` (O(1) vs O(n) scan)
@@ -278,8 +288,9 @@ graph TB
 
     subgraph daemon["daemon/"]
         SRV[server/ → HTTP/bootstrap]
-        HAND[handlers/ → API routes]
-        HOOK[handlers/webhook/ → Webhook parsing]
+         HAND[handlers/ → API routes]
+         PR[handlers/pr/ → PR handlers]
+         HOOK[handlers/webhook/ → Webhook parsing]
         QUEUE[queue/ → Merge queue]
         SYNC[syncer/ → Cross-sync]
         CONS[consumer/ → Events]

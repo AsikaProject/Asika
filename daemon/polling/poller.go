@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,17 +20,35 @@ import (
 
 // Poller polls platforms for PR changes
 type Poller struct {
-	cfg     *models.Config
-	clients map[platforms.PlatformType]platforms.PlatformClient
-	stop    chan struct{}
+	cfg            *models.Config
+	clients        map[platforms.PlatformType]platforms.PlatformClient
+	stop           chan struct{}
+	forcePoll      map[string]bool
+	forcePollMu    sync.RWMutex
+}
+
+// SetForcePoll enables or disables forced polling for a repo group.
+// When enabled, the poller will poll this group even in webhook mode.
+func (p *Poller) SetForcePoll(repoGroup string, enabled bool) {
+	p.forcePollMu.Lock()
+	defer p.forcePollMu.Unlock()
+	p.forcePoll[repoGroup] = enabled
+}
+
+// IsForcePoll returns whether forced polling is enabled for a repo group.
+func (p *Poller) IsForcePoll(repoGroup string) bool {
+	p.forcePollMu.RLock()
+	defer p.forcePollMu.RUnlock()
+	return p.forcePoll[repoGroup]
 }
 
 // NewPoller creates a new poller
 func NewPoller(cfg *models.Config, clients map[platforms.PlatformType]platforms.PlatformClient) *Poller {
 	return &Poller{
-		cfg:     cfg,
-		clients: clients,
-		stop:    make(chan struct{}),
+		cfg:       cfg,
+		clients:   clients,
+		stop:      make(chan struct{}),
+		forcePoll: make(map[string]bool),
 	}
 }
 
@@ -48,6 +67,51 @@ func (p *Poller) Start() {
 		case <-p.stop:
 			slog.Info("polling stopped")
 			return
+		}
+	}
+}
+
+// StartForced starts polling only for repo groups that have forcePoll enabled.
+// Used as fallback when webhook health check fails.
+func (p *Poller) StartForced() {
+	interval := utils.ParseDuration(p.cfg.Events.PollingInterval, 30*time.Second)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	slog.Info("forced polling started", "interval", interval)
+
+	for {
+		select {
+		case <-ticker.C:
+			p.pollForced()
+		case <-p.stop:
+			slog.Info("forced polling stopped")
+			return
+		}
+	}
+}
+
+func (p *Poller) pollForced() {
+	p.forcePollMu.RLock()
+	defer p.forcePollMu.RUnlock()
+
+	for repoGroup := range p.forcePoll {
+		if !p.forcePoll[repoGroup] {
+			continue
+		}
+		var found bool
+		for _, rg := range p.cfg.RepoGroups {
+			if rg.Name == repoGroup {
+				s, f := p.pollRepoGroup(rg)
+				if s+f > 0 {
+					slog.Info("forced poll complete", "repo_group", repoGroup, "success", s, "failed", f)
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			slog.Warn("forced poll: repo group not found in config", "repo_group", repoGroup)
 		}
 	}
 }

@@ -132,6 +132,8 @@ func (c *Consumer) dispatch(event events.Event) {
 		c.workers.Submit(func() { c.handlePRApproved(event) })
 	case events.EventPRReopened:
 		c.workers.Submit(func() { c.handlePRReopened(event) })
+	case events.EventPRReverted:
+		c.workers.Submit(func() { c.handlePRReverted(event) })
 	case events.EventSpamDetected:
 		c.workers.Submit(func() { c.handleSpamDetected(event) })
 	case events.EventPRComment:
@@ -284,6 +286,14 @@ func (c *Consumer) handlePRReopened(event events.Event) {
 			}
 		}()
 	}
+}
+
+func (c *Consumer) handlePRReverted(event events.Event) {
+	pr := event.PR
+	if pr == nil {
+		return
+	}
+	slog.Info("PR reverted", "title", pr.Title, "pr_number", pr.PRNumber, "repo_group", event.RepoGroup)
 }
 
 func (c *Consumer) handlePRComment(event events.Event) {
