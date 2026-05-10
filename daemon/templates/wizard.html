@@ -83,8 +83,27 @@
         <div class="step-content" id="step2">
             <h3>{{t "wizard.step"}} 2: Database Configuration</h3>
             <div class="form-group">
-                <label>Database file path:</label>
-                <input type="text" id="dbpath" value="/var/lib/asika/asika.db">
+                <label>Database Type:</label>
+                <select id="dbtype" onchange="onDbTypeChange()">
+                    <option value="bbolt">Bbolt (embedded, file-based)</option>
+                    <option value="mongo">MongoDB</option>
+                </select>
+            </div>
+            <div id="bboltFields">
+                <div class="form-group">
+                    <label>Database file path:</label>
+                    <input type="text" id="dbpath" value="/var/lib/asika/asika.db">
+                </div>
+            </div>
+            <div id="mongoFields" style="display:none;">
+                <div class="form-group">
+                    <label>MongoDB Connection String:</label>
+                    <input type="text" id="mongo_conn" value="mongodb://localhost:27017">
+                </div>
+                <div class="form-group">
+                    <label>MongoDB Database Name:</label>
+                    <input type="text" id="mongo_dbname" value="asika">
+                </div>
             </div>
             <div class="nav-buttons">
                 <button class="btn btn-secondary" onclick="prevStep(2)">{{t "common.back"}}</button>
@@ -156,57 +175,102 @@
             <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Configure how Asika sends alerts. All fields optional.</p>
 
             <div class="form-group">
-                <h4>Telegram Bot</h4>
-                <label>Bot Token:</label>
-                <input type="text" id="tg_token" placeholder="e.g., 123456:ABC-DEF">
-            </div>
-            <div class="form-group">
-                <label>Chat IDs (comma-separated):</label>
-                <input type="text" id="tg_chat_ids" placeholder="e.g., @channel_name, 123456789">
-            </div>
-            <div class="form-group">
-                <label>Admin IDs (comma-separated, for bot commands):</label>
-                <input type="text" id="tg_admin_ids" placeholder="e.g., 123456789, 987654321">
+                <label>Notification Channel:</label>
+                <select id="notifyChannelSelect" onchange="onNotifyChannelChange()">
+                    <option value="telegram">Telegram Bot</option>
+                    <option value="feishu">Feishu / Lark Bot</option>
+                    <option value="smtp">SMTP Email</option>
+                    <option value="discord">Discord Bot</option>
+                    <option value="slack">Slack Bot</option>
+                </select>
             </div>
 
-            <h4 style="margin-top: 20px;">Feishu / Lark Bot</h4>
-            <div class="form-group">
-                <label>App ID:</label>
-                <input type="text" id="fs_app_id" placeholder="e.g., cli_xxxxx">
-            </div>
-            <div class="form-group">
-                <label>App Secret:</label>
-                <input type="password" id="fs_app_secret" placeholder="app secret">
-            </div>
-            <div class="form-group">
-                <label>Webhook URL (optional, for notifications):</label>
-                <input type="text" id="fs_webhook" placeholder="e.g., https://open.feishu.cn/open-apis/bot/v2/hook/xxx">
-            </div>
-            <div class="form-group">
-                <label>Admin IDs (comma-separated, for bot commands):</label>
-                <input type="text" id="fs_admin_ids" placeholder="e.g., ou_xxxx, ou_yyyy">
+            <!-- Telegram -->
+            <div id="notifyFields_telegram">
+                <div class="form-group">
+                    <label>Bot Token:</label>
+                    <input type="text" id="tg_token" placeholder="e.g., 123456:ABC-DEF">
+                </div>
+                <div class="form-group">
+                    <label>Chat IDs (comma-separated):</label>
+                    <input type="text" id="tg_chat_ids" placeholder="e.g., @channel_name, 123456789">
+                </div>
+                <div class="form-group">
+                    <label>Admin IDs (comma-separated, for bot commands):</label>
+                    <input type="text" id="tg_admin_ids" placeholder="e.g., 123456789, 987654321">
+                </div>
             </div>
 
-            <h4 style="margin-top: 20px;">SMTP Email</h4>
-            <div class="form-group">
-                <label>SMTP Host:</label>
-                <input type="text" id="smtp_host" placeholder="smtp.example.com">
+            <!-- Feishu -->
+            <div id="notifyFields_feishu" style="display:none;">
+                <div class="form-group">
+                    <label>App ID:</label>
+                    <input type="text" id="fs_app_id" placeholder="e.g., cli_xxxxx">
+                </div>
+                <div class="form-group">
+                    <label>App Secret:</label>
+                    <input type="password" id="fs_app_secret" placeholder="app secret">
+                </div>
+                <div class="form-group">
+                    <label>Webhook URL (optional, for notifications):</label>
+                    <input type="text" id="fs_webhook" placeholder="e.g., https://open.feishu.cn/open-apis/bot/v2/hook/xxx">
+                </div>
+                <div class="form-group">
+                    <label>Admin IDs (comma-separated, for bot commands):</label>
+                    <input type="text" id="fs_admin_ids" placeholder="e.g., ou_xxxx, ou_yyyy">
+                </div>
             </div>
-            <div class="form-group">
-                <label>SMTP Port:</label>
-                <input type="number" id="smtp_port" placeholder="587">
+
+            <!-- SMTP -->
+            <div id="notifyFields_smtp" style="display:none;">
+                <div class="form-group">
+                    <label>SMTP Host:</label>
+                    <input type="text" id="smtp_host" placeholder="smtp.example.com">
+                </div>
+                <div class="form-group">
+                    <label>SMTP Port:</label>
+                    <input type="number" id="smtp_port" placeholder="587">
+                </div>
+                <div class="form-group">
+                    <label>SMTP User:</label>
+                    <input type="text" id="smtp_user" placeholder="user@example.com">
+                </div>
+                <div class="form-group">
+                    <label>SMTP Password:</label>
+                    <input type="password" id="smtp_pass" placeholder="password">
+                </div>
+                <div class="form-group">
+                    <label>Recipients (comma-separated):</label>
+                    <input type="text" id="smtp_to" placeholder="admin@example.com">
+                </div>
             </div>
-            <div class="form-group">
-                <label>SMTP User:</label>
-                <input type="text" id="smtp_user" placeholder="user@example.com">
+
+            <!-- Slack -->
+            <div id="notifyFields_slack" style="display:none;">
+                <div class="form-group">
+                    <label>Bot Token (xoxb-...):</label>
+                    <input type="text" id="slack_token" placeholder="e.g., xoxb-xxxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label>App Token (xapp-...):</label>
+                    <input type="text" id="slack_app_token" placeholder="e.g., xapp-xxxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label>Channel IDs (comma-separated):</label>
+                    <input type="text" id="slack_channel_ids" placeholder="e.g., C01XXXXXX, C02XXXXXX">
+                </div>
             </div>
-            <div class="form-group">
-                <label>SMTP Password:</label>
-                <input type="password" id="smtp_pass" placeholder="password">
-            </div>
-            <div class="form-group">
-                <label>Recipients (comma-separated):</label>
-                <input type="text" id="smtp_to" placeholder="admin@example.com">
+
+            <!-- Discord -->
+            <div id="notifyFields_discord" style="display:none;">
+                <div class="form-group">
+                    <label>Bot Token:</label>
+                    <input type="text" id="discord_token" placeholder="e.g., MTAxxxxxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label>Channel IDs (comma-separated):</label>
+                    <input type="text" id="discord_channel_ids" placeholder="e.g., 123456789, 987654321">
+                </div>
             </div>
 
             <div class="nav-buttons">
@@ -288,11 +352,12 @@
 
     <script>
         function setLocale(locale) {
+            document.cookie = 'asika_lang=' + encodeURIComponent(locale) + ';path=/;max-age=' + (86400*365);
             fetch('/api/v1/locale', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ locale: locale })
-            }).then(function() { window.location.reload(); });
+            }).then(function() { window.location.reload(); }).catch(function() { window.location.reload(); });
         }
         (function() {
             var match = document.cookie.match(/(?:^|; )asika_lang=([^;]*)/);
@@ -323,6 +388,20 @@
                 giteaGroup.style.display = 'block';
                 mirrorGroup.style.display = 'none';
             }
+        }
+
+        function onDbTypeChange() {
+            const dbtype = document.getElementById('dbtype').value;
+            document.getElementById('bboltFields').style.display = dbtype === 'mongo' ? 'none' : 'block';
+            document.getElementById('mongoFields').style.display = dbtype === 'mongo' ? 'block' : 'none';
+        }
+
+        function onNotifyChannelChange() {
+            const ch = document.getElementById('notifyChannelSelect').value;
+            ['telegram', 'feishu', 'smtp', 'discord', 'slack'].forEach(function(c) {
+                var el = document.getElementById('notifyFields_' + c);
+                if (el) el.style.display = (c === ch) ? 'block' : 'none';
+            });
         }
 
         function showError(msg) {
@@ -400,11 +479,33 @@
             const smtpToRaw = document.getElementById('smtp_to').value;
             const smtpTo = smtpToRaw ? smtpToRaw.split(',').map(s => s.trim()).filter(s => s) : [];
 
+            // Build database config
+            const dbtype = document.getElementById('dbtype').value;
+            const database = { type: dbtype };
+            if (dbtype === 'mongo') {
+                database.path = document.getElementById('mongo_conn').value;
+                database.name = document.getElementById('mongo_dbname').value;
+            } else {
+                database.path = document.getElementById('dbpath').value;
+            }
+
+            // Parse Discord channel IDs
+            const discordChannelIdsRaw = document.getElementById('discord_channel_ids').value;
+            const discordChannelIds = discordChannelIdsRaw ? discordChannelIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
+            const slackChannelIdsRaw = document.getElementById('slack_channel_ids').value;
+            const slackChannelIds = slackChannelIdsRaw ? slackChannelIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
+
             // Build notify channels
             const notifyChannels = [];
             if (document.getElementById('tg_token').value) {
                 notifyChannels.push({
                     type: 'telegram',
+                    config: {}
+                });
+            }
+            if (document.getElementById('fs_app_id').value) {
+                notifyChannels.push({
+                    type: 'feishu',
                     config: {}
                 });
             }
@@ -420,10 +521,22 @@
                     }
                 });
             }
+            if (document.getElementById('discord_token').value) {
+                notifyChannels.push({
+                    type: 'discord',
+                    config: {}
+                });
+            }
+            if (document.getElementById('slack_token').value) {
+                notifyChannels.push({
+                    type: 'slack',
+                    config: {}
+                });
+            }
 
             const config = {
                 mode: mode,
-                database: { path: document.getElementById('dbpath').value },
+                database: database,
                 tokens: {
                     github: document.getElementById('github_token').value,
                     gitlab: document.getElementById('gitlab_token').value,
@@ -464,6 +577,17 @@
                     app_secret: document.getElementById('fs_app_secret').value,
                     webhook_url: document.getElementById('fs_webhook').value,
                     admin_ids: fsAdminIds
+                },
+                discord: {
+                    enabled: !!document.getElementById('discord_token').value,
+                    token: document.getElementById('discord_token').value,
+                    channel_ids: discordChannelIds
+                },
+                slack: {
+                    enabled: !!document.getElementById('slack_token').value,
+                    token: document.getElementById('slack_token').value,
+                    app_token: document.getElementById('slack_app_token').value,
+                    channel_ids: slackChannelIds
                 },
                 users: [{
                     username: document.getElementById('admin_user').value,

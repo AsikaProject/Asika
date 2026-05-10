@@ -327,7 +327,7 @@ bash build.sh distclean
 
 - **Error handling**: All errors must be handled. Use `fmt.Errorf("context: %w", err)` for wrapping.
 - **Logging**: Use `log/slog` for structured logging. No `fmt.Println` in server code.
-- **i18n**: User-facing strings use `{{t "key"}}` in templates. Add translations to `common/i18n/locales/zh.json`.
+- **i18n**: User-facing strings use `{{t "key"}}` in templates. Add translations to `common/i18n/locales/en.json` and `common/i18n/locales/zh.json`. Default locale is English.
 - **Database**: Use `PutPRWithIndex` when storing PRs (maintains indices). Use `BucketForEachPrefix` for group-scoped queries.
 - **Permissions**: Write handlers check `RequirePermission`. Bot handlers check permissions at the command level.
 - **Platform bots**: Each bot lives in its own sub-package under `daemon/platform/`. Shared helpers (GetPRByID, Truncate, InactivityDays, HasLabelStr, ParseInt) are in `common/platformutil/`.

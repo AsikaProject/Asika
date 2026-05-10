@@ -134,8 +134,18 @@ func runInteractiveWizard(reader *bufio.Reader) map[string]interface{} {
 
 	// Step 2: Database
 	fmt.Println("\n--- Step 2: Database Configuration ---")
-	dbPath := prompt(reader, "Database path", "/var/lib/asika/asika.db")
-	cfg["database"] = map[string]string{"path": dbPath}
+	dbType := prompt(reader, "Database type (bbolt/mongo)", "bbolt")
+	dbConfig := map[string]string{"type": dbType}
+	if dbType == "mongo" {
+		dbPath := prompt(reader, "MongoDB connection string", "mongodb://localhost:27017")
+		dbName := prompt(reader, "MongoDB database name", "asika")
+		dbConfig["path"] = dbPath
+		dbConfig["name"] = dbName
+	} else {
+		dbPath := prompt(reader, "Database path", "/var/lib/asika/asika.db")
+		dbConfig["path"] = dbPath
+	}
+	cfg["database"] = dbConfig
 
 	// Step 3: Platform Tokens
 	fmt.Println("\n--- Step 3: Platform Tokens ---")

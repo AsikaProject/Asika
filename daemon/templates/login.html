@@ -42,11 +42,12 @@
     </div>
     <script>
         function setLocale(locale) {
+            document.cookie = 'asika_lang=' + encodeURIComponent(locale) + ';path=/;max-age=' + (86400*365);
             fetch('/api/v1/locale', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ locale: locale })
-            }).then(function() { window.location.reload(); });
+            }).then(function() { window.location.reload(); }).catch(function() { window.location.reload(); });
         }
         (function() {
             var match = document.cookie.match(/(?:^|; )asika_lang=([^;]*)/);

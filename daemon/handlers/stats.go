@@ -124,8 +124,11 @@ func GetStats(c *gin.Context) {
 				mergesByDay[day]++
 			}
 			if !pr.CreatedAt.IsZero() && !pr.MergedAt.IsZero() {
-				leadTimeSum += pr.MergedAt.Sub(pr.CreatedAt).Hours()
-				leadTimeCount++
+				d := pr.MergedAt.Sub(pr.CreatedAt)
+				if d > 0 {
+					leadTimeSum += d.Hours()
+					leadTimeCount++
+				}
 			}
 		}
 	}

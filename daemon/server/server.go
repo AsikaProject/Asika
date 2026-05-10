@@ -111,9 +111,11 @@ func (s *Server) setupMiddleware() {
 	s.engine.Use(Logger())
 	s.engine.Use(gin.Recovery())
 	s.engine.Use(metricsMiddleware())
-	s.engine.Use(CORS(s.cfg.Server.CORSOrigins))
-	if s.cfg.Server.RateLimitEnabled {
-		s.engine.Use(RateLimit(rate.Limit(s.cfg.Server.RateLimitRPS), s.cfg.Server.RateLimitBurst))
+	if s.cfg != nil {
+		s.engine.Use(CORS(s.cfg.Server.CORSOrigins))
+		if s.cfg.Server.RateLimitEnabled {
+			s.engine.Use(RateLimit(rate.Limit(s.cfg.Server.RateLimitRPS), s.cfg.Server.RateLimitBurst))
+		}
 	}
 	s.engine.Use(AuthMiddleware())
 }
@@ -433,13 +435,15 @@ func (s *Server) Start() error {
 		addr = s.cfg.Server.Listen
 	}
 
-	readTimeout := time.Duration(s.cfg.Server.ReadTimeoutSeconds) * time.Second
-	writeTimeout := time.Duration(s.cfg.Server.WriteTimeoutSeconds) * time.Second
-	if readTimeout == 0 {
-		readTimeout = 30 * time.Second
-	}
-	if writeTimeout == 0 {
-		writeTimeout = 30 * time.Second
+	readTimeout := 30 * time.Second
+	writeTimeout := 30 * time.Second
+	if s.cfg != nil {
+		if t := time.Duration(s.cfg.Server.ReadTimeoutSeconds) * time.Second; t > 0 {
+			readTimeout = t
+		}
+		if t := time.Duration(s.cfg.Server.WriteTimeoutSeconds) * time.Second; t > 0 {
+			writeTimeout = t
+		}
 	}
 
 	s.httpSrv = &http.Server{
@@ -458,9 +462,9 @@ func (s *Server) Stop() error {
 	if s.httpSrv == nil {
 		return nil
 	}
-	timeout := time.Duration(s.cfg.Server.ShutdownTimeoutSeconds) * time.Second
-	if timeout == 0 {
-		timeout = 30 * time.Second
+	timeout := 30 * time.Second
+	if s.cfg != nil && s.cfg.Server.ShutdownTimeoutSeconds > 0 {
+		timeout = time.Duration(s.cfg.Server.ShutdownTimeoutSeconds) * time.Second
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

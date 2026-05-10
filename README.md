@@ -487,7 +487,7 @@ config = { webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
 - **Settings** — Merge queue config, spam detection (keyword tags with batch operations), stale PR management, label rules editor, config history with rollback
 - **API Keys** — Create, list, revoke API keys with role and permission config; keys delivered via DM with 2-minute auto-delete
 - **Config** — Raw TOML editor, system info, self-update, stale PR check
-- **i18n** — English/Chinese language switcher (cookie-based, instant apply)
+- **i18n** — English/Chinese language switcher (cookie-based, instant apply). Default is English.
 - **PWA** — Installable, works offline with service worker
 
 ## Contributing

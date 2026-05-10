@@ -1,6 +1,24 @@
 # ChangeLog for Asika
 
-## Unreleased
+## v20260510DEV
+- **Feature: WebUI wizard — database type selection and notification channel selector:**
+  - Wizard step 2: add database type dropdown (bbolt/mongo) with conditional fields
+  - Wizard step 5: replace flat notification forms with tabbed channel selector (telegram/feishu/smtp/discord/slack)
+  - Switching channels preserves previously entered values
+  - Add Discord Bot and Slack Bot notification channel config to wizard
+  - Fix `submitWizard()` JS to collect all enabled notification channels
+- **Feature: English i18n translations:**
+  - Add `en.json` with all 227 English translation keys
+  - Fix `setLocale()` race condition: set cookie before POST, reload on both success and failure
+  - Apply locale switcher fix to `wizard.html`, `login.html`, and `layout.html`
+- **Fix: nil pointer dereference in initialization mode:**
+  - Guard `s.cfg` access in `setupMiddleware()` (CORS, RateLimit)
+  - Guard `s.cfg` access in `Start()` (ReadTimeout, WriteTimeout)
+  - Guard `s.cfg` access in `Stop()` (ShutdownTimeout)
+  - Server now starts correctly when no config file exists
+- **Fix: negative lead time in DORA metrics:**
+  - Skip PRs where `MergedAt` is before `CreatedAt` in `stats.go`
+  - Prevents corrupt timestamps from skewing average lead time
 - **Feature: MongoDB storage backend with migration tools:**
   - Add `mongoStorage` implementing `Storage` interface with all 22 methods
   - Add `MigrateBboltToMongo` and `MigrateMongoToBbolt` migration utilities

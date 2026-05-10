@@ -11,6 +11,7 @@ enable_web_update = false   # allow admin to update from WebUI
 mode = "multi"
 
 # Database backend: "bbolt" (default) or "mongo"
+# Configured via wizard or set manually below
 [database]
 type = "bbolt"
 path = "/var/lib/asika/asika.db"

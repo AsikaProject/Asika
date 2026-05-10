@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -86,12 +85,21 @@ func CompleteWizard(c *gin.Context) {
 	if cfg.Server.Mode == "" {
 		cfg.Server.Mode = "release"
 	}
-	if cfg.Database.Path == "" {
-		cfg.Database.Path = "/var/lib/asika/asika.db"
+	if cfg.Database.Type == "" {
+		cfg.Database.Type = "bbolt"
 	}
-	if !filepath.IsAbs(cfg.Database.Path) || strings.Contains(cfg.Database.Path, "..") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "database.path must be an absolute path without .. components"})
-		return
+	if cfg.Database.Path == "" {
+		if cfg.Database.Type == "mongo" {
+			cfg.Database.Path = "mongodb://localhost:27017"
+		} else {
+			cfg.Database.Path = "/var/lib/asika/asika.db"
+		}
+	}
+	if cfg.Database.Type != "mongo" {
+		if !filepath.IsAbs(cfg.Database.Path) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "database.path must be an absolute path without .. components"})
+			return
+		}
 	}
 	if cfg.Auth.JWTSecret == "" {
 		cfg.Auth.JWTSecret = config.GenerateUUID()
@@ -138,7 +146,7 @@ func CompleteWizard(c *gin.Context) {
 	}
 
 	// Init database
-	if err := db.Init(cfg.Database.Path); err != nil {
+	if err := db.Init(cfg.Database); err != nil {
 		slog.Error("wizard: failed to init database", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to initialize database", "detail": err.Error()})
 		return
