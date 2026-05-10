@@ -489,6 +489,21 @@ config = { webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
            app_id = "cli_xxx", app_secret = "xxx" }
 ```
 
+### Fault Alerting
+
+When a notification channel fails to send 3 consecutive times, Asika automatically sends a fault alert through all other configured notifiers. Each channel tracks failures independently, and the counter resets on the next successful send.
+
+Alert message format:
+```
+[Fault Alert] Notifier telegram failed 3 consecutive times
+
+Notifier type: telegram
+Consecutive failures: 3
+Last error: <error details>
+
+Please check this notifier's configuration and connectivity.
+```
+
 ## WebUI Features
 
 - **Dashboard** — DORA metrics, overview stats, PR breakdowns by repo group/platform, recent activity

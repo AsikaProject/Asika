@@ -417,6 +417,21 @@ config = {
 }
 ```
 
+### 故障告警
+
+当某个通知渠道连续发送失败 3 次时，Asika 会自动通过其他已配置的通知渠道发送故障告警。每个渠道独立追踪失败次数，成功发送后计数器自动重置。
+
+告警消息格式：
+```
+[Fault Alert] Notifier telegram failed 3 consecutive times
+
+Notifier type: telegram
+Consecutive failures: 3
+Last error: <error details>
+
+Please check this notifier's configuration and connectivity.
+```
+
 ---
 
 # 贡献
