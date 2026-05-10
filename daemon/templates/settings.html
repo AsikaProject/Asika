@@ -14,6 +14,23 @@
 <div id="errorMsg" class="error" style="display:none;"></div>
 <div id="successMsg" class="success" style="display:none;"></div>
 
+<!-- CPU Threads Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <h2>{{t "settings.cpu_threads"}}</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.min_procs"}}</label>
+            <input id="serverMinProcs" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            <span style="font-size:12px; color:#999;">0 = Go default (1)</span>
+        </div>
+        <div>
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.max_procs"}}</label>
+            <input id="serverMaxProcs" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            <span style="font-size:12px; color:#999;">0 = use all CPUs</span>
+        </div>
+    </div>
+</div>
+
 <!-- Merge Queue Settings -->
 <div class="card" style="margin-bottom:20px;">
     <h2>{{t "settings.merge_queue"}}</h2>
@@ -223,6 +240,11 @@
             .then(r => r.json())
             .then(c => {
                 currentConfig = c;
+                // Server
+                const srv = c.server || {};
+                document.getElementById('serverMinProcs').value = srv.min_procs || 0;
+                document.getElementById('serverMaxProcs').value = srv.max_procs || 0;
+
                 // Merge Queue
                 const mq = c.merge_queue || {};
                 document.getElementById('mqRequiredApprovals').value = mq.required_approvals || 1;
@@ -424,6 +446,12 @@
 
     function collectTOML() {
         const lines = [];
+
+        // Server
+        lines.push('[server]');
+        lines.push('min_procs = ' + parseInt(document.getElementById('serverMinProcs').value || 0));
+        lines.push('max_procs = ' + parseInt(document.getElementById('serverMaxProcs').value || 0));
+        lines.push('');
 
         // Merge Queue
         lines.push('[merge_queue]');

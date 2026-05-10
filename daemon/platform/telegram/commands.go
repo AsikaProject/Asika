@@ -500,7 +500,8 @@ func (b *Bot) handleShowConfig(c telebot.Context) error {
 	groups := config.GetRepoGroups(cfg)
 	var sb strings.Builder
 	sb.WriteString("<b>Current Config</b>\n\n")
-	sb.WriteString(fmt.Sprintf("  Server: %s (%s)\n", cfg.Server.Listen, cfg.Server.Mode))
+ 	sb.WriteString(fmt.Sprintf("  Server: %s (%s)\n", cfg.Server.Listen, cfg.Server.Mode))
+	sb.WriteString(fmt.Sprintf("  CPU Threads: min=%d max=%d\n", cfg.Server.MinProcs, cfg.Server.MaxProcs))
 	sb.WriteString(fmt.Sprintf("  DB: %s\n", cfg.Database.Path))
 	sb.WriteString(fmt.Sprintf("  Events: %s\n", cfg.Events.Mode))
 	sb.WriteString(fmt.Sprintf("  Spam: enabled=%v\n", cfg.Spam.Enabled))

@@ -137,6 +137,7 @@ github = "ghev_xxx"
 - Label Rules
 - Merge Queue
 - Chat Bot
+- CPU 线程控制（`min_procs` / `max_procs`）
 - 热重载等配置
 
 ---

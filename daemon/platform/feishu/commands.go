@@ -408,9 +408,9 @@ func (b *Bot) showConfigText() string {
 		return "Config not loaded."
 	}
 	groups := config.GetRepoGroups(cfg)
-	return fmt.Sprintf(
-		"Asika Config:\n  Server: %s (%s)\n  DB: %s\n  Events: %s\n  Spam: %v\n  Repo Groups: %d\n  Notify Channels: %d",
-		cfg.Server.Listen, cfg.Server.Mode, cfg.Database.Path,
+ 	return fmt.Sprintf(
+		"Asika Config:\n  Server: %s (%s)\n  CPU Threads: min=%d max=%d\n  DB: %s\n  Events: %s\n  Spam: %v\n  Repo Groups: %d\n  Notify Channels: %d",
+		cfg.Server.Listen, cfg.Server.Mode, cfg.Server.MinProcs, cfg.Server.MaxProcs, cfg.Database.Path,
 		cfg.Events.Mode, cfg.Spam.Enabled, len(groups), len(cfg.Notify),
 	)
 }

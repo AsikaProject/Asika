@@ -223,6 +223,10 @@
  	"common.back": "返回",
  	"common.confirm": "确认",
  	"common.select_all": "全选",
- 	"common.delete_selected": "删除选中",
- 	"settings.add_keyword": "添加关键词"
+	"common.delete_selected": "删除选中",
+  	"settings.add_keyword": "添加关键词",
+
+  	"settings.cpu_threads": "CPU 线程",
+  	"settings.min_procs": "最小线程数",
+  	"settings.max_procs": "最大线程数"
 }

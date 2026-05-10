@@ -195,6 +195,8 @@ type NotifyConfig struct {
 type ServerConfig struct {
 	Listen                 string   `toml:"listen"`
 	Mode                   string   `toml:"mode"`
+	MinProcs               int      `toml:"min_procs"`
+	MaxProcs               int      `toml:"max_procs"`
 	EnableWebUpdate        bool     `toml:"enable_web_update"`
 	EnablePprof            bool     `toml:"enable_pprof"`
 	CORSOrigins            []string `toml:"cors_origins"`

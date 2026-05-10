@@ -47,6 +47,8 @@ func Load(path string) (*models.Config, error) {
 		Server: models.ServerConfig{
 			Listen:                 ":8080",
 			Mode:                   "release",
+			MinProcs:               0,
+			MaxProcs:               0,
 			CORSOrigins:            []string{},
 			RateLimitEnabled:       true,
 			RateLimitRPS:           10,
@@ -147,6 +149,16 @@ func validate(cfg *models.Config) error {
 	}
 	if cfg.Database.Type == "mongo" && cfg.Database.Name == "" {
 		return fmt.Errorf("database.name is required when database.type is 'mongo'")
+	}
+
+	if cfg.Server.MinProcs < 0 {
+		return fmt.Errorf("server.min_procs must be >= 0")
+	}
+	if cfg.Server.MaxProcs < 0 {
+		return fmt.Errorf("server.max_procs must be >= 0")
+	}
+	if cfg.Server.MinProcs > 0 && cfg.Server.MaxProcs > 0 && cfg.Server.MaxProcs < cfg.Server.MinProcs {
+		return fmt.Errorf("server.max_procs (%d) must be >= server.min_procs (%d)", cfg.Server.MaxProcs, cfg.Server.MinProcs)
 	}
 
 	if cfg.Auth.JWTSecret == "" {

@@ -189,6 +189,17 @@ This architecture provides:
 - Independent goroutine for slow operations (labeler API calls, syncer operations)
 - Runtime config updates via `PUT /api/v1/config` and SIGHUP signal
 
+### CPU Thread Control
+
+`[server]` section supports `min_procs` and `max_procs` to control `runtime.GOMAXPROCS`:
+
+- `min_procs` — floor for OS threads; 0 = Go default (1)
+- `max_procs` — ceiling for OS threads; 0 = use all CPUs (NumCPU)
+- Validation: when both are non-zero, `max_procs >= min_procs`
+- Effective value: `max(max_procs, min_procs)` (or NumCPU if both are 0)
+- Applied at startup in `Bootstrap()` and hot-reloadable via `PUT /api/v1/config`
+- Configurable through WebUI settings page, all platform bots display current values
+
 ### Storage
 
 The project supports two database backends via a pluggable `Storage` interface (`common/db/db.go`):

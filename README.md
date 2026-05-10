@@ -404,6 +404,18 @@ Spam keywords can be managed individually in the WebUI settings page:
 - Select multiple keywords with checkboxes and batch delete
 - Auto-clean periodically resets the keyword list and author trigger
 
+### CPU Thread Control
+
+Control the Go runtime's OS thread count via `[server]`:
+
+```toml
+[server]
+min_procs = 0   # min OS threads; 0 = Go default (1), otherwise floor
+max_procs = 0   # max OS threads; 0 = use all CPUs (NumCPU)
+```
+
+Both are hot-reloadable at runtime via `PUT /api/v1/config` or the WebUI settings page. When both are non-zero, `max_procs` must be >= `min_procs`.
+
 ### Notifications
 
 Get alerts where you work. Supports multiple channels simultaneously — just add more `[[notify]]` blocks.
@@ -484,7 +496,7 @@ config = { webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
 - **Merge Queue** — View queue status, recheck, clear, remove individual items
 - **System Usage** — Real-time CPU/memory monitoring with auto-refresh, GOMEMLIMIT tracking, color-coded progress bar
 - **User Management** — Create, edit, delete users with role and permission assignment, repo group access control
-- **Settings** — Merge queue config, spam detection (keyword tags with batch operations), stale PR management, label rules editor, config history with rollback
+- **Settings** — Merge queue config, spam detection (keyword tags with batch operations), stale PR management, label rules editor, CPU thread control (min_procs / max_procs), config history with rollback
 - **API Keys** — Create, list, revoke API keys with role and permission config; keys delivered via DM with 2-minute auto-delete
 - **Config** — Raw TOML editor, system info, self-update, stale PR check
 - **i18n** — English/Chinese language switcher (cookie-based, instant apply). Default is English.

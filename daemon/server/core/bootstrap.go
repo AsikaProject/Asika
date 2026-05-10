@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"log/slog"
+	"runtime"
 	"time"
 
 	"asika/common/auth"
@@ -59,6 +60,16 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 		return nil, err
 	}
 	slog.Info("database initialized", "path", cfg.Database.Path)
+
+	procs := runtime.NumCPU()
+	if cfg.Server.MaxProcs > 0 {
+		procs = cfg.Server.MaxProcs
+	}
+	if cfg.Server.MinProcs > 0 && procs < cfg.Server.MinProcs {
+		procs = cfg.Server.MinProcs
+	}
+	runtime.GOMAXPROCS(procs)
+	slog.Info("GOMAXPROCS set", "procs", procs, "min_procs", cfg.Server.MinProcs, "max_procs", cfg.Server.MaxProcs, "num_cpu", runtime.NumCPU())
 
 	if err := db.RunMigrations(); err != nil {
 		return nil, fmt.Errorf("database migration failed: %w", err)
@@ -132,6 +143,17 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 		if ic.EventConsumer != nil {
 			ic.EventConsumer.UpdateWorkerPoolConfig(cfg)
 		}
+	})
+	handlers.OnProcsReload(func(minProcs, maxProcs int) {
+		procs := runtime.NumCPU()
+		if maxProcs > 0 {
+			procs = maxProcs
+		}
+		if minProcs > 0 && procs < minProcs {
+			procs = minProcs
+		}
+		runtime.GOMAXPROCS(procs)
+		slog.Info("GOMAXPROCS updated", "procs", procs, "min_procs", minProcs, "max_procs", maxProcs)
 	})
 	handlers.InitPoller(ic.Poller)
 

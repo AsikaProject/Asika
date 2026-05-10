@@ -15,7 +15,21 @@ import (
 	"asika/common/models"
 )
 
-var workerPoolConfigReloadFuncs []func(models.WorkerPoolConfig)
+var (
+	workerPoolConfigReloadFuncs []func(models.WorkerPoolConfig)
+	procsReloadFuncs            []func(minProcs, maxProcs int)
+)
+
+// OnProcsReload registers a callback invoked when min_procs/max_procs config changes.
+func OnProcsReload(fn func(minProcs, maxProcs int)) {
+	procsReloadFuncs = append(procsReloadFuncs, fn)
+}
+
+func notifyProcs(cfg models.Config) {
+	for _, fn := range procsReloadFuncs {
+		fn(cfg.Server.MinProcs, cfg.Server.MaxProcs)
+	}
+}
 
 // OnWorkerPoolConfigReload registers a callback invoked when worker_pool config changes.
 func OnWorkerPoolConfigReload(fn func(models.WorkerPoolConfig)) {
@@ -103,6 +117,16 @@ func UpdateConfig(c *gin.Context) {
 	}
 
 	// Apply hot-reloadable items only (tasks.md 3.3)
+	if serverPatch, ok := patch["server"].(map[string]interface{}); ok {
+		if existingServer, ok := existing["server"].(map[string]interface{}); ok {
+			if mp, ok := serverPatch["min_procs"].(int64); ok {
+				existingServer["min_procs"] = mp
+			}
+			if mp, ok := serverPatch["max_procs"].(int64); ok {
+				existingServer["max_procs"] = mp
+			}
+		}
+	}
 	if labelRules, ok := patch["label_rules"]; ok {
 		existing["label_rules"] = labelRules
 	}
@@ -159,6 +183,7 @@ func UpdateConfig(c *gin.Context) {
 	}
 	config.Store(reloadedCfg)
 	notifyWorkerPoolConfig()
+	notifyProcs(*reloadedCfg)
 
 	slog.Info("config updated", "path", configPath)
 	c.JSON(http.StatusOK, gin.H{"message": "config updated successfully"})

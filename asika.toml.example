@@ -3,8 +3,10 @@
 
 # Server settings
 [server]
-listen = ":8080"
-mode   = "release"   # "debug" | "release"
+listen    = ":8080"
+mode      = "release"   # "debug" | "release"
+min_procs = 0           # min OS threads; 0 = Go default (1), otherwise floor
+max_procs = 0           # max OS threads; 0 = use all CPUs (default)
 enable_web_update = false   # allow admin to update from WebUI
 
 # Mode: "multi" for cross-platform sync, "single" for single repo

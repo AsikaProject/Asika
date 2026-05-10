@@ -234,8 +234,8 @@ func (b *Bot) handleRemoveFromQueue(ev *slack.MessageEvent, client *socketmode.C
 
 func (b *Bot) handleShowConfig(ev *slack.MessageEvent, client *socketmode.Client) {
 	cfg := b.cfg
-	text := fmt.Sprintf("*Asika Config*\nListen: %s\nMode: %s\nRepo Groups: %d",
-		cfg.Server.Listen, cfg.Server.Mode, len(cfg.RepoGroups))
+ 	text := fmt.Sprintf("*Asika Config*\nListen: %s\nMode: %s\nCPU Threads: min=%d max=%d\nRepo Groups: %d",
+		cfg.Server.Listen, cfg.Server.Mode, cfg.Server.MinProcs, cfg.Server.MaxProcs, len(cfg.RepoGroups))
 	b.postMessage(client, ev.Channel, text)
 }
 
