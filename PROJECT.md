@@ -68,8 +68,8 @@ graph TB
             SL[slack/]
         end
 
-        subgraph DB["Storage"]
-            BDB[(Storage bbolt / MongoDB)]
+        subgraph DB["Storage (bbolt / MongoDB)"]
+            BDB[(13 buckets)]
         end
     end
 
@@ -189,27 +189,50 @@ This architecture provides:
 - Independent goroutine for slow operations (labeler API calls, syncer operations)
 - Runtime config updates via `PUT /api/v1/config` and SIGHUP signal
 
-### Storage (bbolt)
+### Storage
 
-Buckets:
+The project supports two database backends via a pluggable `Storage` interface (`common/db/db.go`):
+
+| Engine | Package | Notes |
+|--------|---------|-------|
+| **bbolt** (default) | `go.etcd.io/bbolt` | Embedded KV store; single-file, serializes all writes via `db.Update` |
+| **MongoDB** | `go.mongodb.org/mongo-driver/v2` | Document store; connected via URI + database name |
+
+The active backend is selected at startup via `models.DatabaseConfig.Type` (`"bbolt"` or `"mongo"`). Cross-engine migration is available via `MigrateBboltToMongo()` / `MigrateMongoToBbolt()`.
+
+Buckets (13 total, defined in `common/db/buckets.go`):
 
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
-| `prs` | `{repoGroup}#{platform}#{prNumber}` | PRRecord (JSON) |
-| `pr_index_by_id` | `{prID}` → bbolt index | → `prs` bucket key |
-| `pr_index_by_rg_num` | `{repoGroup}#{prNumber}` → bbolt index | → `prs` bucket key |
+| `prs` | `{repoGroup}#{prID}` | PRRecord (JSON) |
+| `pr_index_by_id` | `{prID}` → index | → `prs` bucket key |
+| `pr_index_by_rg_num` | `{repoGroup}:{prNumber}` → index | → `prs` bucket key |
 | `queue_items` | `{repoGroup}#{prID}` | QueueItem (JSON) |
 | `users` | `{username}` | User (JSON) |
-| `logs` | `{timestamp}` | AuditLog (JSON) |
-| `sync_history` | `{timestamp}` | SyncRecord (JSON) |
-| `config_snapshots` | `{version}` | ConfigSnapshot (JSON) |
-| `config` | `{key}` | Config value (JSON) |
-| `backups` | `{filename}` | Backup metadata (JSON) |
+| `api_keys` | `{keyID}` | APIKey (JSON) |
+| `logs` | `{nanosecondTimestamp}_{randomHex}` | AuditLog (JSON) |
+| `sync_history` | `{syncRecordID}` | SyncRecord (JSON) |
+| `config` | `{key}` | Config value (JSON); also stores `__migration_version__`, `__config_version__`, label rules |
+| `config_history` | `{zeroPadded6DigitVersion}` | ConfigSnapshot (JSON); max 20 snapshots, rollback-capable |
+| `webhook_retries` | `{retryID}` | WebhookRetry (JSON) |
+| `repos` | — | Repository records (used only during cross-engine migration) |
 
 Performance optimizations:
-- Index-based PR lookups (O(1) vs O(n) scan)
+- Index-based PR lookups via `PutPRWithIndex` / `GetPRByIndex` (O(1) vs O(n) scan)
+- Two secondary index buckets: by PR UUID and by repo_group+PR number
 - Prefix-based queue iteration (scan only relevant repo group)
-- Single-pass stats computation (merged 5 scans into individual passes)
+- Single-writer actor (`consumer/writer.go`) serializes all bbolt writes through a buffered channel (buffer=256), eliminating write contention
+- MongoDB native indexes: unique on `prs.id`, unique compound on `(repo_group, pr_number)`, unique on `users.username`, unique on `api_keys.id`, non-unique on `webhook_retries.next_retry`
+
+Schema migrations (bbolt only):
+- Tracked via `__migration_version__` key in `BucketConfig`
+- Version 1: initializes migration tracking
+- Version 2: ensures `SpamFlag` defaults to `true` for PRs with `State == "spam"`
+- Three startup data migrations: repo group re-keying, PR state fixes, live state sync from platform APIs
+
+Config versioning:
+- Snapshots stored in `config_history` with auto-incrementing zero-padded versions
+- Auto-pruned to latest 20; rollback via `POST /api/v1/config/rollback`
 
 ## Development
 
