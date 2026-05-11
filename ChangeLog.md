@@ -2,6 +2,16 @@
 
 ## v20260511DEV > Unleased
 
+### Mid-Difficulty Features
+
+- **Issue-PR bidirectional linking**: New `IssuePRLink` model and `issue_pr_links` bucket. Automatically extracts issue references (`Fixes #123`, `Closes org/repo#456`, `Resolves #N`) from PR titles and bodies during webhook processing and sync. Cross-repo references supported via `owner/repo#N` format. REST API: `GET /api/v1/repos/:rg/issues/:issue_id/prs`, `GET /api/v1/repos/:rg/prs/:pr_id/issues`, `POST /api/v1/repos/:rg/prs/:pr_id/sync-links`. PR body is now parsed from GitHub, GitLab, and Gitea webhooks and stored in `PRRecord.Body`.
+
+- **PR templates & checklist validation**: New `PRTemplate` model and `pr_templates` bucket. Fetches PR templates from platform repos (`.github/PULL_REQUEST_TEMPLATE.md`, `.github/pull_request_template.md`, etc.) via new `GetFileContent` platform interface method. Checklist validation checks for unchecked items (`- [ ]`) in PR body, blocking merge until complete. REST API: `GET /api/v1/repos/:rg/template`, `POST /api/v1/repos/:rg/template/fetch`, `POST /api/v1/repos/:rg/prs/:pr_id/checklist`. New `GetPRBody` and `GetFileContent` methods added to all 5 platform clients.
+
+- **Cross-repo PR dependency tracking**: New `PRDependency` model and `pr_dependencies` bucket. Parses `Depends-on: <url>` declarations from PR descriptions. When a PR is merged, downstream dependent PRs can be identified for rebase notification. REST API: `GET /api/v1/repos/:rg/prs/:pr_id/dependencies`, `GET /api/v1/repos/:rg/prs/:pr_id/dependents`, `POST /api/v1/repos/:rg/prs/:pr_id/sync-deps`.
+
+- **Platform client interface extension**: Added `GetPRBody(ctx, owner, repo, number) (string, error)` and `GetFileContent(ctx, owner, repo, path) (string, error)` to `PlatformClient` interface. All 5 platform clients (GitHub, GitLab, Gitea, Bitbucket, Gerrit) implement both methods. Mock client updated accordingly.
+
 ### Low-Difficulty Features
 
 - **Notification digest/batching**: Notifications for the same PR within a 5-minute window are now batched into a single digest message. The first event sends immediately; subsequent events are buffered and dispatched as a summary when the window expires. Reduces notification spam when a PR has multiple rapid events (e.g., approve + CI pass + label). Digest format: `📋 PR {id}: N events` with per-event-type counts.

@@ -545,6 +545,9 @@ Please check this notifier's configuration and connectivity.
 - **Team Stats** — Per-author contribution metrics, top contributors chart, sortable authors table
 - **Bottleneck Analysis** — Identifies reopened, long-review, stale, and frequently-rejected PRs with P90/P95 lead time percentiles
 - **Scheduled Merge** — Schedule a PR to merge at a future time via the merge queue
+- **Issue-PR Links** — Automatic extraction of `Fixes #123` / `Closes org/repo#456` references from PR descriptions, with bidirectional lookup
+- **PR Templates** — Fetch and apply PR templates from repo (`.github/PULL_REQUEST_TEMPLATE.md`), with checklist validation blocking merge until complete
+- **Cross-Repo Dependencies** — Parse `Depends-on: <url>` declarations to track PR dependencies across repositories
 - **PR Management** — List, detail view, approve, close, reopen, spam/mark, comment, rebase, cherry-pick
 - **Merge Queue** — View queue status, recheck, clear, remove individual items
 - **Reports** — View generated report history with per-group and per-platform breakdowns

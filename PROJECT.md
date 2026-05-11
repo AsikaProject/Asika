@@ -239,6 +239,9 @@ Buckets (21 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `team_spaces` | `{spaceName}` | TeamSpace (JSON); team space with members and repo groups |
 | `space_members` | `{spaceName}:{username}` | SpaceMember (JSON); space membership with role |
 | `space_settings` | `{spaceName}:{key}` | Setting value (JSON); per-space config overrides |
+| `issue_pr_links` | `{issueID}:{prID}` | IssuePRLink (JSON); bidirectional issue-to-PR links parsed from PR descriptions |
+| `pr_dependencies` | `{prID}:{dependsOnPRID}` | PRDependency (JSON); cross-repo PR dependencies from `Depends-on:` declarations |
+| `pr_templates` | `{repoGroup}:{platform}` | PRTemplate (JSON); fetched PR templates with checklist detection |
 
 Performance optimizations:
 - Index-based PR lookups via `PutPRWithIndex` / `GetPRByIndex` (O(1) vs O(n) scan)
