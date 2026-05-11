@@ -469,3 +469,29 @@ func (c *GitHubClient) RevertPR(ctx context.Context, owner, repo string, number 
 		State:    "open",
 	}, nil
 }
+
+func (c *GitHubClient) GetPRBody(ctx context.Context, owner, repo string, number int) (string, error) {
+	pr, _, err := c.client.PullRequests.Get(ctx, owner, repo, number)
+	if err != nil {
+		return "", fmt.Errorf("failed to get PR: %w", err)
+	}
+	if pr.Body != nil {
+		return *pr.Body, nil
+	}
+	return "", nil
+}
+
+func (c *GitHubClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
+	file, _, _, err := c.client.Repositories.GetContents(ctx, owner, repo, path, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get file content: %w", err)
+	}
+	if file != nil && file.Content != nil {
+		content, err := file.GetContent()
+		if err != nil {
+			return "", fmt.Errorf("failed to decode file content: %w", err)
+		}
+		return content, nil
+	}
+	return "", nil
+}

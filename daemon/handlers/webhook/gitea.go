@@ -27,6 +27,7 @@ func parseGiteaWebhook(body []byte, repoGroup string, platform string) (string, 
 		Number      int    `json:"number"`
 		PullRequest struct {
 			Title  string `json:"title"`
+			Body   string `json:"body"`
 			State  string `json:"state"`
 			Merged bool   `json:"merged"`
 			Draft  bool   `json:"draft"`
@@ -59,6 +60,7 @@ func parseGiteaWebhook(body []byte, repoGroup string, platform string) (string, 
 		Platform:  platform,
 		PRNumber:  payload.Number,
 		Title:     payload.PullRequest.Title,
+		Body:      payload.PullRequest.Body,
 		Author:    author,
 		State:     payload.PullRequest.State,
 		RepoGroup: repoGroup,

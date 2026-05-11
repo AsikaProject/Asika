@@ -24,11 +24,12 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		ObjectKind       string `json:"object_kind"`
 		EventName        string `json:"event_name"`
 		ObjectAttributes struct {
-			IID    int    `json:"iid"`
-			Title  string `json:"title"`
-			State  string `json:"state"`
-			Action string `json:"action"`
-			Merged bool   `json:"merged"`
+			IID         int    `json:"iid"`
+			Title       string `json:"title"`
+			Description string `json:"description"`
+			State       string `json:"state"`
+			Action      string `json:"action"`
+			Merged      bool   `json:"merged"`
 		} `json:"object_attributes"`
 		User struct {
 			Username string `json:"username"`
@@ -56,6 +57,7 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		Platform:  "gitlab",
 		PRNumber:  payload.ObjectAttributes.IID,
 		Title:     title,
+		Body:      payload.ObjectAttributes.Description,
 		Author:    payload.User.Username,
 		State:     payload.ObjectAttributes.State,
 		RepoGroup: repoGroup,

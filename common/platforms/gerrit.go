@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"io"
+	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/andygrunwald/go-gerrit"
@@ -15,6 +18,9 @@ import (
 type GerritClient struct {
 	client        *gerrit.Client
 	webhookSecret string
+	baseURL       string
+	username      string
+	password      string
 }
 
 // NewGerritClient creates a new Gerrit client
@@ -34,6 +40,9 @@ func NewGerritClient(url, username, password, webhookSecret string) *GerritClien
 	return &GerritClient{
 		client:        client,
 		webhookSecret: webhookSecret,
+		baseURL:       url,
+		username:      username,
+		password:      password,
 	}
 }
 
@@ -419,4 +428,32 @@ func (c *GerritClient) RevertPR(ctx context.Context, owner, repo string, number 
 		PRNumber: prNumber,
 		State:    "open",
 	}, nil
+}
+
+func (c *GerritClient) GetPRBody(ctx context.Context, owner, repo string, number int) (string, error) {
+	changeID := fmt.Sprintf("%s~%d", owner, number)
+	info, _, err := c.client.Changes.GetChange(ctx, changeID, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get change: %w", err)
+	}
+	if info != nil {
+		return info.Subject, nil
+	}
+	return "", nil
+}
+
+func (c *GerritClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
+	endpoint := fmt.Sprintf("%s/projects/%s/files/%s/content", c.baseURL, url.PathEscape(owner), url.PathEscape(path))
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	req.SetBasicAuth(c.username, c.password)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return string(body), nil
 }

@@ -150,6 +150,14 @@ func (m *MockPlatformClient) RevertPR(ctx context.Context, owner, repo string, n
 	}, nil
 }
 
+func (m *MockPlatformClient) GetPRBody(ctx context.Context, owner, repo string, number int) (string, error) {
+	return "", m.Err
+}
+
+func (m *MockPlatformClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
+	return "", m.Err
+}
+
 func (m *MockPlatformClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
 	if m.Err != nil {
 		return nil, m.Err

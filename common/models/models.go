@@ -88,6 +88,7 @@ type PRRecord struct {
 	MergedAt       time.Time     `json:"merged_at"`              // when the PR was merged (zero if not merged)
 	BranchInfo     *PRBranchInfo `json:"branch_info,omitempty"`  // branch metadata for rebase
 	CloseReason    string        `json:"close_reason,omitempty"` // reason for closing (empty, a predefined reason, or custom text)
+	Body           string        `json:"body,omitempty"`         // PR description body for issue link parsing
 }
 
 // PREvent represents a pull request event
@@ -182,6 +183,32 @@ type SpamAuthor struct {
 	FirstSeen time.Time `json:"first_seen"`
 	LastSeen  time.Time `json:"last_seen"`
 	Count     int       `json:"count"`
+}
+
+// IssuePRLink represents a link between an Issue and a PR.
+type IssuePRLink struct {
+	IssueID    string `json:"issue_id"`    // e.g. "owner/repo#123"
+	PRID       string `json:"pr_id"`       // PRRecord.ID
+	RepoGroup  string `json:"repo_group"`
+	Platform   string `json:"platform"`
+	LinkType   string `json:"link_type"`   // "fixes" | "closes" | "resolves" | "related"
+}
+
+// PRDependency represents a dependency between two PRs.
+type PRDependency struct {
+	PRID           string `json:"pr_id"`           // the PR that depends on another
+	DependsOnPRID  string `json:"depends_on_pr_id"` // the PR being depended on
+	DependsOnURL   string `json:"depends_on_url"`  // original URL in description
+	RepoGroup      string `json:"repo_group"`
+	Platform       string `json:"platform"`
+}
+
+// PRTemplate represents a PR template for a repo group.
+type PRTemplate struct {
+	RepoGroup  string `json:"repo_group"`
+	Platform   string `json:"platform"`
+	Content    string `json:"content"`     // template body
+	HasChecklist bool  `json:"has_checklist"` // true if template contains checklist items
 }
 
 // Config represents the main configuration structure

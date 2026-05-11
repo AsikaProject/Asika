@@ -198,6 +198,21 @@ func (s *Server) setupRoutes() {
 		}
 
 		protected.GET("/stats/bottlenecks", handlers.GetBottleneckStats)
+
+		// Issue-PR links
+		protected.GET("/repos/:repo_group/issues/:issue_id/prs", handlers.GetIssueLinks)
+		protected.GET("/repos/:repo_group/prs/:pr_id/issues", handlers.GetPRLinks)
+		protected.POST("/repos/:repo_group/prs/:pr_id/sync-links", handlers.SyncIssueLinks)
+
+		// PR templates
+		protected.GET("/repos/:repo_group/template", handlers.GetPRTemplate)
+		protected.POST("/repos/:repo_group/template/fetch", handlers.FetchTemplate)
+		protected.POST("/repos/:repo_group/prs/:pr_id/checklist", handlers.CheckChecklist)
+
+		// PR dependencies
+		protected.GET("/repos/:repo_group/prs/:pr_id/dependencies", handlers.GetPRDependencies)
+		protected.GET("/repos/:repo_group/prs/:pr_id/dependents", handlers.GetPRDependents)
+		protected.POST("/repos/:repo_group/prs/:pr_id/sync-deps", handlers.SyncDependencies)
 		protected.POST("/auth/temp-token", handlers.CreateTempToken)
 
 		spaces := protected.Group("/spaces")

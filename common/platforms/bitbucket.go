@@ -531,3 +531,41 @@ func (c *BitbucketClient) RevertPR(ctx context.Context, owner, repo string, numb
 		State:    "open",
 	}, nil
 }
+
+func (c *BitbucketClient) GetPRBody(ctx context.Context, owner, repo string, number int) (string, error) {
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests/%d", owner, repo, number)
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.client.HttpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var result struct {
+		Description string `json:"description"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+	return result.Description, nil
+}
+
+func (c *BitbucketClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/src/HEAD/%s", owner, repo, path)
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.client.HttpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return string(body), nil
+}

@@ -104,6 +104,7 @@ func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		PullRequest struct {
 			Number  int    `json:"number"`
 			Title   string `json:"title"`
+			Body    string `json:"body"`
 			State   string `json:"state"`
 			Merged  bool   `json:"merged"`
 			Draft   bool   `json:"draft"`
@@ -134,6 +135,7 @@ func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		Platform:  "github",
 		PRNumber:  payload.PullRequest.Number,
 		Title:     payload.PullRequest.Title,
+		Body:      payload.PullRequest.Body,
 		Author:    payload.PullRequest.User.Login,
 		State:     payload.PullRequest.State,
 		RepoGroup: repoGroup,

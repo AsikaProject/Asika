@@ -22,4 +22,7 @@ const (
 	BucketTeamSpaces        = "team_spaces"
 	BucketSpaceMembers      = "space_members"
 	BucketSpaceSettings     = "space_settings"
+	BucketIssuePRLinks      = "issue_pr_links"
+	BucketPRDependencies    = "pr_dependencies"
+	BucketPRTemplates       = "pr_templates"
 )

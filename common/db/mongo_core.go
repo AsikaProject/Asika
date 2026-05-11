@@ -302,3 +302,144 @@ func (s *mongoStorage) AppendAuditLog(level, message string, ctxMap map[string]i
 	_, err := s.coll(BucketLogs).InsertOne(ctx, doc)
 	return err
 }
+
+func (s *mongoStorage) PutIssuePRLink(link *models.IssuePRLink) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	doc := bson.M{
+		"_id":        fmt.Sprintf("%s:%s", link.IssueID, link.PRID),
+		"issue_id":   link.IssueID,
+		"pr_id":      link.PRID,
+		"repo_group": link.RepoGroup,
+		"platform":   link.Platform,
+		"link_type":  link.LinkType,
+	}
+	_, err := s.coll(BucketIssuePRLinks).InsertOne(ctx, doc)
+	if err != nil {
+		_, err = s.coll(BucketIssuePRLinks).ReplaceOne(ctx, bson.M{"_id": doc["_id"]}, doc, options.Replace().SetUpsert(true))
+	}
+	return err
+}
+
+func (s *mongoStorage) GetIssuePRLinksByIssue(issueID string) ([]*models.IssuePRLink, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketIssuePRLinks).Find(ctx, bson.M{"issue_id": issueID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var links []*models.IssuePRLink
+	for cursor.Next(ctx) {
+		var link models.IssuePRLink
+		if err := cursor.Decode(&link); err != nil {
+			continue
+		}
+		links = append(links, &link)
+	}
+	return links, nil
+}
+
+func (s *mongoStorage) GetIssuePRLinksByPR(prID string) ([]*models.IssuePRLink, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketIssuePRLinks).Find(ctx, bson.M{"pr_id": prID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var links []*models.IssuePRLink
+	for cursor.Next(ctx) {
+		var link models.IssuePRLink
+		if err := cursor.Decode(&link); err != nil {
+			continue
+		}
+		links = append(links, &link)
+	}
+	return links, nil
+}
+
+func (s *mongoStorage) PutPRDependency(dep *models.PRDependency) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	doc := bson.M{
+		"_id":             fmt.Sprintf("%s:%s", dep.PRID, dep.DependsOnPRID),
+		"pr_id":           dep.PRID,
+		"depends_on_pr_id": dep.DependsOnPRID,
+		"depends_on_url":  dep.DependsOnURL,
+		"repo_group":      dep.RepoGroup,
+		"platform":        dep.Platform,
+	}
+	_, err := s.coll(BucketPRDependencies).InsertOne(ctx, doc)
+	if err != nil {
+		_, err = s.coll(BucketPRDependencies).ReplaceOne(ctx, bson.M{"_id": doc["_id"]}, doc, options.Replace().SetUpsert(true))
+	}
+	return err
+}
+
+func (s *mongoStorage) GetPRDependenciesByPR(prID string) ([]*models.PRDependency, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketPRDependencies).Find(ctx, bson.M{"pr_id": prID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var deps []*models.PRDependency
+	for cursor.Next(ctx) {
+		var dep models.PRDependency
+		if err := cursor.Decode(&dep); err != nil {
+			continue
+		}
+		deps = append(deps, &dep)
+	}
+	return deps, nil
+}
+
+func (s *mongoStorage) GetPRDependentsByPR(prID string) ([]*models.PRDependency, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketPRDependencies).Find(ctx, bson.M{"depends_on_pr_id": prID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var deps []*models.PRDependency
+	for cursor.Next(ctx) {
+		var dep models.PRDependency
+		if err := cursor.Decode(&dep); err != nil {
+			continue
+		}
+		deps = append(deps, &dep)
+	}
+	return deps, nil
+}
+
+func (s *mongoStorage) PutPRTemplate(tpl *models.PRTemplate) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	doc := bson.M{
+		"_id":           fmt.Sprintf("%s:%s", tpl.RepoGroup, tpl.Platform),
+		"repo_group":    tpl.RepoGroup,
+		"platform":      tpl.Platform,
+		"content":       tpl.Content,
+		"has_checklist": tpl.HasChecklist,
+	}
+	_, err := s.coll(BucketPRTemplates).InsertOne(ctx, doc)
+	if err != nil {
+		_, err = s.coll(BucketPRTemplates).ReplaceOne(ctx, bson.M{"_id": doc["_id"]}, doc, options.Replace().SetUpsert(true))
+	}
+	return err
+}
+
+func (s *mongoStorage) GetPRTemplate(repoGroup, platform string) (*models.PRTemplate, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	id := fmt.Sprintf("%s:%s", repoGroup, platform)
+	var tpl models.PRTemplate
+	err := s.coll(BucketPRTemplates).FindOne(ctx, bson.M{"_id": id}).Decode(&tpl)
+	if err != nil {
+		return nil, err
+	}
+	return &tpl, nil
+}

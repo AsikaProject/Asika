@@ -559,3 +559,21 @@ func (c *GitLabClient) RevertPR(ctx context.Context, owner, repo string, number 
 		State:    "open",
 	}, nil
 }
+
+func (c *GitLabClient) GetPRBody(ctx context.Context, owner, repo string, number int) (string, error) {
+	project := owner + "/" + repo
+	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get MR: %w", err)
+	}
+	return mr.Description, nil
+}
+
+func (c *GitLabClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
+	project := owner + "/" + repo
+	file, _, err := c.client.RepositoryFiles.GetFile(project, path, nil, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get file: %w", err)
+	}
+	return file.Content, nil
+}

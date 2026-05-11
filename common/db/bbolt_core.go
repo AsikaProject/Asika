@@ -32,6 +32,7 @@ func newBboltStorage(dbPath string) (*bboltStorage, error) {
 			BucketWebhookHealth, BucketReportHistory, BucketNotificationPrefs,
 			BucketNotificationDedup, BucketTeamSpaces, BucketSpaceMembers,
 			BucketSpaceSettings,
+			BucketIssuePRLinks, BucketPRDependencies, BucketPRTemplates,
 		}
 		for _, b := range buckets {
 			if _, err := tx.CreateBucketIfNotExists([]byte(b)); err != nil {
@@ -252,4 +253,102 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (s *bboltStorage) PutIssuePRLink(link *models.IssuePRLink) error {
+	data, err := json.Marshal(link)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("%s:%s", link.IssueID, link.PRID)
+	return s.Put(BucketIssuePRLinks, key, data)
+}
+
+func (s *bboltStorage) GetIssuePRLinksByIssue(issueID string) ([]*models.IssuePRLink, error) {
+	var links []*models.IssuePRLink
+	prefix := issueID + ":"
+	err := s.BucketForEachPrefix(BucketIssuePRLinks, prefix, func(key, value []byte) error {
+		var link models.IssuePRLink
+		if err := json.Unmarshal(value, &link); err != nil {
+			return nil
+		}
+		links = append(links, &link)
+		return nil
+	})
+	return links, err
+}
+
+func (s *bboltStorage) GetIssuePRLinksByPR(prID string) ([]*models.IssuePRLink, error) {
+	var links []*models.IssuePRLink
+	err := s.ForEach(BucketIssuePRLinks, func(key, value []byte) error {
+		var link models.IssuePRLink
+		if err := json.Unmarshal(value, &link); err != nil {
+			return nil
+		}
+		if link.PRID == prID {
+			links = append(links, &link)
+		}
+		return nil
+	})
+	return links, err
+}
+
+func (s *bboltStorage) PutPRDependency(dep *models.PRDependency) error {
+	data, err := json.Marshal(dep)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("%s:%s", dep.PRID, dep.DependsOnPRID)
+	return s.Put(BucketPRDependencies, key, data)
+}
+
+func (s *bboltStorage) GetPRDependenciesByPR(prID string) ([]*models.PRDependency, error) {
+	var deps []*models.PRDependency
+	prefix := prID + ":"
+	err := s.BucketForEachPrefix(BucketPRDependencies, prefix, func(key, value []byte) error {
+		var dep models.PRDependency
+		if err := json.Unmarshal(value, &dep); err != nil {
+			return nil
+		}
+		deps = append(deps, &dep)
+		return nil
+	})
+	return deps, err
+}
+
+func (s *bboltStorage) GetPRDependentsByPR(prID string) ([]*models.PRDependency, error) {
+	var deps []*models.PRDependency
+	err := s.ForEach(BucketPRDependencies, func(key, value []byte) error {
+		var dep models.PRDependency
+		if err := json.Unmarshal(value, &dep); err != nil {
+			return nil
+		}
+		if dep.DependsOnPRID == prID {
+			deps = append(deps, &dep)
+		}
+		return nil
+	})
+	return deps, err
+}
+
+func (s *bboltStorage) PutPRTemplate(tpl *models.PRTemplate) error {
+	data, err := json.Marshal(tpl)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("%s:%s", tpl.RepoGroup, tpl.Platform)
+	return s.Put(BucketPRTemplates, key, data)
+}
+
+func (s *bboltStorage) GetPRTemplate(repoGroup, platform string) (*models.PRTemplate, error) {
+	key := fmt.Sprintf("%s:%s", repoGroup, platform)
+	data, err := s.Get(BucketPRTemplates, key)
+	if err != nil || data == nil {
+		return nil, err
+	}
+	var tpl models.PRTemplate
+	if err := json.Unmarshal(data, &tpl); err != nil {
+		return nil, err
+	}
+	return &tpl, nil
 }

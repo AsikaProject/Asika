@@ -528,3 +528,22 @@ func (c *GiteaClient) RevertPR(ctx context.Context, owner, repo string, number i
 		State:    "open",
 	}, nil
 }
+
+func (c *GiteaClient) GetPRBody(ctx context.Context, owner, repo string, number int) (string, error) {
+	pr, _, err := c.client.GetPullRequest(owner, repo, int64(number))
+	if err != nil {
+		return "", fmt.Errorf("failed to get PR: %w", err)
+	}
+	return pr.Body, nil
+}
+
+func (c *GiteaClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
+	content, _, err := c.client.GetContents(owner, repo, "", path)
+	if err != nil {
+		return "", fmt.Errorf("failed to get file content: %w", err)
+	}
+	if content != nil && content.Content != nil {
+		return *content.Content, nil
+	}
+	return "", nil
+}

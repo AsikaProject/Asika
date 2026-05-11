@@ -64,4 +64,10 @@ type PlatformClient interface {
 
 	// Revert creates a revert PR for a merged PR and returns the new PR record
 	RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error)
+
+	// GetPRBody returns the body/description of a PR
+	GetPRBody(ctx context.Context, owner, repo string, number int) (string, error)
+
+	// GetFileContent returns the content of a file in a repository
+	GetFileContent(ctx context.Context, owner, repo, path string) (string, error)
 }

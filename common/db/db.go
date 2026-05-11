@@ -59,6 +59,14 @@ type Storage interface {
 	GetUserSpaces(username string) ([]string, error)
 	PutSpaceSetting(spaceName, key string, value []byte) error
 	GetSpaceSetting(spaceName, key string) ([]byte, error)
+	PutIssuePRLink(link *models.IssuePRLink) error
+	GetIssuePRLinksByIssue(issueID string) ([]*models.IssuePRLink, error)
+	GetIssuePRLinksByPR(prID string) ([]*models.IssuePRLink, error)
+	PutPRDependency(dep *models.PRDependency) error
+	GetPRDependenciesByPR(prID string) ([]*models.PRDependency, error)
+	GetPRDependentsByPR(prID string) ([]*models.PRDependency, error)
+	PutPRTemplate(tpl *models.PRTemplate) error
+	GetPRTemplate(repoGroup, platform string) (*models.PRTemplate, error)
 }
 
 // ConfigSnapshotEntry represents a stored config version.
@@ -233,4 +241,28 @@ func PutSpaceSetting(spaceName, key string, value []byte) error {
 }
 func GetSpaceSetting(spaceName, key string) ([]byte, error) {
 	return mustStorage().GetSpaceSetting(spaceName, key)
+}
+func PutIssuePRLink(link *models.IssuePRLink) error {
+	return mustStorage().PutIssuePRLink(link)
+}
+func GetIssuePRLinksByIssue(issueID string) ([]*models.IssuePRLink, error) {
+	return mustStorage().GetIssuePRLinksByIssue(issueID)
+}
+func GetIssuePRLinksByPR(prID string) ([]*models.IssuePRLink, error) {
+	return mustStorage().GetIssuePRLinksByPR(prID)
+}
+func PutPRDependency(dep *models.PRDependency) error {
+	return mustStorage().PutPRDependency(dep)
+}
+func GetPRDependenciesByPR(prID string) ([]*models.PRDependency, error) {
+	return mustStorage().GetPRDependenciesByPR(prID)
+}
+func GetPRDependentsByPR(prID string) ([]*models.PRDependency, error) {
+	return mustStorage().GetPRDependentsByPR(prID)
+}
+func PutPRTemplate(tpl *models.PRTemplate) error {
+	return mustStorage().PutPRTemplate(tpl)
+}
+func GetPRTemplate(repoGroup, platform string) (*models.PRTemplate, error) {
+	return mustStorage().GetPRTemplate(repoGroup, platform)
 }
