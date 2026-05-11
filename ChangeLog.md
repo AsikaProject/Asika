@@ -2,6 +2,16 @@
 
 ## v20260511DEV > Unleased
 
+### High-Difficulty Features
+
+- **Serial merge validation**: New `SerialWorker` in `daemon/queue/serial_worker.go` runs an independent validation queue before merge. State machine: `validating → rebasing → waiting_ci → ci_running → ready → merging`. Each PR is rebased onto latest `main`, force-pushed, and CI is re-validated before marking merge-ready. Prevents "multiple PRs pass CI individually but fail after merge" problems. New `serial_queue` bucket and `QueueItem.ValidationStatus`/`ValidationDetail` fields. `RebaseAndPush` added to `common/gitutil`.
+
+- **Cross-team PR collaboration**: New `cross_space_deps` bucket. When a PR is merged, `NotifyCrossSpaceDeps` checks `PRDependency` records for cross-space dependents. Publishes `EventSyncCompleted` notification to downstream PRs in other spaces with rebase instructions. REST API: `GET /api/v1/repos/:rg/prs/:id/cross-space-deps`, `GET /api/v1/cross-space-deps/:source/:target`, `POST /api/v1/cross-space-deps/:source/:target/resolve`.
+
+- **Role-based tiered notifications**: New `EscalationWorker` in `daemon/server/core/escalation.go` implements 3-level escalation per priority. Critical PRs: reviewer (1h) → team (2h) → tech_lead (4h). Urgent PRs: reviewer (4h) → team (8h) → tech_lead (12h). Normal PRs: reviewer (24h) → team (48h). Priority determined by labels (`critical`, `security`, `breaking-change`, `hotfix`, `urgent`, `high-priority`) and file paths (`src/core/`, `src/security/`, `cmd/`). Escalation state persisted to `escalation_rules` bucket to prevent duplicate notifications.
+
+- **Refactor**: Split `common/gitutil/git.go` (551 lines) into `git.go` (291 lines, high-level API), `git_ops.go` (125 lines, low-level git operations), `git_util.go` (104 lines, internal utilities). Split `daemon/handlers/webhook/webhook.go` into `webhook/` sub-package (previously done). Added tests for serial worker (4 tests), cross-space deps (4 tests), escalation (3 tests).
+
 ### Mid-Difficulty Features
 
 - **Issue-PR bidirectional linking**: New `IssuePRLink` model and `issue_pr_links` bucket. Automatically extracts issue references (`Fixes #123`, `Closes org/repo#456`, `Resolves #N`) from PR titles and bodies during webhook processing and sync. Cross-repo references supported via `owner/repo#N` format. REST API: `GET /api/v1/repos/:rg/issues/:issue_id/prs`, `GET /api/v1/repos/:rg/prs/:pr_id/issues`, `POST /api/v1/repos/:rg/prs/:pr_id/sync-links`. PR body is now parsed from GitHub, GitLab, and Gitea webhooks and stored in `PRRecord.Body`.

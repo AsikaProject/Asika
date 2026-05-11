@@ -548,8 +548,11 @@ Please check this notifier's configuration and connectivity.
 - **Issue-PR Links** — Automatic extraction of `Fixes #123` / `Closes org/repo#456` references from PR descriptions, with bidirectional lookup
 - **PR Templates** — Fetch and apply PR templates from repo (`.github/PULL_REQUEST_TEMPLATE.md`), with checklist validation blocking merge until complete
 - **Cross-Repo Dependencies** — Parse `Depends-on: <url>` declarations to track PR dependencies across repositories
+- **Cross-Team Collaboration** — When a PR in one team space is merged, dependent PRs in other spaces are automatically notified to rebase
+- **Tiered Escalation** — PRs escalate automatically: reviewer → team → tech_lead based on labels (`critical`, `security`, `hotfix`, etc.) and time open. Critical PRs escalate in hours, normal PRs in days
+- **Serial Merge Validation** — Before merging, PRs are rebased onto latest `main` and CI is re-validated to prevent post-merge failures
 - **PR Management** — List, detail view, approve, close, reopen, spam/mark, comment, rebase, cherry-pick
-- **Merge Queue** — View queue status, recheck, clear, remove individual items
+- **Merge Queue** — View queue status, recheck, clear, remove individual items, schedule future merges
 - **Reports** — View generated report history with per-group and per-platform breakdowns
 - **System Usage** — Real-time CPU/memory monitoring with auto-refresh, GOMEMLIMIT tracking, color-coded progress bar
 - **User Management** — Create, edit, delete users with role and permission assignment, repo group access control

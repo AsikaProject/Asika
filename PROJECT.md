@@ -169,6 +169,8 @@ Temporary tokens: Users can generate short-lived JWT tokens (1m–24h) with a `t
 - **Stale Checker** — Periodically checks for and handles stale PRs
 - **Webhook Retry Worker** — Retries failed webhook deliveries with exponential backoff
 - **Webhook Health Checker** — Every 2 minutes, checks `webhook_health` bucket per repo group/platform. If no webhook received within threshold, enables forced polling for that repo group (auto-fallback).
+- **Serial Validation Worker** — Processes `serial_queue` bucket items through validation state machine: rebase onto latest main → re-validate CI → mark merge-ready. Prevents post-merge CI failures.
+- **Escalation Worker** — Hourly scans open PRs, calculates priority from labels + file paths, sends tiered notifications: reviewer → team → tech_lead based on priority and time open.
 
 ### Actor System (Goroutine Pools)
 
@@ -242,6 +244,9 @@ Buckets (21 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `issue_pr_links` | `{issueID}:{prID}` | IssuePRLink (JSON); bidirectional issue-to-PR links parsed from PR descriptions |
 | `pr_dependencies` | `{prID}:{dependsOnPRID}` | PRDependency (JSON); cross-repo PR dependencies from `Depends-on:` declarations |
 | `pr_templates` | `{repoGroup}:{platform}` | PRTemplate (JSON); fetched PR templates with checklist detection |
+| `serial_queue` | `{repoGroup}#{prID}` | QueueItem (JSON); serial validation queue with `ValidationStatus` field |
+| `cross_space_deps` | `{sourcePRID}:{targetPRID}` | CrossSpaceDep (JSON); cross-space dependency records |
+| `escalation_rules` | `{prID}` or `"default"` | Escalation state (JSON); last escalation timestamp or level |
 
 Performance optimizations:
 - Index-based PR lookups via `PutPRWithIndex` / `GetPRByIndex` (O(1) vs O(n) scan)
