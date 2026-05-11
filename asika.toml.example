@@ -55,6 +55,8 @@ gerrit.username = ""
 gerrit.password = ""
 
 # Merge queue defaults (overridable per repo group)
+# Scheduled merge: use POST /api/v1/repos/:rg/prs/:id/schedule-merge with
+#   { "schedule_at": "2026-05-11T14:00:00+08:00" } to queue a PR for future merge.
 [merge_queue]
 required_approvals = 1
 ci_check_required  = true

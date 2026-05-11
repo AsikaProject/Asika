@@ -216,6 +216,9 @@ asika queue recheck [group]    # Trigger recheck
 asika queue clear [group]      # Clear all queue items
 asika queue remove <group> <id>  # Remove specific PR
 
+# Scheduled merge
+asika pr schedule-merge [group] [id] --at "2026-05-11T14:00:00+08:00"  # Schedule a PR merge
+
 # API Key management
 asika apikey create <name> <role>   # Create API key (admin only)
 asika apikey list                   # List all API keys (admin only)
@@ -510,6 +513,17 @@ config = { webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/xxx",
            app_id = "cli_xxx", app_secret = "xxx" }
 ```
 
+### Notification Digest
+
+Rapid events on the same PR are batched into a single digest notification to reduce spam. The first event sends immediately; subsequent events within a 5-minute window are combined into a summary:
+
+```
+📋 PR uuid-123: 3 events
+  • approved
+  • ci_passed
+  • labeled ×2
+```
+
 ### Fault Alerting
 
 When a notification channel fails to send 3 consecutive times, Asika automatically sends a fault alert through all other configured notifiers. Each channel tracks failures independently, and the counter resets on the next successful send.
@@ -529,6 +543,8 @@ Please check this notifier's configuration and connectivity.
 
 - **Dashboard** — DORA metrics, overview stats, PR breakdowns by repo group/platform, recent activity
 - **Team Stats** — Per-author contribution metrics, top contributors chart, sortable authors table
+- **Bottleneck Analysis** — Identifies reopened, long-review, stale, and frequently-rejected PRs with P90/P95 lead time percentiles
+- **Scheduled Merge** — Schedule a PR to merge at a future time via the merge queue
 - **PR Management** — List, detail view, approve, close, reopen, spam/mark, comment, rebase, cherry-pick
 - **Merge Queue** — View queue status, recheck, clear, remove individual items
 - **Reports** — View generated report history with per-group and per-platform breakdowns

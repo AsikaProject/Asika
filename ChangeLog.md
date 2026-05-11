@@ -2,6 +2,16 @@
 
 ## v20260511DEV > Unleased
 
+### Low-Difficulty Features
+
+- **Notification digest/batching**: Notifications for the same PR within a 5-minute window are now batched into a single digest message. The first event sends immediately; subsequent events are buffered and dispatched as a summary when the window expires. Reduces notification spam when a PR has multiple rapid events (e.g., approve + CI pass + label). Digest format: `📋 PR {id}: N events` with per-event-type counts.
+
+- **Bottleneck identification**: New `GET /api/v1/stats/bottlenecks` endpoint identifies four categories of bottleneck PRs: reopened PRs (multiple reopen cycles), long-review PRs (open >48h with review activity), stale PRs (open >50% of review period with review requests), and frequent-reject PRs (≥2 review rejections). Also computes P90/P95 lead time percentiles. New `BottleneckStats` and `BottleneckPR` models.
+
+- **Temporary privilege escalation tokens**: New `POST /api/v1/auth/temp-token` endpoint generates short-lived JWT tokens (1m–24h) with elevated permissions. Users with existing access can create temp tokens for CI/CD or one-off operations without sharing their main token. Temp tokens include `temp: true` claim and a `permissions` map checked by `RequirePermission` middleware before falling through to DB permissions. `GenerateTempToken`, `IsTempToken`, and `GetTempPermissions` APIs in `common/auth`.
+
+- **Scheduled merge**: New `POST /api/v1/repos/:rg/prs/:id/schedule-merge` endpoint allows queuing a PR with a future merge time (RFC3339 format). The queue checker skips items whose `ScheduleAt` time has not yet arrived. `QueueItem` model now includes `ScheduleAt` field. `AddToQueueScheduled` exported from `queue.Manager` and `pr` sub-package.
+
 ### Phase 1 — Immediate Features
 
 - **Webhook health check + polling fallback**: New `webhook_health` bbolt/MongoDB bucket. `GET /api/v1/webhooks/health` returns per-repo-group/platform status (last seen, healthy/unhealthy). Background health checker worker runs every 2 minutes; if no webhook received within threshold (default 5m), forced polling is automatically enabled for the affected repo group. Configurable via `[events]` section (`health_check_interval`, `health_check_threshold`).

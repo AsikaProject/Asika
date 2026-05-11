@@ -157,9 +157,11 @@ Three-tier role hierarchy with six granular permissions:
 
 Non-admin users can be assigned to specific repo groups. Empty `AllowedRepoGroups` = access to all groups (backward compatible).
 
+Temporary tokens: Users can generate short-lived JWT tokens (1m–24h) with a `temp: true` claim and a `permissions` map. `RequirePermission` middleware checks temp token permissions before falling through to DB permissions. Generated via `POST /api/v1/auth/temp-token`.
+
 ### Background Workers
 
-- **Queue Checker** — Every 30s, checks all queue items for merge readiness (approvals, CI, conflicts)
+- **Queue Checker** — Every 30s, checks all queue items for merge readiness (approvals, CI, conflicts). Items with a future `ScheduleAt` time are skipped until the scheduled time arrives.
 - **Spam Detector** — Scans for spam PRs based on author frequency and title keywords
 - **Spam Auto-Clean** — Periodically clears spam keywords and resets author trigger (configurable interval)
 - **Poller** — Fetches PRs from platforms at configured intervals (polling mode)
@@ -213,7 +215,7 @@ The project supports two database backends via a pluggable `Storage` interface (
 
 The active backend is selected at startup via `models.DatabaseConfig.Type` (`"bbolt"` or `"mongo"`). Cross-engine migration is available via `MigrateBboltToMongo()` / `MigrateMongoToBbolt()`.
 
-Buckets (21 total, defined in `common/db/buckets.go`):
+Buckets (21 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
 
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
