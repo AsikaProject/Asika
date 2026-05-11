@@ -218,6 +218,25 @@ func (s *Server) setupRoutes() {
 		protected.GET("/repos/:repo_group/prs/:pr_id/cross-space-deps", handlers.ListCrossSpaceDeps)
 		protected.GET("/cross-space-deps/:source_pr_id/:target_pr_id", handlers.GetCrossSpaceDeps)
 		protected.POST("/cross-space-deps/:source_pr_id/:target_pr_id/resolve", handlers.ResolveCrossSpaceDep)
+
+		// PR Stacks
+		stacksGroup := protected.Group("/stacks")
+		stacksGroup.Use(RequireAnyRole("viewer", "operator", "admin"))
+		{
+			stacksGroup.GET("", handlers.ListStacks)
+			stacksGroup.GET("/:id", handlers.GetStack)
+
+			stacksWrite := stacksGroup.Group("")
+			stacksWrite.Use(RequirePermission("merge"))
+			{
+				stacksWrite.POST("", handlers.CreateStack)
+				stacksWrite.DELETE("/:id", handlers.DeleteStack)
+				stacksWrite.POST("/:id/members", handlers.AddStackMember)
+				stacksWrite.DELETE("/:id/members/:pr_id", handlers.RemoveStackMember)
+				stacksWrite.PUT("/:id/members/:pr_id/state", handlers.UpdateStackMemberState)
+				stacksWrite.POST("/repos/:repo_group/prs/:pr_id/sync", handlers.SyncStackFromPR)
+			}
+		}
 		protected.POST("/auth/temp-token", handlers.CreateTempToken)
 
 		spaces := protected.Group("/spaces")

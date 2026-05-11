@@ -191,6 +191,29 @@ type SpamAuthor struct {
 	Count     int       `json:"count"`
 }
 
+// PRStack represents a cross-platform PR chain/stack.
+type PRStack struct {
+	ID          string       `json:"id"`          // UUID
+	Name        string       `json:"name"`        // human-readable name, e.g. "feature-auth"
+	Description string       `json:"description"` // optional description
+	Author      string       `json:"author"`      // creator of the stack
+	State       string       `json:"state"`       // "open"|"merged"|"partial"|"failed"
+	Members     []StackMember `json:"members"`    // PRs in this stack
+	CreatedAt   time.Time    `json:"created_at"`
+	UpdatedAt   time.Time    `json:"updated_at"`
+}
+
+// StackMember represents a single PR within a stack.
+type StackMember struct {
+	PRID       string `json:"pr_id"`       // PRRecord.ID
+	Platform   string `json:"platform"`    // "github"|"gitlab"|...
+	PRNumber   int    `json:"pr_number"`   // PR number on the platform
+	RepoGroup  string `json:"repo_group"`  // repo group name
+	Stage      int    `json:"stage"`       // ordering: 0 = base, 1 = next, etc.
+	State      string `json:"state"`       // "open"|"merged"|"failed"
+	HTMLURL    string `json:"html_url"`    // link to the PR
+}
+
 // IssuePRLink represents a link between an Issue and a PR.
 type IssuePRLink struct {
 	IssueID    string `json:"issue_id"`    // e.g. "owner/repo#123"

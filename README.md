@@ -551,6 +551,8 @@ Please check this notifier's configuration and connectivity.
 - **Cross-Team Collaboration** — When a PR in one team space is merged, dependent PRs in other spaces are automatically notified to rebase
 - **Tiered Escalation** — PRs escalate automatically: reviewer → team → tech_lead based on labels (`critical`, `security`, `hotfix`, etc.) and time open. Critical PRs escalate in hours, normal PRs in days
 - **Serial Merge Validation** — Before merging, PRs are rebased onto latest `main` and CI is re-validated to prevent post-merge failures
+- **PR Stack / Chain** — Track cross-platform PR chains (e.g., GitHub PR #42 ↔ GitLab MR #15). Auto-detects links from PR descriptions. Stack state tracks overall progress
+- **Token Encryption** — Platform tokens encrypted at rest with AES-256-GCM. Master key from `ASIKA_MASTER_KEY` environment variable
 - **PR Management** — List, detail view, approve, close, reopen, spam/mark, comment, rebase, cherry-pick
 - **Merge Queue** — View queue status, recheck, clear, remove individual items, schedule future merges
 - **Reports** — View generated report history with per-group and per-platform breakdowns

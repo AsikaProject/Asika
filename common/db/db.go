@@ -67,6 +67,10 @@ type Storage interface {
 	GetPRDependentsByPR(prID string) ([]*models.PRDependency, error)
 	PutPRTemplate(tpl *models.PRTemplate) error
 	GetPRTemplate(repoGroup, platform string) (*models.PRTemplate, error)
+	PutPRStack(stack *models.PRStack) error
+	GetPRStack(id string) (*models.PRStack, error)
+	ListPRStacks() ([]*models.PRStack, error)
+	DeletePRStack(id string) error
 }
 
 // ConfigSnapshotEntry represents a stored config version.
@@ -265,4 +269,16 @@ func PutPRTemplate(tpl *models.PRTemplate) error {
 }
 func GetPRTemplate(repoGroup, platform string) (*models.PRTemplate, error) {
 	return mustStorage().GetPRTemplate(repoGroup, platform)
+}
+func PutPRStack(stack *models.PRStack) error {
+	return mustStorage().PutPRStack(stack)
+}
+func GetPRStack(id string) (*models.PRStack, error) {
+	return mustStorage().GetPRStack(id)
+}
+func ListPRStacks() ([]*models.PRStack, error) {
+	return mustStorage().ListPRStacks()
+}
+func DeletePRStack(id string) error {
+	return mustStorage().DeletePRStack(id)
 }

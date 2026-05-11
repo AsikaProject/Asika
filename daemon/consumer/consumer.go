@@ -239,6 +239,9 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 
 	// Check cross-space dependencies
 	go handlers.NotifyCrossSpaceDeps(pr)
+
+	// Update PR stack member state
+	go handlers.UpdateStackMemberStateOnMerge(pr)
 }
 
 func (c *Consumer) handlePRApproved(event events.Event) {

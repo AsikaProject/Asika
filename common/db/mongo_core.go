@@ -443,3 +443,60 @@ func (s *mongoStorage) GetPRTemplate(repoGroup, platform string) (*models.PRTemp
 	}
 	return &tpl, nil
 }
+
+func (s *mongoStorage) PutPRStack(stack *models.PRStack) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	doc := bson.M{
+		"_id":         stack.ID,
+		"name":        stack.Name,
+		"description": stack.Description,
+		"author":      stack.Author,
+		"state":       stack.State,
+		"members":     stack.Members,
+		"created_at":  stack.CreatedAt,
+		"updated_at":  stack.UpdatedAt,
+	}
+	_, err := s.coll(BucketPRStacks).InsertOne(ctx, doc)
+	if err != nil {
+		_, err = s.coll(BucketPRStacks).ReplaceOne(ctx, bson.M{"_id": stack.ID}, doc, options.Replace().SetUpsert(true))
+	}
+	return err
+}
+
+func (s *mongoStorage) GetPRStack(id string) (*models.PRStack, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var stack models.PRStack
+	err := s.coll(BucketPRStacks).FindOne(ctx, bson.M{"_id": id}).Decode(&stack)
+	if err != nil {
+		return nil, err
+	}
+	return &stack, nil
+}
+
+func (s *mongoStorage) ListPRStacks() ([]*models.PRStack, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketPRStacks).Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var stacks []*models.PRStack
+	for cursor.Next(ctx) {
+		var stack models.PRStack
+		if err := cursor.Decode(&stack); err != nil {
+			continue
+		}
+		stacks = append(stacks, &stack)
+	}
+	return stacks, nil
+}
+
+func (s *mongoStorage) DeletePRStack(id string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := s.coll(BucketPRStacks).DeleteOne(ctx, bson.M{"_id": id})
+	return err
+}

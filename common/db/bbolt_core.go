@@ -34,6 +34,7 @@ func newBboltStorage(dbPath string) (*bboltStorage, error) {
 			BucketSpaceSettings,
 			BucketIssuePRLinks, BucketPRDependencies, BucketPRTemplates,
 			BucketSerialQueue, BucketCrossSpaceDeps, BucketEscalationRules,
+			BucketPRStacks,
 		}
 		for _, b := range buckets {
 			if _, err := tx.CreateBucketIfNotExists([]byte(b)); err != nil {
@@ -352,4 +353,41 @@ func (s *bboltStorage) GetPRTemplate(repoGroup, platform string) (*models.PRTemp
 		return nil, err
 	}
 	return &tpl, nil
+}
+
+func (s *bboltStorage) PutPRStack(stack *models.PRStack) error {
+	data, err := json.Marshal(stack)
+	if err != nil {
+		return err
+	}
+	return s.Put(BucketPRStacks, stack.ID, data)
+}
+
+func (s *bboltStorage) GetPRStack(id string) (*models.PRStack, error) {
+	data, err := s.Get(BucketPRStacks, id)
+	if err != nil || data == nil {
+		return nil, err
+	}
+	var stack models.PRStack
+	if err := json.Unmarshal(data, &stack); err != nil {
+		return nil, err
+	}
+	return &stack, nil
+}
+
+func (s *bboltStorage) ListPRStacks() ([]*models.PRStack, error) {
+	var stacks []*models.PRStack
+	err := s.ForEach(BucketPRStacks, func(key, value []byte) error {
+		var stack models.PRStack
+		if err := json.Unmarshal(value, &stack); err != nil {
+			return nil
+		}
+		stacks = append(stacks, &stack)
+		return nil
+	})
+	return stacks, err
+}
+
+func (s *bboltStorage) DeletePRStack(id string) error {
+	return s.Delete(BucketPRStacks, id)
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/google/uuid"
 
+	"asika/common/crypto"
 	"asika/common/db"
 	"asika/common/models"
 )
@@ -128,6 +129,10 @@ func Load(path string) (*models.Config, error) {
 	// Validate configuration
 	if err := validate(cfg); err != nil {
 		return nil, err
+	}
+
+	if err := crypto.DecryptTokensInConfig(cfg); err != nil {
+		return nil, fmt.Errorf("failed to decrypt tokens: %w", err)
 	}
 
 	Store(cfg)
@@ -477,7 +482,8 @@ func GenerateUUID() string {
 	return uuid.New().String()
 }
 
-// SaveToFile writes the config to the configured file path
+// SaveToFile writes the config to the configured file path.
+// Tokens are encrypted before writing if encryption is enabled.
 func SaveToFile(cfg models.Config) error {
 	path := ConfigPath
 	if path == "" {
@@ -490,6 +496,10 @@ func SaveToFile(cfg models.Config) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+
+	if err := crypto.EncryptTokensInConfig(&cfg); err != nil {
+		return fmt.Errorf("failed to encrypt tokens: %w", err)
 	}
 
 	f, err := os.Create(path)
