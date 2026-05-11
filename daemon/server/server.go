@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
-	"net/http/pprof"
 	"strings"
 	"time"
 
@@ -14,13 +13,10 @@ import (
 	"golang.org/x/time/rate"
 
 	"asika/common/config"
-	"asika/common/db"
 	"asika/common/i18n"
 	"asika/common/models"
 	"asika/common/platforms"
 	"asika/daemon/handlers"
-	"asika/daemon/handlers/webhook"
-	"asika/daemon/platform/feishu"
 	"asika/daemon/templates"
 )
 
@@ -48,7 +44,6 @@ func NewServer(cfg *models.Config, clients map[platforms.PlatformType]platforms.
 
 	engine := gin.New()
 
-	// Load HTML templates from embedded FS with i18n function
 	t, err := template.New("").Funcs(template.FuncMap{"t": tFunc, "currentLang": currentLangFunc}).ParseFS(templates.FS, "*.html")
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse templates: %v", err))
@@ -61,7 +56,6 @@ func NewServer(cfg *models.Config, clients map[platforms.PlatformType]platforms.
 		clients: clients,
 	}
 
-	// Initialize handlers with clients
 	handlers.InitClients(clients)
 
 	s.setupMiddleware()
@@ -70,7 +64,6 @@ func NewServer(cfg *models.Config, clients map[platforms.PlatformType]platforms.
 	return s
 }
 
-// initCheckMiddleware redirects to wizard if not initialized
 func initCheckMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
@@ -105,7 +98,6 @@ func initCheckMiddleware() gin.HandlerFunc {
 	}
 }
 
-// setupMiddleware configures middleware
 func (s *Server) setupMiddleware() {
 	s.engine.Use(initCheckMiddleware())
 	s.engine.Use(LocaleMiddleware())
@@ -119,396 +111,6 @@ func (s *Server) setupMiddleware() {
 		}
 	}
 	s.engine.Use(AuthMiddleware())
-}
-
-// setupRoutes configures routes according to tasks.md section 8
-func (s *Server) setupRoutes() {
-	s.engine.GET("/health", healthHandler)
-	s.engine.GET("/metrics", metricsHandler)
-
-	// pprof debug endpoints (no auth, only in debug mode)
-	if s.cfg != nil && s.cfg.Server.EnablePprof {
-		debug := s.engine.Group("/debug/pprof")
-		debug.GET("/", gin.WrapF(pprof.Index))
-		debug.GET("/cmdline", gin.WrapF(pprof.Cmdline))
-		debug.GET("/profile", gin.WrapF(pprof.Profile))
-		debug.POST("/symbol", gin.WrapF(pprof.Symbol))
-		debug.GET("/symbol", gin.WrapF(pprof.Symbol))
-		debug.GET("/trace", gin.WrapF(pprof.Trace))
-		debug.GET("/allocs", gin.WrapF(pprof.Handler("allocs").ServeHTTP))
-		debug.GET("/block", gin.WrapF(pprof.Handler("block").ServeHTTP))
-		debug.GET("/goroutine", gin.WrapF(pprof.Handler("goroutine").ServeHTTP))
-		debug.GET("/heap", gin.WrapF(pprof.Handler("heap").ServeHTTP))
-		debug.GET("/mutex", gin.WrapF(pprof.Handler("mutex").ServeHTTP))
-		debug.GET("/threadcreate", gin.WrapF(pprof.Handler("threadcreate").ServeHTTP))
-	}
-
-	api := s.engine.Group("/api/v1")
-
-	// Authentication routes (8.1)
-	auth := api.Group("/auth")
-	{
-		auth.POST("/login", handlers.Login)
-		auth.POST("/logout", handlers.Logout)
-	}
-
-	// i18n locale switcher (no auth required, cookie-based)
-	api.POST("/locale", handlers.SetLocale)
-
-	// Wizard routes (10. WebUI Wizard)
-	wizard := api.Group("/wizard")
-	{
-		wizard.GET("", handlers.GetWizardSteps)
-		wizard.POST("/step/complete", handlers.CompleteWizard)
-		wizard.POST("/step/:step", handlers.SubmitWizardStep)
-	}
-
-	// Protected routes (require JWT or API Key)
-	protected := api.Group("")
-	protected.Use(RequireAuth())
-	// API key auth runs inside RequireAuth as fallback
-
-	// API Key management (admin only, JWT required — not API key)
-	apiKeys := protected.Group("/apikeys")
-	apiKeys.Use(RequireRole("admin"))
-	{
-		apiKeys.POST("", handlers.CreateAPIKey)
-		apiKeys.GET("", handlers.ListAPIKeys)
-		apiKeys.DELETE("/:id", handlers.RevokeAPIKey)
-	}
-	{
-		// User management (8.1)
-		users := protected.Group("/users")
-		users.Use(RequireRole("admin"))
-		{
-			users.GET("", handlers.ListUsers)
-			users.POST("", handlers.CreateUser)
-			users.PUT("/:username", handlers.UpdateUser)
-			users.DELETE("/:username", handlers.DeleteUser)
-		}
-
-		// PR management (8.2)
-		prs := protected.Group("/repos/:repo_group/prs")
-		prs.Use(RequireAnyRole("viewer", "operator", "admin"))
-		prs.Use(RequireRepoGroupAccess())
-		{
-			prs.GET("", handlers.ListPRs)
-			prs.POST("/sync", handlers.ListPRs)
-			prs.GET("/:pr_id", handlers.GetPR)
-			prs.POST("/:pr_id/comment", handlers.CommentPR)
-
-			prsApprove := prs.Group("")
-			prsApprove.Use(RequirePermission("approve"))
-			{
-				prsApprove.POST("/:pr_id/approve", handlers.ApprovePR)
-				prsApprove.POST("/batch/approve", handlers.BatchApprovePR)
-			}
-
-			prsClose := prs.Group("")
-			prsClose.Use(RequirePermission("close"))
-			{
-				prsClose.POST("/:pr_id/close", handlers.ClosePR)
-				prsClose.POST("/batch/close", handlers.BatchClosePR)
-			}
-
-			prsReopen := prs.Group("")
-			prsReopen.Use(RequirePermission("reopen"))
-			{
-				prsReopen.POST("/:pr_id/reopen", handlers.ReopenPR)
-			}
-
-			prsSpam := prs.Group("")
-			prsSpam.Use(RequirePermission("spam"))
-			{
-				prsSpam.POST("/:pr_id/spam", handlers.MarkSpam)
-			}
-
-			prsMerge := prs.Group("")
-			prsMerge.Use(RequirePermission("merge"))
-			{
-				prsMerge.POST("/:pr_id/rebase", handlers.RebaseSinglePR)
-				prsMerge.POST("/:pr_id/cherry-pick", handlers.CherryPickSinglePR)
-				prsMerge.POST("/:pr_id/schedule-merge", handlers.ScheduleMerge)
-			}
-
-			prsRevert := prs.Group("")
-			prsRevert.Use(RequirePermission("revert"))
-			{
-				prsRevert.POST("/:pr_id/revert", handlers.RevertPR)
-			}
-
-			prs.POST("/batch/label", handlers.BatchLabelPR)
-		}
-
-		// Queue management (8.3)
-		queue := protected.Group("/queue/:repo_group")
-		queue.Use(RequireAnyRole("viewer", "operator", "admin"))
-		queue.Use(RequireRepoGroupAccess())
-		{
-			queue.GET("", handlers.GetQueue)
-
-			queueWrite := queue.Group("")
-			queueWrite.Use(RequirePermission("manage_queue"))
-			{
-				queueWrite.POST("/recheck", handlers.RecheckQueue)
-				queueWrite.POST("/rebase", handlers.RebaseQueue)
-				queueWrite.DELETE("", handlers.ClearQueue)
-				queueWrite.DELETE("/:pr_id", handlers.RemoveFromQueue)
-			}
-		}
-
-		// Audit logs (8.2)
-		logs := protected.Group("/logs")
-		logs.Use(RequireAnyRole("viewer", "operator", "admin"))
-		{
-			logs.GET("", handlers.GetLogs)
-			logs.GET("/export", handlers.ExportLogs)
-		}
-
-		// Config management (8.4)
-		cfgGroup := protected.Group("/config")
-		cfgGroup.Use(RequireRole("admin"))
-		{
-			cfgGroup.GET("", handlers.GetConfig)
-			cfgGroup.PUT("", handlers.UpdateConfig)
-			cfgGroup.GET("/history", handlers.GetConfigHistory)
-			cfgGroup.POST("/rollback", handlers.RollbackConfig)
-		}
-
-		// Stats / DORA metrics
-		protected.GET("/stats", handlers.GetStats)
-
-		// Team stats
-		protected.GET("/stats/team", handlers.GetTeamStats)
-
-		// Report history
-		protected.GET("/reports", handlers.GetReportHistory)
-
-		// Notification preferences
-		notifPrefs := protected.Group("/users/:username/notifications")
-		{
-			notifPrefs.GET("", handlers.GetNotificationPrefs)
-			notifPrefs.PUT("", handlers.UpdateNotificationPrefs)
-		}
-
-		// Audit log viewer
-		protected.GET("/audit", func(c *gin.Context) {
-			user, _ := c.Get("username")
-			c.HTML(http.StatusOK, "audit.html", gin.H{
-				"title":    "Audit Logs - Asika",
-				"username": user,
-			})
-		})
-
-		// Real-time usage (CPU/Memory)
-		protected.GET("/usage", handlers.GetUsage)
-
-		// Sync history (8.5)
-		sync := protected.Group("/sync")
-		sync.Use(RequireAnyRole("viewer", "operator", "admin"))
-		{
-			sync.GET("/history", handlers.GetSyncHistory)
-			sync.POST("/retry/:sync_id", handlers.RetrySync)
-		}
-
-		// Test notification (8.6)
-		test := protected.Group("/test")
-		test.Use(RequireRole("admin"))
-		{
-			test.POST("/notify", handlers.TestNotify)
-		}
-
-		// Webhook health status
-		protected.GET("/webhooks/health", webhook.WebhookHealthHandler)
-
-		// Config dry-run
-		cfgGroup.POST("/dry-run", handlers.DryRunConfig)
-
-		// Admin operations (backup/restore)
-		admin := protected.Group("/admin")
-		admin.Use(RequireRole("admin"))
-		{
-			admin.POST("/backup", handlers.CreateBackup)
-			admin.GET("/backups", handlers.ListBackups)
-			admin.POST("/restore", handlers.RestoreBackup)
-		}
-
-		// Bottleneck stats
-		protected.GET("/stats/bottlenecks", handlers.GetBottleneckStats)
-
-		// Temp token
-		protected.POST("/auth/temp-token", handlers.CreateTempToken)
-
-		// Team spaces
-		spaces := protected.Group("/spaces")
-		spaces.Use(RequireAnyRole("viewer", "operator", "admin"))
-		{
-			spaces.GET("", handlers.ListSpaces)
-			spaces.GET("/:name", handlers.GetSpace)
-			spaces.GET("/:name/members", handlers.GetSpaceMembers)
-
-			spacesWrite := spaces.Group("")
-			spacesWrite.Use(RequireRole("admin"))
-			{
-				spacesWrite.POST("", handlers.CreateSpace)
-				spacesWrite.DELETE("/:name", handlers.DeleteSpace)
-				spacesWrite.PUT("/:name/repo-groups", handlers.UpdateSpaceRepoGroups)
-				spacesWrite.POST("/:name/members", handlers.AddSpaceMember)
-				spacesWrite.DELETE("/:name/members/:username", handlers.RemoveSpaceMember)
-			}
-		}
-
-		// Self-update (admin only)
-		update := protected.Group("/self-update")
-		update.Use(RequireRole("admin"))
-		{
-			update.GET("/check", handlers.CheckForUpdate)
-			update.GET("/run", handlers.PerformWebUpdate)
-		}
-
-		// Stale PR management (admin only)
-		staleGroup := protected.Group("/stale")
-		staleGroup.Use(RequireRole("admin"))
-		{
-			staleGroup.POST("/check", handlers.HandleStaleCheck)
-			staleGroup.POST("/check/:repo_group", handlers.HandleStaleCheck)
-			staleGroup.POST("/unmark/:repo_group/:pr_number", handlers.HandleStaleUnmark)
-		}
-	}
-
-	// WebUI routes - server-rendered (SSR) per tasks.md 2.3
-	s.engine.GET("/", func(c *gin.Context) {
-		if config.Current() == nil {
-			c.Redirect(http.StatusFound, "/wizard")
-			return
-		}
-		// Check if user is already logged in
-		if cookie, err := c.Cookie("asika_token"); err == nil && cookie != "" {
-			c.Redirect(http.StatusFound, "/dashboard")
-		} else {
-			c.Redirect(http.StatusFound, "/login")
-		}
-	})
-
-	s.engine.GET("/wizard", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "wizard.html", gin.H{"title": "Setup Wizard - Asika"})
-	})
-
-	s.engine.GET("/login", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "login.html", gin.H{"title": "Login - Asika"})
-	})
-
-	ssr := s.engine.Group("")
-	ssr.Use(SSRAuthRequired())
-	{
-		ssr.GET("/dashboard", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "dashboard.html", gin.H{
-				"title":    "Dashboard - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/prs", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "pr_list.html", gin.H{
-				"title":    "PRs - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/repos/:repo_group/prs/:pr_id", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "pr_detail.html", gin.H{
-				"title":      "PR Detail - Asika",
-				"username":   user,
-				"repo_group": c.Param("repo_group"),
-				"pr_id":      c.Param("pr_id"),
-			})
-		})
-
-		ssr.GET("/queue", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "queue.html", gin.H{
-				"title":    "Queue - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/users", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "users.html", gin.H{
-				"title":    "Users - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/config", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "config.html", gin.H{
-				"title":    "Config - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/apikeys", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "apikeys.html", gin.H{
-				"title":    "API Keys - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/settings", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "settings.html", gin.H{
-				"title":    "Settings - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/usage", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "usage.html", gin.H{
-				"title":    "Usage - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/spaces", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "spaces.html", gin.H{
-				"title":    "Team Spaces - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/team", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "team.html", gin.H{
-				"title":    "Team Stats - Asika",
-				"username": user,
-			})
-		})
-
-		ssr.GET("/reports", func(c *gin.Context) {
-			user := c.GetString("username")
-			c.HTML(http.StatusOK, "reports.html", gin.H{
-				"title":    "Reports - Asika",
-				"username": user,
-			})
-		})
-	}
-
-	// PWA assets (no auth)
-	s.engine.GET("/manifest.json", manifestHandler)
-	s.engine.GET("/sw.js", serviceWorkerHandler)
-
-	// Webhook routes (no auth)
-	s.engine.POST("/webhook/:repo_group/:platform", webhook.WebhookHandler)
-
-	// Feishu event callback (no auth, validated by feishu's verification token)
-	s.engine.POST("/api/v1/feishu/event", feishu.FeishuEventHandler)
 }
 
 // Start starts the server
@@ -554,102 +156,4 @@ func (s *Server) Stop() error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return s.httpSrv.Shutdown(ctx)
-}
-
-func manifestHandler(c *gin.Context) {
-	c.Header("Content-Type", "application/json")
-	c.Header("Cache-Control", "public, max-age=3600")
-	c.JSON(http.StatusOK, gin.H{
-		"name":             "Asika",
-		"short_name":       "Asika",
-		"description":      "Asika PR Manager — Git collaboration control center",
-		"start_url":        "/dashboard",
-		"display":          "standalone",
-		"background_color": "#f5f5f5",
-		"theme_color":      "#0066cc",
-		"orientation":      "any",
-		"icons": []gin.H{
-			{
-				"src":   "/static/icon-192.png",
-				"sizes": "192x192",
-				"type":  "image/png",
-			},
-			{
-				"src":   "/static/icon-512.png",
-				"sizes": "512x512",
-				"type":  "image/png",
-			},
-		},
-	})
-}
-
-func serviceWorkerHandler(c *gin.Context) {
-	c.Header("Content-Type", "application/javascript")
-	c.Header("Cache-Control", "no-cache")
-	const sw = `
-const CACHE_NAME = 'asika-v1';
-const urlsToCache = [
-  '/',
-  '/login',
-  '/dashboard'
-];
-
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('fetch', event => {
-  // Only cache GET requests to same-origin pages
-  if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      const fetchPromise = fetch(event.request).then(response => {
-        if (response && response.status === 200 && response.type === 'basic') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => cached);
-      return cached || fetchPromise;
-    })
-  );
-});
-`
-	c.String(http.StatusOK, sw)
-}
-
-func healthHandler(c *gin.Context) {
-	dbHealthy := db.Ping() == nil
-	metrics := GetMetrics()
-	status := "healthy"
-	statusCode := http.StatusOK
-	if !dbHealthy {
-		status = "degraded"
-		statusCode = http.StatusServiceUnavailable
-	}
-
-	c.JSON(statusCode, gin.H{
-		"status":    status,
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"uptime":    fmt.Sprintf("%.0fs", metrics["uptime_seconds"]),
-		"database":  map[string]bool{"connected": dbHealthy},
-		"metrics": map[string]interface{}{
-			"goroutines": metrics["goroutines"],
-			"memory_mb":  float64(metrics["memory_alloc_bytes"].(uint64)) / 1024 / 1024,
-		},
-	})
 }

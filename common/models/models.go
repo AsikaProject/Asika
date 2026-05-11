@@ -163,175 +163,25 @@ type MergeQueueConfig struct {
 	Expression        string   `json:"expression" toml:"expression"`               // merge condition expression (empty = use default logic)
 }
 
-// LabelCondition represents a single condition within a compound rule.
-type LabelCondition struct {
-	Pattern string `json:"pattern" toml:"pattern"`
+// WebhookRetry represents a failed webhook that needs retry
+type WebhookRetry struct {
+	ID         string    `json:"id"`
+	RepoGroup  string    `json:"repo_group"`
+	Platform   string    `json:"platform"`
+	Body       []byte    `json:"body"`
+	FailCount  int       `json:"fail_count"`
+	LastError  string    `json:"last_error"`
+	LastFailed time.Time `json:"last_failed"`
+	NextRetry  time.Time `json:"next_retry"`
 }
 
-// LabelRule represents a label rule.
-// For simple rules, use Pattern + Label.
-// For compound rules, use Conditions + Logic + Label.
-type LabelRule struct {
-	Pattern     string           `json:"pattern,omitempty" toml:"pattern"`
-	Label       string           `json:"label" toml:"label"`
-	Color       string           `json:"color,omitempty" toml:"color"`
-	Description string           `json:"description,omitempty" toml:"description"`
-	Conditions  []LabelCondition `json:"conditions,omitempty" toml:"conditions"`
-	Logic       string           `json:"logic,omitempty" toml:"logic"`   // "and" or "or", default "and"
-	Priority    int              `json:"priority,omitempty" toml:"priority"` // higher = evaluated first
-	Exclusive   bool             `json:"exclusive,omitempty" toml:"exclusive"` // if true, stop after this rule matches
-}
-
-// ReviewRule represents an automatic reviewer assignment rule.
-// Pattern matches against file paths (default), title (title:), or author (author:).
-type ReviewRule struct {
-	Pattern   string   `json:"pattern" toml:"pattern"`
-	Reviewers []string `json:"reviewers" toml:"reviewers"`
-	Priority  int      `json:"priority,omitempty" toml:"priority"`
-}
-
-// SpamConfig represents spam detection configuration
-type SpamConfig struct {
-	Enabled           bool     `json:"enabled" toml:"enabled"`
-	TimeWindow        string   `json:"time_window" toml:"time_window"`
-	Threshold         int      `json:"threshold" toml:"threshold"`
-	TriggerOnAuthor   bool     `json:"trigger_on_author" toml:"trigger_on_author"`
-	TriggerOnTitleKw  []string `json:"trigger_on_title_kw" toml:"trigger_on_title_kw"`
-	AutoCleanEnabled  bool     `json:"auto_clean_enabled" toml:"auto_clean_enabled"`
-	AutoCleanInterval string   `json:"auto_clean_interval" toml:"auto_clean_interval"`
-}
-
-// NotifyConfig represents notification configuration
-type NotifyConfig struct {
-	Type   string                 `toml:"type"`
-	Config map[string]interface{} `toml:"config"`
-}
-
-// ServerConfig represents server configuration
-type ServerConfig struct {
-	Listen                 string   `toml:"listen"`
-	Mode                   string   `toml:"mode"`
-	MinProcs               int      `toml:"min_procs"`
-	MaxProcs               int      `toml:"max_procs"`
-	EnableWebUpdate        bool     `toml:"enable_web_update"`
-	EnablePprof            bool     `toml:"enable_pprof"`
-	CORSOrigins            []string `toml:"cors_origins"`
-	RateLimitEnabled       bool     `toml:"rate_limit_enabled"`
-	RateLimitRPS           int      `toml:"rate_limit_rps"`
-	RateLimitBurst         int      `toml:"rate_limit_burst"`
-	ReadTimeoutSeconds     int      `toml:"read_timeout_seconds"`
-	WriteTimeoutSeconds    int      `toml:"write_timeout_seconds"`
-	ShutdownTimeoutSeconds int      `toml:"shutdown_timeout_seconds"`
-	MetricsLogInterval     string   `toml:"metrics_log_interval"`
-}
-
-// UpdatesConfig represents self-update configuration
-type UpdatesConfig struct {
-	Check       bool   `toml:"check" json:"check"`
-	Interval    string `toml:"interval" json:"interval"`
-	NotifyOnNew bool   `toml:"notify_on_new" json:"notify_on_new"`
-}
-
-// StaleConfig represents stale PR management configuration
-type StaleConfig struct {
-	Enabled          bool     `toml:"enabled" json:"enabled"`
-	CheckInterval    string   `toml:"check_interval" json:"check_interval"`
-	DaysUntilStale   int      `toml:"days_until_stale" json:"days_until_stale"`
-	DaysUntilClose   int      `toml:"days_until_close" json:"days_until_close"`
-	StaleLabel       string   `toml:"stale_label" json:"stale_label"`
-	ExemptLabels     []string `toml:"exempt_labels" json:"exempt_labels"`
-	NotifyOnStale    bool     `toml:"notify_on_stale" json:"notify_on_stale"`
-	CommentOnStale   string   `toml:"comment_on_stale" json:"comment_on_stale"`
-	CommentOnClose   string   `toml:"comment_on_close" json:"comment_on_close"`
-	RemoveOnActivity bool     `toml:"remove_stale_on_activity" json:"remove_stale_on_activity"`
-	SkipDraftPRs     bool     `toml:"skip_draft_prs" json:"skip_draft_prs"`
-}
-
-// DatabaseConfig represents database configuration.
-// Type can be "bbolt" (default) or "mongo".
-// For bbolt: Path is the file path to the .db file.
-// For mongo: Path is the connection string (e.g. "mongodb://localhost:27017"), Name is the database name.
-type DatabaseConfig struct {
-	Type string `toml:"type"`
-	Path string `toml:"path"`
-	Name string `toml:"name"`
-}
-
-// AuthConfig represents authentication configuration
-type AuthConfig struct {
-	JWTSecret   string `toml:"jwt_secret"`
-	TokenExpiry string `toml:"token_expiry"`
-}
-
-// EventsConfig represents events configuration
-type EventsConfig struct {
-	Mode                string `toml:"mode"`
-	WebhookSecret       string `toml:"webhook_secret"`
-	PollingInterval     string `toml:"polling_interval"`
-	HealthCheckInterval string `toml:"health_check_interval"`
-	HealthCheckThreshold string `toml:"health_check_threshold"`
-}
-
-// GitConfig represents git configuration
-type GitConfig struct {
-	WorkDir       string `toml:"workdir"`
-	RepoClonePath string `toml:"repo_clone_path"` // optional persistent clone path; empty = use temp dir
-}
-
-// TokensConfig represents platform token configuration
-type TokensConfig struct {
-	GitHub    string     `toml:"github"`
-	GitLab    string     `toml:"gitlab"`
-	Gitea     string     `toml:"gitea"`
-	Forgejo   string     `toml:"forgejo"`
-	Codeberg  string     `toml:"codeberg"`
-	Bitbucket string     `toml:"bitbucket"`
-	Gerrit    GerritAuth `toml:"gerrit"`
-}
-
-// GerritAuth holds Gerrit authentication credentials
-type GerritAuth struct {
-	URL      string `toml:"url"`
-	Username string `toml:"username"`
-	Password string `toml:"password"`
-}
-
-// RepoGroupConfig represents repository group configuration (TOML mapping)
-type RepoGroupConfig struct {
-	Name           string           `toml:"name" json:"name"`
-	Mode           string           `toml:"mode" json:"mode"`
-	MirrorPlatform string           `toml:"mirror_platform" json:"mirror_platform"`
-	GitHub         string           `toml:"github" json:"github"`
-	GitLab         string           `toml:"gitlab" json:"gitlab"`
-	Gitea          string           `toml:"gitea" json:"gitea"`
-	Forgejo        string           `toml:"forgejo" json:"forgejo"`
-	Codeberg       string           `toml:"codeberg" json:"codeberg"`
-	Bitbucket      string           `toml:"bitbucket" json:"bitbucket"`
-	Gerrit         string           `toml:"gerrit" json:"gerrit"`
-	DefaultBranch  string           `toml:"default_branch" json:"default_branch"`
-	HookPath       string           `toml:"hookpath" json:"hookpath"`
-	CIProvider     string           `toml:"ci_provider" json:"ci_provider"`
-	MergeQueue     MergeQueueConfig `toml:"merge_queue" json:"merge_queue"`
-	LabelRules     []LabelRule      `toml:"label_rules" json:"label_rules,omitempty"`
-}
-
-// SingleRepoConfig represents single repository configuration
-type SingleRepoConfig struct {
-	Platform      string `toml:"platform"` // mirror_platform in tasks.md, "github"|"gitlab"|"gitea"|"forgejo"|"codeberg"
-	Repo          string `toml:"repo"`
-	DefaultBranch string `toml:"default_branch"`
-	HookPath      string `toml:"hookpath"`
-	CIProvider    string `toml:"ci_provider"`
-}
-
-// WorkerPoolConfig controls the dynamic worker pool sizing.
-type WorkerPoolConfig struct {
-	MinWorkers    int    `toml:"min_workers" json:"min_workers"`
-	MaxWorkers    int    `toml:"max_workers" json:"max_workers"`
-	ScaleUpPct    int    `toml:"scale_up_pct" json:"scale_up_pct"`
-	ScaleDownPct  int    `toml:"scale_down_pct" json:"scale_down_pct"`
-	CooldownSecs  int    `toml:"cooldown_secs" json:"cooldown_secs"`
-	StatsInterval string `toml:"stats_interval" json:"stats_interval"`
+// SpamAuthor tracks a known spam author in the database.
+type SpamAuthor struct {
+	Author    string    `json:"author"`
+	Platform  string    `json:"platform"`
+	FirstSeen time.Time `json:"first_seen"`
+	LastSeen  time.Time `json:"last_seen"`
+	Count     int       `json:"count"`
 }
 
 // Config represents the main configuration structure
@@ -368,132 +218,7 @@ type Config struct {
 
 // ScheduleConfig defines scheduled report configuration.
 type ScheduleConfig struct {
-	Enabled   bool   `toml:"enabled" json:"enabled"`
-	Cron      string `toml:"cron" json:"cron"`
-	PeriodDays int   `toml:"period_days" json:"period_days"`
-}
-
-// TelegramConfig represents Telegram bot configuration
-type TelegramConfig struct {
-	Enabled     bool     `toml:"enabled" json:"enabled"`
-	Token       string   `toml:"token" json:"token"`
-	AdminIDs    []int64  `toml:"admin_ids" json:"admin_ids"`
-	OperatorIDs []int64  `toml:"operator_ids" json:"operator_ids"`
-	ViewerIDs   []int64  `toml:"viewer_ids" json:"viewer_ids"`
-	ChatIDs     []string `toml:"chat_ids" json:"chat_ids"`
-}
-
-// FeishuConfig represents Feishu/Lark bot configuration
-type FeishuConfig struct {
-	Enabled           bool     `toml:"enabled" json:"enabled"`
-	AppID             string   `toml:"app_id" json:"app_id"`
-	AppSecret         string   `toml:"app_secret" json:"app_secret"`
-	WebhookURL        string   `toml:"webhook_url" json:"webhook_url"`
-	VerificationToken string   `toml:"verification_token" json:"verification_token"`
-	EncryptKey        string   `toml:"encrypt_key" json:"encrypt_key"`
-	AdminIDs          []string `toml:"admin_ids" json:"admin_ids"`
-	OperatorIDs       []string `toml:"operator_ids" json:"operator_ids"`
-	ViewerIDs         []string `toml:"viewer_ids" json:"viewer_ids"`
-}
-
-// WebhookRetry represents a failed webhook that needs retry
-type WebhookRetry struct {
-	ID         string    `json:"id"`
-	RepoGroup  string    `json:"repo_group"`
-	Platform   string    `json:"platform"`
-	Body       []byte    `json:"body"`
-	FailCount  int       `json:"fail_count"`
-	LastError  string    `json:"last_error"`
-	LastFailed time.Time `json:"last_failed"`
-	NextRetry  time.Time `json:"next_retry"`
-}
-
-// DiscordConfig represents Discord bot configuration
-type DiscordConfig struct {
-	Enabled     bool     `toml:"enabled" json:"enabled"`
-	Token       string   `toml:"token" json:"token"`
-	AdminIDs    []string `toml:"admin_ids" json:"admin_ids"`
-	OperatorIDs []string `toml:"operator_ids" json:"operator_ids"`
-	ViewerIDs   []string `toml:"viewer_ids" json:"viewer_ids"`
-	ChannelID   string   `toml:"channel_id" json:"channel_id"`
-}
-
-// SlackConfig represents Slack bot configuration
-type SlackConfig struct {
-	Enabled     bool     `toml:"enabled" json:"enabled"`
-	Token       string   `toml:"token" json:"token"`         // Bot User OAuth Token (xoxb-...)
-	AppToken    string   `toml:"app_token" json:"app_token"` // App-Level Token (xapp-...) for Socket Mode
-	AdminIDs    []string `toml:"admin_ids" json:"admin_ids"`
-	OperatorIDs []string `toml:"operator_ids" json:"operator_ids"`
-	ViewerIDs   []string `toml:"viewer_ids" json:"viewer_ids"`
-}
-
-// SpamAuthor tracks a known spam author in the database.
-type SpamAuthor struct {
-	Author    string    `json:"author"`
-	Platform  string    `json:"platform"`
-	FirstSeen time.Time `json:"first_seen"`
-	LastSeen  time.Time `json:"last_seen"`
-	Count     int       `json:"count"`
-}
-
-// QuietHoursConfig defines notification quiet hours and escalation rules.
-type QuietHoursConfig struct {
-	Enabled        bool     `toml:"enabled" json:"enabled"`
-	StartTime      string   `toml:"start_time" json:"start_time"`       // e.g. "22:00"
-	EndTime        string   `toml:"end_time" json:"end_time"`           // e.g. "08:00"
-	Timezone       string   `toml:"timezone" json:"timezone"`           // e.g. "Asia/Shanghai"; empty = local
-	EscalationRole string   `toml:"escalation_role" json:"escalation_role"` // role to notify during quiet hours: "admin"|"operator"
-	BypassForUrgent []string `toml:"bypass_for_urgent" json:"bypass_for_urgent"` // event types that bypass quiet hours
-}
-
-// AuthorStats holds per-author contribution metrics.
-type AuthorStats struct {
-	Author          string  `json:"author"`
-	PRsOpened       int     `json:"prs_opened"`
-	PRsMerged       int     `json:"prs_merged"`
-	PRsReviewed     int     `json:"prs_reviewed"`
-	AvgLeadTimeHrs  float64 `json:"avg_lead_time_hours"`
-	AvgReviewTimeHrs float64 `json:"avg_review_time_hours"`
-}
-
-// TeamStats holds aggregated team metrics.
-type TeamStats struct {
-	PeriodDays     int           `json:"period_days"`
-	TotalAuthors   int           `json:"total_authors"`
-	Authors        []AuthorStats `json:"authors"`
-	TopContributors []AuthorStats `json:"top_contributors"`
-}
-
-// TeamSpace represents an isolated team space with its own repos and members.
-type TeamSpace struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	CreatedAt   time.Time        `json:"created_at"`
-	CreatedBy   string           `json:"created_by"`
-	Members     []SpaceMember    `json:"members,omitempty"`
-	RepoGroups  []string         `json:"repo_groups"` // repo group names belonging to this space
-}
-
-// SpaceMember represents a member of a team space.
-type SpaceMember struct {
-	Username  string    `json:"username"`
-	Role      string    `json:"role"` // "space_admin" | "space_operator" | "space_viewer"
-	JoinedAt  time.Time `json:"joined_at"`
-}
-
-// NotificationPreferences defines per-user notification settings.
-type NotificationPreferences struct {
-	Username         string            `json:"username"`
-	Enabled          bool              `json:"enabled"`                           // master switch
-	EnabledNotifiers []string          `json:"enabled_notifiers"`                 // which notifier types to use
-	EventPrefs       map[string]bool   `json:"event_prefs"`                       // event_type -> enabled
-	DigestMode       string            `json:"digest_mode"`                       // "realtime" | "hourly" | "daily"
-	QuietHoursOverride *QuietHoursConfig `json:"quiet_hours_override,omitempty"`  // per-user quiet hours
-}
-
-// CloseReasonsConfig holds the predefined close reasons.
-// Each reason automatically maps to a label with the same name.
-type CloseReasonsConfig struct {
-	Reasons []string `json:"reasons" toml:"reasons"`
+	Enabled    bool   `toml:"enabled" json:"enabled"`
+	Cron       string `toml:"cron" json:"cron"`
+	PeriodDays int    `toml:"period_days" json:"period_days"`
 }
