@@ -36,12 +36,28 @@ type UpdateProgress struct {
 	Error    string `json:"error,omitempty"`
 }
 
+// isDevVersion returns true if the version is a development build (contains a hyphen suffix like "20260511DEV-b92c70f").
+// Release versions are pure date strings like "20260511" or "20260511HF".
+func isDevVersion(v string) bool {
+	return strings.Contains(v, "-")
+}
+
 // CheckForUpdate checks GitHub for a newer version.
+// Dev builds (version contains "-") skip the check and report as up-to-date.
 func CheckForUpdate(c *gin.Context) {
+	if isDevVersion(version.Version) {
+		c.JSON(http.StatusOK, gin.H{
+			"current":    version.Version,
+			"latest":     version.Version,
+			"upgradable": false,
+			"dev":        true,
+		})
+		return
+	}
+
 	cfg := config.Current()
 	var httpClient *http.Client
 	if cfg != nil && cfg.Tokens.GitHub != "" {
-		// Use authenticated client for higher rate limit
 		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: cfg.Tokens.GitHub})
 		httpClient = oauth2.NewClient(context.Background(), ts)
 	} else {
