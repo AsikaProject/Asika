@@ -10,7 +10,6 @@ import (
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
-	"asika/daemon/handlers"
 	"asika/daemon/platform/discord"
 	"asika/daemon/platform/feishu"
 	"asika/daemon/platform/slack"
@@ -83,7 +82,7 @@ func StartFeishu(
 		cfg, clients, queueMgr, syncr, spamDetector, feishuNotifier,
 	)
 
-	handlers.InitFeishuBot(fsBot)
+	feishu.InitFeishuBot(fsBot)
 
 	go fsBot.Start()
 	slog.Info("feishu bot started", "app_id", cfg.Feishu.AppID)

@@ -20,6 +20,7 @@ import (
 	"asika/common/platforms"
 	"asika/daemon/handlers"
 	"asika/daemon/handlers/webhook"
+	"asika/daemon/platform/feishu"
 	"asika/daemon/templates"
 )
 
@@ -500,7 +501,7 @@ func (s *Server) setupRoutes() {
 	s.engine.POST("/webhook/:repo_group/:platform", webhook.WebhookHandler)
 
 	// Feishu event callback (no auth, validated by feishu's verification token)
-	s.engine.POST("/api/v1/feishu/event", handlers.FeishuEventHandler)
+	s.engine.POST("/api/v1/feishu/event", feishu.FeishuEventHandler)
 }
 
 // Start starts the server
