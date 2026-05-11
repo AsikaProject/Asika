@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -139,43 +138,52 @@ func TestUpdateNotificationPrefs_MissingUsername(t *testing.T) {
 	}
 }
 
-func TestCheckNotificationDedup(t *testing.T) {
+func TestNotificationDedup_StoreAndRetrieve(t *testing.T) {
 	testutil.NewTestDB(t)
 	defer db.Close()
 
 	key := "pr_opened:pr-123:telegram"
-	exists, err := db.GetNotificationDedup(key)
+	data := []byte("2026-01-01T00:00:00Z")
+	err := db.PutNotificationDedup(key, data)
+	if err != nil {
+		t.Fatalf("PutNotificationDedup failed: %v", err)
+	}
+
+	stored, err := db.GetNotificationDedup(key)
 	if err != nil {
 		t.Fatalf("GetNotificationDedup failed: %v", err)
 	}
-	if exists != nil {
-		t.Fatal("expected nil for new dedup key")
-	}
-}
-
-func TestRecordAndCheckDedup(t *testing.T) {
-	testutil.NewTestDB(t)
-	defer db.Close()
-
-	key1 := "pr_opened:pr-456:smtp"
-	ts := time.Now()
-	data, _ := json.Marshal(ts)
-	db.PutNotificationDedup(key1, data)
-
-	stored, err := db.GetNotificationDedup(key1)
-	if err != nil || stored == nil {
+	if stored == nil {
 		t.Fatal("expected stored dedup entry")
 	}
 
-	key2 := "pr_opened:pr-456:telegram"
-	stored2, _ := db.GetNotificationDedup(key2)
-	if stored2 != nil {
-		t.Fatal("expected nil for different notifier")
+	err = db.DeleteNotificationDedup(key)
+	if err != nil {
+		t.Fatalf("DeleteNotificationDedup failed: %v", err)
 	}
 
-	key3 := "pr_opened:pr-999:smtp"
-	stored3, _ := db.GetNotificationDedup(key3)
-	if stored3 != nil {
-		t.Fatal("expected nil for different PR")
+	stored2, _ := db.GetNotificationDedup(key)
+	if stored2 != nil {
+		t.Fatal("expected nil after deletion")
+	}
+}
+
+func TestNotificationDedup_DifferentKeys(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	data := []byte("2026-01-01T00:00:00Z")
+	db.PutNotificationDedup("pr:1:telegram", data)
+	db.PutNotificationDedup("pr:2:telegram", data)
+	db.PutNotificationDedup("pr:1:smtp", data)
+
+	stored, _ := db.GetNotificationDedup("pr:1:telegram")
+	if stored == nil {
+		t.Fatal("expected entry for pr:1:telegram")
+	}
+
+	stored2, _ := db.GetNotificationDedup("pr:999:telegram")
+	if stored2 != nil {
+		t.Fatal("expected nil for nonexistent key")
 	}
 }
