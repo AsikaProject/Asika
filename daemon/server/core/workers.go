@@ -14,6 +14,7 @@ import (
 	"asika/common/utils"
 	"asika/daemon/consumer"
 	"asika/daemon/handlers"
+	"asika/daemon/handlers/pr"
 	"asika/daemon/handlers/webhook"
 	"asika/daemon/polling"
 	"asika/daemon/queue"
@@ -121,6 +122,15 @@ func StartWorkers(
 
 	// Webhook health checker
 	startWebhookHealthChecker(cfg, poller)
+
+	// Serial validation worker
+	serialWorker := queue.NewSerialWorker(cfg, clients)
+	serialWorker.Start()
+	pr.InitSerialWorker(serialWorker)
+
+	// Escalation worker
+	escalationWorker := NewEscalationWorker()
+	escalationWorker.Start()
 
 	return
 }

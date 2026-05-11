@@ -24,6 +24,8 @@ var clients map[platforms.PlatformType]platforms.PlatformClient
 
 var queueMgr *queue.Manager
 
+var serialWorker *queue.SerialWorker
+
 var syncerRef *syncer.Syncer
 
 var pollerRef *polling.Poller
@@ -38,6 +40,10 @@ func InitClients(c map[platforms.PlatformType]platforms.PlatformClient) {
 
 func InitQueueMgr(mgr *queue.Manager) {
 	queueMgr = mgr
+}
+
+func InitSerialWorker(w *queue.SerialWorker) {
+	serialWorker = w
 }
 
 func InitSyncer(s *syncer.Syncer) {

@@ -61,7 +61,7 @@ func (m *Manager) Recover() {
 	}
 
 	for _, entry := range toReset {
-		pr, findErr := findPRByID(entry.item.PRID)
+		pr, findErr := FindPRByID(entry.item.PRID)
 		if findErr == nil && pr != nil && pr.State == "merged" {
 			slog.Info("queue recovery: PR already merged, removing from queue", "pr_id", entry.item.PRID)
 			db.Delete(db.BucketQueueItems, entry.key)
@@ -232,7 +232,7 @@ func (m *Manager) merge(item *models.QueueItem) error {
 	ctx := context.Background()
 
 	// Find PR in bbolt
-	pr, err := findPRByID(item.PRID)
+	pr, err := FindPRByID(item.PRID)
 	if err != nil {
 		return err
 	}
@@ -293,8 +293,8 @@ func (m *Manager) merge(item *models.QueueItem) error {
 	return err
 }
 
-// findPRByID finds a PR by its ID in bbolt
-func findPRByID(prID string) (*models.PRRecord, error) {
+// FindPRByID finds a PR by its ID in bbolt (exported for use by serial worker).
+func FindPRByID(prID string) (*models.PRRecord, error) {
 	data, err := db.GetPRByIndex(prID, "", 0)
 	if err != nil || data == nil {
 		var pr *models.PRRecord

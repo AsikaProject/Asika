@@ -107,14 +107,20 @@ type PRCommentPayload struct {
 
 // QueueItem represents a merge queue item
 type QueueItem struct {
-	PRID          string        `json:"pr_id"`
-	RepoGroup     string        `json:"repo_group"`
-	Status        string        `json:"status"` // "waiting"|"checking"|"merging"|"done"|"failed"
-	AddedAt       time.Time     `json:"added_at"`
-	LastChecked   time.Time     `json:"last_checked"`
-	FailureReason string        `json:"failure_reason,omitempty"`
-	Criteria      MergeCriteria `json:"criteria"`
-	ScheduleAt    time.Time     `json:"schedule_at,omitempty"` // if set, don't merge until this time
+	PRID               string        `json:"pr_id"`
+	RepoGroup          string        `json:"repo_group"`
+	Status             string        `json:"status"` // "waiting"|"checking"|"merging"|"done"|"failed"
+	AddedAt            time.Time     `json:"added_at"`
+	LastChecked        time.Time     `json:"last_checked"`
+	FailureReason      string        `json:"failure_reason,omitempty"`
+	Criteria           MergeCriteria `json:"criteria"`
+	ScheduleAt         time.Time     `json:"schedule_at,omitempty"` // if set, don't merge until this time
+	ValidationStatus   string        `json:"validation_status,omitempty"` // ""|"validating"|"rebooting"|"waiting_ci"|"ci_running"|"ready"|"validation_failed"
+	ValidationStarted  time.Time     `json:"validation_started,omitempty"`
+	ValidationDetail   string        `json:"validation_detail,omitempty"` // human-readable status detail
+	Space              string        `json:"space,omitempty"` // team space name for cross-space tracking
+	Priority           int           `json:"priority,omitempty"` // higher = more urgent
+	NotifyOnComplete   bool          `json:"notify_on_complete,omitempty"` // send notification when merged
 }
 
 // MergeCriteria represents a snapshot of merge conditions

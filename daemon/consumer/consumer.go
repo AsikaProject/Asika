@@ -16,6 +16,7 @@ import (
 	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/daemon/handlers"
 	"asika/daemon/labeler"
 	"asika/daemon/queue"
 	"asika/daemon/reviewer"
@@ -235,6 +236,9 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 			}
 		}()
 	}
+
+	// Check cross-space dependencies
+	go handlers.NotifyCrossSpaceDeps(pr)
 }
 
 func (c *Consumer) handlePRApproved(event events.Event) {

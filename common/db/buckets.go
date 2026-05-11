@@ -25,4 +25,7 @@ const (
 	BucketIssuePRLinks      = "issue_pr_links"
 	BucketPRDependencies    = "pr_dependencies"
 	BucketPRTemplates       = "pr_templates"
+	BucketSerialQueue        = "serial_queue"
+	BucketCrossSpaceDeps     = "cross_space_deps"
+	BucketEscalationRules    = "escalation_rules"
 )
