@@ -113,6 +113,7 @@ type QueueItem struct {
 	LastChecked   time.Time     `json:"last_checked"`
 	FailureReason string        `json:"failure_reason,omitempty"`
 	Criteria      MergeCriteria `json:"criteria"`
+	ScheduleAt    time.Time     `json:"schedule_at,omitempty"` // if set, don't merge until this time
 }
 
 // MergeCriteria represents a snapshot of merge conditions

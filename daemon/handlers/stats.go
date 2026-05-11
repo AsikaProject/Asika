@@ -287,6 +287,181 @@ func GetTeamStats(c *gin.Context) {
 	})
 }
 
+// BottleneckStats holds identified bottleneck PRs.
+type BottleneckStats struct {
+	PeriodDays          int              `json:"period_days"`
+	ReopenedPRs         []BottleneckPR   `json:"reopened_prs"`
+	LongReviewPRs       []BottleneckPR   `json:"long_review_prs"`
+	StalePRs            []BottleneckPR   `json:"stale_prs"`
+	FrequentRejectPRs   []BottleneckPR   `json:"frequent_reject_prs"`
+	AvgLeadTimeHrs      float64          `json:"avg_lead_time_hours"`
+	P90LeadTimeHrs      float64          `json:"p90_lead_time_hours"`
+	P95LeadTimeHrs      float64          `json:"p95_lead_time_hours"`
+}
+
+// BottleneckPR represents a single bottleneck PR entry.
+type BottleneckPR struct {
+	PRID        string  `json:"pr_id"`
+	Title       string  `json:"title"`
+	Author      string  `json:"author"`
+	RepoGroup   string  `json:"repo_group"`
+	LeadTimeHrs float64 `json:"lead_time_hours"`
+	ReopenCount int     `json:"reopen_count,omitempty"`
+	RejectCount int     `json:"reject_count,omitempty"`
+	AgeDays     float64 `json:"age_days,omitempty"`
+}
+
+// GetBottleneckStats handles GET /api/v1/stats/bottlenecks
+func GetBottleneckStats(c *gin.Context) {
+	periodDays := 30
+	if p := c.Query("period"); p != "" {
+		if n, err := fmt.Sscanf(p, "%d", &periodDays); err != nil || n != 1 || periodDays <= 0 {
+			periodDays = 30
+		}
+	}
+	cutoff := time.Now().AddDate(0, 0, -periodDays)
+
+	type prAnalysis struct {
+		pr          models.PRRecord
+		reopenCount int
+		rejectCount int
+		reviewReqCount int
+	}
+
+	analyses := make(map[string]*prAnalysis)
+	var leadTimes []float64
+
+	db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		var pr models.PRRecord
+		if err := json.Unmarshal(value, &pr); err != nil {
+			return nil
+		}
+		pa := &prAnalysis{pr: pr}
+		for _, ev := range pr.Events {
+			if ev.Timestamp.Before(cutoff) {
+				continue
+			}
+			switch ev.Action {
+			case "reopened":
+				pa.reopenCount++
+			case "changes_requested", "review_rejected":
+				pa.rejectCount++
+			case "review_requested":
+				pa.reviewReqCount++
+			}
+		}
+		analyses[pr.ID] = pa
+
+		if pr.State == "merged" && !pr.CreatedAt.IsZero() && !pr.MergedAt.IsZero() {
+			lt := pr.MergedAt.Sub(pr.CreatedAt).Hours()
+			if lt > 0 {
+				leadTimes = append(leadTimes, lt)
+			}
+		}
+		return nil
+	})
+
+	avgLead := 0.0
+	p90Lead := 0.0
+	p95Lead := 0.0
+	if len(leadTimes) > 0 {
+		sort.Float64s(leadTimes)
+		sum := 0.0
+		for _, v := range leadTimes {
+			sum += v
+		}
+		avgLead = sum / float64(len(leadTimes))
+		p90Lead = leadTimes[int(float64(len(leadTimes))*0.9)]
+		p95Lead = leadTimes[int(float64(len(leadTimes))*0.95)]
+	}
+
+	var reopenedPRs, longReviewPRs, stalePRs, frequentRejectPRs []BottleneckPR
+	nowTime := time.Now()
+
+	for _, pa := range analyses {
+		pr := pa.pr
+		lt := 0.0
+		if !pr.CreatedAt.IsZero() && !pr.MergedAt.IsZero() && pr.MergedAt.After(pr.CreatedAt) {
+			lt = pr.MergedAt.Sub(pr.CreatedAt).Hours()
+		}
+
+		bp := BottleneckPR{
+			PRID:      pr.ID,
+			Title:     pr.Title,
+			Author:    pr.Author,
+			RepoGroup: pr.RepoGroup,
+		}
+
+		if pa.reopenCount > 0 {
+			bp.ReopenCount = pa.reopenCount
+			bp.LeadTimeHrs = lt
+			reopenedPRs = append(reopenedPRs, bp)
+		}
+
+		if pa.rejectCount >= 2 {
+			bp.RejectCount = pa.rejectCount
+			bp.LeadTimeHrs = lt
+			frequentRejectPRs = append(frequentRejectPRs, bp)
+		}
+
+		if pr.State == "open" && !pr.CreatedAt.IsZero() {
+			age := nowTime.Sub(pr.CreatedAt).Hours()
+			if age > 48 {
+				bp.AgeDays = age / 24
+				bp.LeadTimeHrs = lt
+				longReviewPRs = append(longReviewPRs, bp)
+			}
+		}
+
+		if pr.State == "open" && !pr.CreatedAt.IsZero() {
+			age := nowTime.Sub(pr.CreatedAt).Hours() / 24
+			if age > float64(periodDays)*0.5 && pa.reviewReqCount > 0 {
+				found := false
+				for _, existing := range longReviewPRs {
+					if existing.PRID == pr.ID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					stalePRs = append(stalePRs, BottleneckPR{
+						PRID:      pr.ID,
+						Title:     pr.Title,
+						Author:    pr.Author,
+						RepoGroup: pr.RepoGroup,
+						AgeDays:   age,
+					})
+				}
+			}
+		}
+	}
+
+	sort.Slice(reopenedPRs, func(i, j int) bool {
+		return reopenedPRs[i].ReopenCount > reopenedPRs[j].ReopenCount
+	})
+	sort.Slice(longReviewPRs, func(i, j int) bool {
+		return longReviewPRs[i].LeadTimeHrs > longReviewPRs[j].LeadTimeHrs
+	})
+	sort.Slice(stalePRs, func(i, j int) bool {
+		return stalePRs[i].AgeDays > stalePRs[j].AgeDays
+	})
+	sort.Slice(frequentRejectPRs, func(i, j int) bool {
+		return frequentRejectPRs[i].RejectCount > frequentRejectPRs[j].RejectCount
+	})
+
+	c.Header("Cache-Control", "private, max-age=60")
+	c.JSON(http.StatusOK, BottleneckStats{
+		PeriodDays:        periodDays,
+		ReopenedPRs:       reopenedPRs,
+		LongReviewPRs:     longReviewPRs,
+		StalePRs:          stalePRs,
+		FrequentRejectPRs: frequentRejectPRs,
+		AvgLeadTimeHrs:    avgLead,
+		P90LeadTimeHrs:    p90Lead,
+		P95LeadTimeHrs:    p95Lead,
+	})
+}
+
 // GetReportHistory handles GET /api/v1/reports
 func GetReportHistory(c *gin.Context) {
 	limit := 20

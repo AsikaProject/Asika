@@ -9,6 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"asika/common/i18n"
+	"time"
 
 	"asika/common/auth"
 	"asika/common/config"
@@ -288,6 +289,63 @@ func DeleteUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "user deleted"})
+}
+
+// CreateTempToken handles POST /api/v1/auth/temp-token
+// Generates a short-lived token with elevated permissions for temporary access.
+func CreateTempToken(c *gin.Context) {
+	username, _ := c.Get("username")
+	role, _ := c.Get("role")
+	if username == nil || role == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	var req struct {
+		Duration    string            `json:"duration"`     // e.g. "30m", "1h"
+		Permissions map[string]bool   `json:"permissions"`  // e.g. {"can_merge": true, "can_approve": true}
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if req.Duration == "" {
+		req.Duration = "30m"
+	}
+	d, err := time.ParseDuration(req.Duration)
+	if err != nil || d <= 0 || d > 24*time.Hour {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid duration: must be between 1m and 24h"})
+		return
+	}
+
+	if len(req.Permissions) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "permissions required"})
+		return
+	}
+
+	validPerms := map[string]bool{
+		"can_approve": true, "can_merge": true, "can_close": true,
+		"can_reopen": true, "can_spam": true, "can_manage_queue": true, "can_revert": true,
+	}
+	for k := range req.Permissions {
+		if !validPerms[k] {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid permission: " + k})
+			return
+		}
+	}
+
+	token, err := auth.GenerateTempToken(username.(string), role.(string), d, req.Permissions)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"token":       token,
+		"expires_in":  d.Seconds(),
+		"permissions": req.Permissions,
+	})
 }
 
 // SetLocale handles POST /api/v1/locale

@@ -228,6 +228,7 @@ func (s *Server) setupRoutes() {
 			{
 				prsMerge.POST("/:pr_id/rebase", handlers.RebaseSinglePR)
 				prsMerge.POST("/:pr_id/cherry-pick", handlers.CherryPickSinglePR)
+				prsMerge.POST("/:pr_id/schedule-merge", handlers.ScheduleMerge)
 			}
 
 			prsRevert := prs.Group("")
@@ -331,6 +332,12 @@ func (s *Server) setupRoutes() {
 			admin.GET("/backups", handlers.ListBackups)
 			admin.POST("/restore", handlers.RestoreBackup)
 		}
+
+		// Bottleneck stats
+		protected.GET("/stats/bottlenecks", handlers.GetBottleneckStats)
+
+		// Temp token
+		protected.POST("/auth/temp-token", handlers.CreateTempToken)
 
 		// Team spaces
 		spaces := protected.Group("/spaces")

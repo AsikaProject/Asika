@@ -55,6 +55,51 @@ func GenerateJWT(username, role string) (string, error) {
 	return token.SignedString(jwtSecret)
 }
 
+// GenerateTempToken generates a short-lived temporary token for privilege escalation.
+// The token is valid for the specified duration and includes the target permissions.
+func GenerateTempToken(username, role string, duration time.Duration, permissions map[string]bool) (string, error) {
+	claims := jwt.MapClaims{
+		"username":    username,
+		"role":        role,
+		"exp":         time.Now().Add(duration).Unix(),
+		"iat":         time.Now().Unix(),
+		"temp":        true,
+		"permissions": permissions,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+
+// IsTempToken checks if a claims set belongs to a temporary token.
+func IsTempToken(claims jwt.MapClaims) bool {
+	if v, ok := claims["temp"]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
+// GetTempPermissions returns the permissions map from a temporary token's claims.
+func GetTempPermissions(claims jwt.MapClaims) map[string]bool {
+	raw, ok := claims["permissions"]
+	if !ok {
+		return nil
+	}
+	m, ok := raw.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	result := make(map[string]bool, len(m))
+	for k, v := range m {
+		if b, ok := v.(bool); ok {
+			result[k] = b
+		}
+	}
+	return result
+}
+
 // ValidateJWT validates a JWT token and returns the claims
 func ValidateJWT(tokenString string) (jwt.MapClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {

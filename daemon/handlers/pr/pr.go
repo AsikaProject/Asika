@@ -69,6 +69,13 @@ func AddToQueue(pr *models.PRRecord) error {
 	return queueMgr.AddToQueue(pr)
 }
 
+func AddToQueueScheduled(pr *models.PRRecord, scheduleAt time.Time) error {
+	if queueMgr == nil {
+		return nil
+	}
+	return queueMgr.AddToQueueScheduled(pr, scheduleAt)
+}
+
 func TriggerQueueCheck() {
 	if queueMgr != nil {
 		go queueMgr.CheckQueue()

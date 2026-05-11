@@ -84,6 +84,12 @@ func (m *Manager) Recover() {
 
 // AddToQueue adds a PR to the merge queue
 func (m *Manager) AddToQueue(pr *models.PRRecord) error {
+	return m.AddToQueueScheduled(pr, time.Time{})
+}
+
+// AddToQueueScheduled adds a PR to the merge queue with a scheduled merge time.
+// If scheduleAt is zero, the PR is queued immediately.
+func (m *Manager) AddToQueueScheduled(pr *models.PRRecord, scheduleAt time.Time) error {
 	key := fmt.Sprintf("%s#%s", pr.RepoGroup, pr.ID)
 
 	// Check if already in queue
@@ -116,11 +122,12 @@ func (m *Manager) AddToQueue(pr *models.PRRecord) error {
 	}
 
 	item := models.QueueItem{
-		PRID:      pr.ID,
-		RepoGroup: pr.RepoGroup,
-		Status:    "waiting",
-		AddedAt:   time.Now(),
-		Criteria:  criteria,
+		PRID:       pr.ID,
+		RepoGroup:  pr.RepoGroup,
+		Status:     "waiting",
+		AddedAt:    time.Now(),
+		Criteria:   criteria,
+		ScheduleAt: scheduleAt,
 	}
 
 	data, err := json.Marshal(item)
@@ -171,9 +178,14 @@ func (m *Manager) CheckQueue() {
 	}
 
 	// Process items outside any db transaction
+	now := time.Now()
 	for i, item := range items {
+		if !item.ScheduleAt.IsZero() && item.ScheduleAt.After(now) {
+			continue
+		}
+
 		item.Status = "checking"
-		item.LastChecked = time.Now()
+		item.LastChecked = now
 
 		shouldMerge, err := m.checker.ShouldMerge(&item)
 		if err != nil {

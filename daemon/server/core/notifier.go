@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"asika/common/config"
@@ -14,6 +15,8 @@ import (
 	"asika/common/platforms"
 	"asika/daemon/handlers"
 )
+
+const dedupWindow = 5 * time.Minute
 
 var (
 	globalNotifiers []notifier.Notifier
@@ -61,9 +64,16 @@ func sendNotificationInternal(ctx context.Context, title, body, eventType, prID,
 			continue
 		}
 		nt := n.Type()
-		if eventType != "" && prID != "" && isDeduped(eventType, prID, nt) {
-			slog.Info("notification deduplicated", "notifier", nt, "event", eventType, "pr", prID)
-			continue
+		if eventType != "" && prID != "" {
+			entry, buffered := appendToDedupBuffer(eventType, prID, nt, title, body)
+			if buffered {
+				slog.Info("notification buffered for digest", "notifier", nt, "event", eventType, "pr", prID)
+				continue
+			}
+			if entry != nil {
+				sendDigest(ctx, nt, n, entry)
+				continue
+			}
 		}
 		sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := n.Send(sendCtx, title, body)
@@ -72,35 +82,150 @@ func sendNotificationInternal(ctx context.Context, title, body, eventType, prID,
 			failureTracker.RecordFailure(nt, err)
 		} else {
 			failureTracker.RecordSuccess(nt)
-			if eventType != "" && prID != "" {
-				recordDedup(eventType, prID, nt)
-			}
 		}
 	}
 }
 
-func isDeduped(eventType, prID, notifierType string) bool {
-	key := fmt.Sprintf("%s:%s:%s", eventType, prID, notifierType)
-	data, err := db.GetNotificationDedup(key)
-	if err != nil || data == nil {
-		return false
-	}
-	var ts time.Time
-	if err := json.Unmarshal(data, &ts); err != nil {
-		return false
-	}
-	if time.Since(ts) > 5*time.Minute {
-		db.DeleteNotificationDedup(key)
-		return false
-	}
-	return true
+type dedupEntry struct {
+	PRID       string    `json:"pr_id"`
+	Notifier   string    `json:"notifier"`
+	Events     []string  `json:"events"`
+	Titles     []string  `json:"titles"`
+	FirstSeen  time.Time `json:"first_seen"`
+	LastSeen   time.Time `json:"last_seen"`
+	Dispatched bool      `json:"dispatched"`
 }
 
-func recordDedup(eventType, prID, notifierType string) {
-	key := fmt.Sprintf("%s:%s:%s", eventType, prID, notifierType)
-	ts := time.Now()
-	data, _ := json.Marshal(ts)
-	db.PutNotificationDedup(key, data)
+var (
+	dedupMu      sync.Mutex
+	dedupTimers  = make(map[string]*time.Timer)
+)
+
+func dedupBufferKey(prID, notifierType string) string {
+	return fmt.Sprintf("%s:%s", prID, notifierType)
+}
+
+func appendToDedupBuffer(eventType, prID, notifierType, title, body string) (*dedupEntry, bool) {
+	key := dedupBufferKey(prID, notifierType)
+	now := time.Now()
+
+	dedupMu.Lock()
+	defer dedupMu.Unlock()
+
+	data, err := db.GetNotificationDedup(key)
+	if err == nil && data != nil {
+		var entry dedupEntry
+		if json.Unmarshal(data, &entry) == nil && !entry.Dispatched {
+			if now.Sub(entry.FirstSeen) < dedupWindow {
+				entry.Events = append(entry.Events, eventType)
+				entry.Titles = append(entry.Titles, title)
+				entry.LastSeen = now
+				db.PutNotificationDedup(key, mustMarshal(entry))
+				if len(entry.Events) == 1 {
+					scheduleDigestDispatch(key, entry)
+				}
+				return nil, true
+			}
+		}
+	}
+
+	entry := dedupEntry{
+		PRID:      prID,
+		Notifier:  notifierType,
+		Events:    []string{eventType},
+		Titles:    []string{title},
+		FirstSeen: now,
+		LastSeen:  now,
+	}
+	db.PutNotificationDedup(key, mustMarshal(entry))
+	scheduleDigestDispatch(key, entry)
+	return &entry, false
+}
+
+func scheduleDigestDispatch(key string, entry dedupEntry) {
+	if t, exists := dedupTimers[key]; exists {
+		t.Stop()
+	}
+	dedupTimers[key] = time.AfterFunc(dedupWindow, func() {
+		dedupMu.Lock()
+		defer dedupMu.Unlock()
+
+		data, err := db.GetNotificationDedup(key)
+		if err != nil || data == nil {
+			return
+		}
+		var e dedupEntry
+		if json.Unmarshal(data, &e) != nil || e.Dispatched {
+			return
+		}
+		e.Dispatched = true
+		db.PutNotificationDedup(key, mustMarshal(e))
+
+		if n := findNotifier(e.Notifier); n != nil {
+			sendDigest(context.Background(), e.Notifier, n, &e)
+		}
+		delete(dedupTimers, key)
+	})
+}
+
+func sendDigest(ctx context.Context, notifierType string, n notifier.Notifier, entry *dedupEntry) {
+	if len(entry.Events) <= 1 {
+		sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+		err := n.Send(sendCtx, entry.Titles[0], "")
+		if err != nil {
+			failureTracker.RecordFailure(notifierType, err)
+		} else {
+			failureTracker.RecordSuccess(notifierType)
+		}
+		return
+	}
+
+	summary := fmt.Sprintf("📋 PR %s: %d events\n", entry.PRID, len(entry.Events))
+	eventCount := make(map[string]int)
+	for _, ev := range entry.Events {
+		eventCount[ev]++
+	}
+	for ev, count := range eventCount {
+		if count > 1 {
+			summary += fmt.Sprintf("  • %s ×%d\n", ev, count)
+		} else {
+			summary += fmt.Sprintf("  • %s\n", ev)
+		}
+	}
+
+	sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	err := n.Send(sendCtx, summary, "")
+	if err != nil {
+		failureTracker.RecordFailure(notifierType, err)
+	} else {
+		failureTracker.RecordSuccess(notifierType)
+	}
+	recordBatchDedup(entry.PRID, notifierType, entry.Events)
+}
+
+func findNotifier(notifierType string) notifier.Notifier {
+	for _, n := range globalNotifiers {
+		if n.Type() == notifierType {
+			return n
+		}
+	}
+	return nil
+}
+
+func recordBatchDedup(prID, notifierType string, events []string) {
+	now := time.Now()
+	data, _ := json.Marshal(now)
+	for _, ev := range events {
+		key := fmt.Sprintf("%s:%s:%s", ev, prID, notifierType)
+		db.PutNotificationDedup(key, data)
+	}
+}
+
+func mustMarshal(v interface{}) []byte {
+	data, _ := json.Marshal(v)
+	return data
 }
 
 // SendNotificationUrgent sends a notification bypassing quiet hours.

@@ -14,6 +14,7 @@ import (
 	"asika/common/models"
 	"asika/daemon/handlers"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // Logger is a custom logger middleware
@@ -280,12 +281,28 @@ func RequirePermission(permField string) gin.HandlerFunc {
 			}
 		}
 
-		// JWT user: load from DB
+		// JWT user: check temp token permissions first, then load from DB
 		username, _ := c.Get("username")
 		if username == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
 			c.Abort()
 			return
+		}
+
+		claims, _ := c.Get("claims")
+		if claims != nil {
+			if jwtClaims, ok := claims.(jwt.MapClaims); ok && auth.IsTempToken(jwtClaims) {
+				tempPerms := auth.GetTempPermissions(jwtClaims)
+				if tempPerms != nil {
+					if enabled, exists := tempPerms[permField]; exists && enabled {
+						c.Next()
+						return
+					}
+					c.JSON(http.StatusForbidden, gin.H{"error": "权限不够", "code": 403})
+					c.Abort()
+					return
+				}
+			}
 		}
 
 		data, err := db.Get(db.BucketUsers, username.(string))
