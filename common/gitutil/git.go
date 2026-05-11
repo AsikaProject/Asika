@@ -456,3 +456,96 @@ func isUpToDate(err error) bool {
 	return strings.Contains(msg, "already up-to-date") ||
 		strings.Contains(msg, "up to date")
 }
+
+// RebaseAndPush rebases headBranch onto baseBranch and force-pushes to remote.
+func RebaseAndPush(workdir, remoteURL, token, headBranch, baseBranch string) error {
+	repo, dir, cleanup, err := prepareRepo(workdir, remoteURL, token, "")
+	if err != nil {
+		return err
+	}
+	if cleanup {
+		defer CleanupWorkdir(dir)
+	}
+
+	err = FetchRemote(repo, "origin", token)
+	if err != nil {
+		if !isUpToDate(err) {
+			return fmt.Errorf("failed to fetch: %w", err)
+		}
+	}
+
+	w, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
+
+	err = w.Checkout(&git.CheckoutOptions{
+		Branch: plumbing.ReferenceName("refs/heads/" + headBranch),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to checkout head branch %s: %w", headBranch, err)
+	}
+
+	baseRef := plumbing.NewRemoteReferenceName("origin", baseBranch)
+	baseCommit, err := repo.ResolveRevision(plumbing.Revision(baseRef))
+	if err != nil {
+		return fmt.Errorf("failed to resolve base branch %s: %w", baseBranch, err)
+	}
+
+	headRef, err := repo.ResolveRevision(plumbing.Revision(plumbing.HEAD))
+	if err != nil {
+		return fmt.Errorf("failed to resolve HEAD: %w", err)
+	}
+
+	if *baseCommit == *headRef {
+		return nil
+	}
+
+	iter, err := repo.Log(&git.LogOptions{From: *headRef})
+	if err != nil {
+		return fmt.Errorf("failed to get commit log: %w", err)
+	}
+
+	var commitsToRebase []*object.Commit
+	iter.ForEach(func(c *object.Commit) error {
+		if c.Hash == *baseCommit {
+			return storer.ErrStop
+		}
+		commitsToRebase = append([]*object.Commit{c}, commitsToRebase...)
+		return nil
+	})
+
+	err = w.Reset(&git.ResetOptions{
+		Commit: *baseCommit,
+		Mode:   git.HardReset,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to reset to base: %w", err)
+	}
+
+	for _, commit := range commitsToRebase {
+		err = CherryPick(repo, commit.Hash.String())
+		if err != nil {
+			return fmt.Errorf("cherry-pick %s failed: %w", commit.Hash.String()[:8], err)
+		}
+	}
+
+	opts := &git.PushOptions{
+		RefSpecs: []config.RefSpec{
+			config.RefSpec(fmt.Sprintf("+refs/heads/%s:refs/heads/%s", headBranch, headBranch)),
+		},
+	}
+	if token != "" {
+		opts.Auth = &http.BasicAuth{
+			Username: "git",
+			Password: token,
+		}
+	}
+
+	err = repo.Push(opts)
+	if err != nil && !isUpToDate(err) {
+		return fmt.Errorf("push failed: %w", err)
+	}
+
+	return nil
+}

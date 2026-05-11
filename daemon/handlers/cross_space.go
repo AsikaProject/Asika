@@ -4,25 +4,61 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-
-	"log/slog"
+	"sync"
 
 	"github.com/gin-gonic/gin"
+	"log/slog"
 
 	"asika/common/db"
 	"asika/common/events"
 	"asika/common/models"
 )
 
-// CrossSpaceDep represents a cross-space PR dependency.
+// CrossSpaceDep represents a cross-space PR dependency record.
 type CrossSpaceDep struct {
-	SourcePRID    string `json:"source_pr_id"`
-	SourceSpace   string `json:"source_space"`
-	TargetPRID    string `json:"target_pr_id"`
-	TargetSpace   string `json:"target_space"`
+	SourcePRID      string `json:"source_pr_id"`
+	SourceSpace     string `json:"source_space"`
+	TargetPRID      string `json:"target_pr_id"`
+	TargetSpace     string `json:"target_space"`
 	SourceRepoGroup string `json:"source_repo_group"`
 	TargetRepoGroup string `json:"target_repo_group"`
-	Status        string `json:"status"` // "pending"|"resolved"|"failed"
+	Status          string `json:"status"`
+}
+
+var (
+	spaceCache   = make(map[string]string)
+	spaceCacheMu sync.RWMutex
+)
+
+func getSpaceForPR(pr *models.PRRecord) string {
+	spaceCacheMu.RLock()
+	if s, ok := spaceCache[pr.RepoGroup]; ok {
+		spaceCacheMu.RUnlock()
+		return s
+	}
+	spaceCacheMu.RUnlock()
+
+	spaces, err := db.ListTeamSpaces()
+	if err != nil {
+		return ""
+	}
+	for _, space := range spaces {
+		for _, rg := range space.RepoGroups {
+			spaceCacheMu.Lock()
+			spaceCache[rg] = space.Name
+			spaceCacheMu.Unlock()
+			if rg == pr.RepoGroup {
+				return space.Name
+			}
+		}
+	}
+	return ""
+}
+
+func invalidateSpaceCache() {
+	spaceCacheMu.Lock()
+	spaceCache = make(map[string]string)
+	spaceCacheMu.Unlock()
 }
 
 // NotifyCrossSpaceDeps checks if a merged PR has cross-space dependents and publishes events.
@@ -36,44 +72,50 @@ func NotifyCrossSpaceDeps(pr *models.PRRecord) {
 		return
 	}
 
+	sourceSpace := getSpaceForPR(pr)
+	if sourceSpace == "" {
+		return
+	}
+
 	for _, dep := range deps {
-		dependentPR, err := findPRInAll(dep.PRID)
+		dependentPR, err := findPRByGlobalID(dep.PRID)
 		if err != nil {
 			slog.Warn("cross-space: dependent PR not found", "pr_id", dep.PRID)
 			continue
 		}
 
-		sourceSpace := getSpaceForPR(pr)
 		depSpace := getSpaceForPR(dependentPR)
-
-		if sourceSpace != "" && depSpace != "" && sourceSpace != depSpace {
-			crossDep := &CrossSpaceDep{
-				SourcePRID:      pr.ID,
-				SourceSpace:     sourceSpace,
-				TargetPRID:      dependentPR.ID,
-				TargetSpace:     depSpace,
-				SourceRepoGroup: pr.RepoGroup,
-				TargetRepoGroup: dependentPR.RepoGroup,
-				Status:          "pending",
-			}
-			data, _ := json.Marshal(crossDep)
-			db.Put(db.BucketCrossSpaceDeps, fmt.Sprintf("%s:%s", pr.ID, dependentPR.ID), data)
-
-			events.PublishPR(events.EventSyncCompleted, dependentPR.RepoGroup, dependentPR.Platform, dependentPR, map[string]interface{}{
-				"cross_space_notification": true,
-				"source_pr_id":             pr.ID,
-				"source_space":             sourceSpace,
-				"message":                  fmt.Sprintf("PR #%d in space '%s' that you depend on has been merged. Please rebase.", pr.PRNumber, sourceSpace),
-			})
-
-			slog.Info("cross-space notification sent",
-				"source_pr", pr.ID, "source_space", sourceSpace,
-				"dep_pr", dependentPR.ID, "dep_space", depSpace)
+		if depSpace == "" || depSpace == sourceSpace {
+			continue
 		}
+
+		crossDep := &CrossSpaceDep{
+			SourcePRID:      pr.ID,
+			SourceSpace:     sourceSpace,
+			TargetPRID:      dependentPR.ID,
+			TargetSpace:     depSpace,
+			SourceRepoGroup: pr.RepoGroup,
+			TargetRepoGroup: dependentPR.RepoGroup,
+			Status:          "pending",
+		}
+		depData, _ := json.Marshal(crossDep)
+		depKey := fmt.Sprintf("%s:%s", pr.ID, dependentPR.ID)
+		db.Put(db.BucketCrossSpaceDeps, depKey, depData)
+
+		events.PublishPR(events.EventSyncCompleted, dependentPR.RepoGroup, dependentPR.Platform, dependentPR, map[string]interface{}{
+			"cross_space_notification": true,
+			"source_pr_id":             pr.ID,
+			"source_space":             sourceSpace,
+			"message":                  fmt.Sprintf("PR #%d in space '%s' that you depend on has been merged. Please rebase.", pr.PRNumber, sourceSpace),
+		})
+
+		slog.Info("cross-space notification sent",
+			"source_pr", pr.ID, "source_space", sourceSpace,
+			"dep_pr", dependentPR.ID, "dep_space", depSpace)
 	}
 }
 
-func findPRInAll(prID string) (*models.PRRecord, error) {
+func findPRByGlobalID(prID string) (*models.PRRecord, error) {
 	data, err := db.GetPRByIndex(prID, "", 0)
 	if err == nil && data != nil {
 		var pr models.PRRecord
@@ -98,33 +140,25 @@ func findPRInAll(prID string) (*models.PRRecord, error) {
 	return found, nil
 }
 
-func getSpaceForPR(pr *models.PRRecord) string {
-	spaces, err := db.ListTeamSpaces()
-	if err != nil {
-		return ""
-	}
-	for _, space := range spaces {
-		for _, rg := range space.RepoGroups {
-			if rg == pr.RepoGroup {
-				return space.Name
-			}
-		}
-	}
-	return ""
-}
-
-// GetCrossSpaceDeps handles GET /api/v1/repos/:repo_group/prs/:pr_id/cross-space-deps
 func GetCrossSpaceDeps(c *gin.Context) {
-	prID := c.Param("pr_id")
-	deps, err := db.GetPRDependentsByPR(prID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query"})
+	sourcePRID := c.Param("source_pr_id")
+	targetPRID := c.Param("target_pr_id")
+	key := fmt.Sprintf("%s:%s", sourcePRID, targetPRID)
+
+	data, err := db.Get(db.BucketCrossSpaceDeps, key)
+	if err != nil || data == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "dependency not found"})
 		return
 	}
-	c.JSON(http.StatusOK, deps)
+
+	var dep CrossSpaceDep
+	if err := json.Unmarshal(data, &dep); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse"})
+		return
+	}
+	c.JSON(http.StatusOK, dep)
 }
 
-// ResolveCrossSpaceDep handles POST /api/v1/cross-space-deps/:source_pr_id/:target_pr_id/resolve
 func ResolveCrossSpaceDep(c *gin.Context) {
 	sourcePRID := c.Param("source_pr_id")
 	targetPRID := c.Param("target_pr_id")
@@ -148,4 +182,14 @@ func ResolveCrossSpaceDep(c *gin.Context) {
 
 	slog.Info("cross-space dep resolved", "source", sourcePRID, "target", targetPRID)
 	c.JSON(http.StatusOK, dep)
+}
+
+func ListCrossSpaceDeps(c *gin.Context) {
+	prID := c.Param("pr_id")
+	deps, err := db.GetPRDependentsByPR(prID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query"})
+		return
+	}
+	c.JSON(http.StatusOK, deps)
 }

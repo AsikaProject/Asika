@@ -215,7 +215,8 @@ func (s *Server) setupRoutes() {
 		protected.POST("/repos/:repo_group/prs/:pr_id/sync-deps", handlers.SyncDependencies)
 
 		// Cross-space dependencies
-		protected.GET("/repos/:repo_group/prs/:pr_id/cross-space-deps", handlers.GetCrossSpaceDeps)
+		protected.GET("/repos/:repo_group/prs/:pr_id/cross-space-deps", handlers.ListCrossSpaceDeps)
+		protected.GET("/cross-space-deps/:source_pr_id/:target_pr_id", handlers.GetCrossSpaceDeps)
 		protected.POST("/cross-space-deps/:source_pr_id/:target_pr_id/resolve", handlers.ResolveCrossSpaceDep)
 		protected.POST("/auth/temp-token", handlers.CreateTempToken)
 

@@ -33,6 +33,7 @@ func newBboltStorage(dbPath string) (*bboltStorage, error) {
 			BucketNotificationDedup, BucketTeamSpaces, BucketSpaceMembers,
 			BucketSpaceSettings,
 			BucketIssuePRLinks, BucketPRDependencies, BucketPRTemplates,
+			BucketSerialQueue, BucketCrossSpaceDeps, BucketEscalationRules,
 		}
 		for _, b := range buckets {
 			if _, err := tx.CreateBucketIfNotExists([]byte(b)); err != nil {

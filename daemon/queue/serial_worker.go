@@ -9,21 +9,18 @@ import (
 
 	"asika/common/config"
 	"asika/common/db"
-	"asika/common/events"
 	"asika/common/gitutil"
 	"asika/common/models"
 	"asika/common/platforms"
 )
 
 // SerialWorker handles serial merge validation: rebase → CI re-run → merge.
-// Ensures each PR in the queue is validated against the latest main before merging.
 type SerialWorker struct {
 	cfg     *models.Config
 	clients map[platforms.PlatformType]platforms.PlatformClient
 	stop    chan struct{}
 }
 
-// NewSerialWorker creates a new serial validation worker.
 func NewSerialWorker(cfg *models.Config, clients map[platforms.PlatformType]platforms.PlatformClient) *SerialWorker {
 	return &SerialWorker{
 		cfg:     cfg,
@@ -32,7 +29,6 @@ func NewSerialWorker(cfg *models.Config, clients map[platforms.PlatformType]plat
 	}
 }
 
-// Start begins the serial validation loop.
 func (w *SerialWorker) Start() {
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
@@ -50,12 +46,10 @@ func (w *SerialWorker) Start() {
 	slog.Info("serial validation worker started")
 }
 
-// Stop signals the worker to stop.
 func (w *SerialWorker) Stop() {
 	close(w.stop)
 }
 
-// Enqueue adds a PR to the serial validation queue.
 func (w *SerialWorker) Enqueue(item *models.QueueItem) error {
 	item.ValidationStatus = "validating"
 	item.ValidationStarted = time.Now()
@@ -84,8 +78,8 @@ func (w *SerialWorker) process() {
 		return
 	}
 
-	for i, item := range items {
-		w.processOne(&item, keys[i])
+	for i := range items {
+		w.processOne(&items[i], keys[i])
 	}
 }
 
@@ -93,7 +87,7 @@ func (w *SerialWorker) processOne(item *models.QueueItem, key string) {
 	switch item.ValidationStatus {
 	case "validating":
 		w.startRebase(item, key)
-	case "rebooting":
+	case "rebasing":
 		w.checkRebaseStatus(item, key)
 	case "waiting_ci":
 		w.waitForCI(item, key)
@@ -102,7 +96,6 @@ func (w *SerialWorker) processOne(item *models.QueueItem, key string) {
 	case "ready":
 		w.markMergeable(item, key)
 	case "validation_failed":
-		slog.Warn("serial validation failed", "pr_id", item.PRID, "reason", item.ValidationDetail)
 	default:
 		slog.Warn("unknown validation status", "pr_id", item.PRID, "status", item.ValidationStatus)
 	}
@@ -143,22 +136,21 @@ func (w *SerialWorker) startRebase(item *models.QueueItem, key string) {
 	token := config.GetToken(w.cfg, pr.Platform)
 	clonePath := w.cfg.Git.RepoClonePath
 
-	rebaseErr := gitutil.Rebase("", cloneURL, token, branchInfo.HeadBranch, branchInfo.BaseBranch, clonePath)
+	rebaseErr := gitutil.RebaseAndPush(clonePath, cloneURL, token, branchInfo.HeadBranch, branchInfo.BaseBranch)
 	if rebaseErr != nil {
-		w.fail(item, key, fmt.Sprintf("rebase failed: %v", rebaseErr))
+		w.fail(item, key, fmt.Sprintf("rebase+push failed: %v", rebaseErr))
 		return
 	}
 
 	item.ValidationStatus = "waiting_ci"
-	item.ValidationDetail = "rebased, waiting for CI"
+	item.ValidationDetail = "rebased and pushed, waiting for CI"
 	w.updateItem(item, key)
-	slog.Info("serial: rebase succeeded, waiting for CI", "pr_id", item.PRID)
+	slog.Info("serial: rebase succeeded, waiting for CI", "pr_id", item.PRID, "branch", branchInfo.HeadBranch)
 }
 
 func (w *SerialWorker) checkRebaseStatus(item *models.QueueItem, key string) {
 	if time.Since(item.ValidationStarted) > 10*time.Minute {
 		w.fail(item, key, "rebase timed out after 10 minutes")
-		return
 	}
 }
 
@@ -169,60 +161,29 @@ func (w *SerialWorker) waitForCI(item *models.QueueItem, key string) {
 		return
 	}
 
-	group := config.GetRepoGroupByName(w.cfg, pr.RepoGroup)
-	if group == nil {
-		w.fail(item, key, "repo group not found")
-		return
-	}
-
-	client := w.clients[platforms.PlatformType(pr.Platform)]
-	if client == nil {
-		w.fail(item, key, "no client")
-		return
-	}
-
-	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
-	commits, err := client.GetPRCommits(context.Background(), owner, repo, pr.PRNumber)
-	if err != nil {
-		slog.Warn("serial: failed to get commits, retrying", "pr_id", item.PRID, "error", err)
-		return
-	}
-	if len(commits) == 0 {
-		return
-	}
-
-	lastCommit := commits[len(commits)-1]
-	ciStatus, err := client.GetCIStatus(context.Background(), owner, repo, lastCommit)
+	ciStatus, err := w.getCIStatus(pr)
 	if err != nil {
 		slog.Warn("serial: failed to get CI status, retrying", "pr_id", item.PRID, "error", err)
 		return
 	}
 
-	if ciStatus == "pending" || ciStatus == "running" {
+	switch {
+	case ciStatus == "pending" || ciStatus == "running":
 		item.ValidationStatus = "ci_running"
-		item.ValidationDetail = fmt.Sprintf("CI running for commit %s", lastCommit[:8])
+		item.ValidationDetail = "CI running"
 		w.updateItem(item, key)
-		return
-	}
-
-	if ciStatus == "success" {
+	case ciStatus == "success":
 		item.ValidationStatus = "ready"
 		item.ValidationDetail = "CI passed, ready to merge"
 		w.updateItem(item, key)
-		events.PublishPR(events.EventSyncCompleted, pr.RepoGroup, pr.Platform, pr, nil)
 		slog.Info("serial: CI passed, marked ready", "pr_id", item.PRID)
-		return
+	case ciStatus == "failure" || ciStatus == "error":
+		w.fail(item, key, "CI failed")
+	default:
+		item.ValidationStatus = "ready"
+		item.ValidationDetail = fmt.Sprintf("CI status: %s", ciStatus)
+		w.updateItem(item, key)
 	}
-
-	if ciStatus == "failure" || ciStatus == "error" {
-		w.fail(item, key, fmt.Sprintf("CI failed for commit %s", lastCommit[:8]))
-		return
-	}
-
-	slog.Info("serial: CI status unknown, treating as ready", "pr_id", item.PRID, "status", ciStatus)
-	item.ValidationStatus = "ready"
-	item.ValidationDetail = fmt.Sprintf("CI status: %s", ciStatus)
-	w.updateItem(item, key)
 }
 
 func (w *SerialWorker) pollCIStatus(item *models.QueueItem, key string) {
@@ -232,49 +193,48 @@ func (w *SerialWorker) pollCIStatus(item *models.QueueItem, key string) {
 		return
 	}
 
+	ciStatus, err := w.getCIStatus(pr)
+	if err != nil {
+		return
+	}
+
+	switch {
+	case ciStatus == "success":
+		item.ValidationStatus = "ready"
+		item.ValidationDetail = "CI passed, ready to merge"
+		w.updateItem(item, key)
+		slog.Info("serial: CI passed", "pr_id", item.PRID)
+	case ciStatus == "failure" || ciStatus == "error":
+		w.fail(item, key, "CI failed")
+	default:
+		if time.Since(item.ValidationStarted) > 30*time.Minute {
+			w.fail(item, key, "CI timed out after 30 minutes")
+		}
+	}
+}
+
+func (w *SerialWorker) getCIStatus(pr *models.PRRecord) (string, error) {
 	group := config.GetRepoGroupByName(w.cfg, pr.RepoGroup)
 	if group == nil {
-		w.fail(item, key, "repo group not found")
-		return
+		return "", fmt.Errorf("repo group not found")
 	}
 
 	client := w.clients[platforms.PlatformType(pr.Platform)]
 	if client == nil {
-		w.fail(item, key, "no client")
-		return
+		return "", fmt.Errorf("no client for platform: %s", pr.Platform)
 	}
 
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	commits, err := client.GetPRCommits(context.Background(), owner, repo, pr.PRNumber)
 	if err != nil {
-		return
+		return "", err
 	}
 	if len(commits) == 0 {
-		return
+		return "", fmt.Errorf("no commits found")
 	}
 
 	lastCommit := commits[len(commits)-1]
-	ciStatus, err := client.GetCIStatus(context.Background(), owner, repo, lastCommit)
-	if err != nil {
-		return
-	}
-
-	if ciStatus == "success" {
-		item.ValidationStatus = "ready"
-		item.ValidationDetail = "CI passed, ready to merge"
-		w.updateItem(item, key)
-		slog.Info("serial: CI passed", "pr_id", item.PRID)
-		return
-	}
-
-	if ciStatus == "failure" || ciStatus == "error" {
-		w.fail(item, key, fmt.Sprintf("CI failed for commit %s", lastCommit[:8]))
-		return
-	}
-
-	if time.Since(item.ValidationStarted) > 30*time.Minute {
-		w.fail(item, key, "CI timed out after 30 minutes")
-	}
+	return client.GetCIStatus(context.Background(), owner, repo, lastCommit)
 }
 
 func (w *SerialWorker) markMergeable(item *models.QueueItem, key string) {
