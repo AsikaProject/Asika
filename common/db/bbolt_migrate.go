@@ -118,3 +118,21 @@ func setVersion(tx *bbolt.Tx, version int) error {
 	}
 	return b.Put([]byte(migrationVersionKey), []byte(fmt.Sprintf("%d", version)))
 }
+
+func BackupToFile(dest string) error {
+	s, ok := defaultStorage.(*bboltStorage)
+	if !ok {
+		return fmt.Errorf("backup only supported on bbolt storage")
+	}
+	return s.db.View(func(tx *bbolt.Tx) error {
+		return tx.CopyFile(dest, 0600)
+	})
+}
+
+func RunMigrations() error {
+	s, ok := defaultStorage.(*bboltStorage)
+	if !ok {
+		return nil
+	}
+	return s.runMigrations()
+}
