@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"asika/common/db"
@@ -28,10 +29,38 @@ var criticalLabels = map[string]bool{
 }
 
 var urgentLabels = map[string]bool{
-	"urgent": true, "high-priority": true, "needs-review": true,
+	"urgent": true, "high-priority": true,
 }
 
-// CalculatePRPriority determines the priority of a PR based on its labels.
+var criticalPaths = []string{
+	"src/core/", "src/security/", "cmd/", "internal/core/",
+}
+
+// EscalationLevel defines who gets notified at each level.
+type EscalationLevel struct {
+	Level    int
+	Target   string        // "reviewer" | "team" | "tech_lead"
+	Threshold time.Duration
+}
+
+var escalationLevels = map[string][]EscalationLevel{
+	PriorityCritical: {
+		{Level: 1, Target: "reviewer", Threshold: 1 * time.Hour},
+		{Level: 2, Target: "team", Threshold: 2 * time.Hour},
+		{Level: 3, Target: "tech_lead", Threshold: 4 * time.Hour},
+	},
+	PriorityUrgent: {
+		{Level: 1, Target: "reviewer", Threshold: 4 * time.Hour},
+		{Level: 2, Target: "team", Threshold: 8 * time.Hour},
+		{Level: 3, Target: "tech_lead", Threshold: 12 * time.Hour},
+	},
+	PriorityNormal: {
+		{Level: 1, Target: "reviewer", Threshold: 24 * time.Hour},
+		{Level: 2, Target: "team", Threshold: 48 * time.Hour},
+	},
+}
+
+// CalculatePRPriority determines the priority of a PR based on labels, author, and file paths.
 func CalculatePRPriority(pr *models.PRRecord) string {
 	for _, lbl := range pr.Labels {
 		if criticalLabels[lbl] {
@@ -43,9 +72,17 @@ func CalculatePRPriority(pr *models.PRRecord) string {
 			return PriorityUrgent
 		}
 	}
+	for _, f := range pr.DiffFiles {
+		for _, p := range criticalPaths {
+			if strings.HasPrefix(f, p) {
+				return PriorityUrgent
+			}
+		}
+	}
 	return PriorityNormal
 }
 
+// EscalationWorker periodically checks for PRs that need escalation.
 type EscalationWorker struct {
 	stop chan struct{}
 }
@@ -101,45 +138,76 @@ func (w *EscalationWorker) checkEscalations() {
 
 func (w *EscalationWorker) escalateIfNeeded(pr *models.PRRecord, now time.Time) {
 	priority := CalculatePRPriority(pr)
-	threshold, ok := escalationThresholds[priority]
-	if !ok || threshold == 0 {
+	levels, ok := escalationLevels[priority]
+	if !ok || len(levels) == 0 {
 		return
 	}
 
-	if now.Sub(pr.CreatedAt) < threshold {
-		return
-	}
-
+	openFor := now.Sub(pr.CreatedAt)
 	escKey := fmt.Sprintf("escalation:%s", pr.ID)
+
+	var currentLevel int
 	escData, err := db.Get(db.BucketEscalationRules, escKey)
 	if err == nil && escData != nil {
-		var lastEscalated time.Time
-		if err := json.Unmarshal(escData, &lastEscalated); err == nil {
-			if now.Sub(lastEscalated) < threshold {
-				return
-			}
+		json.Unmarshal(escData, &currentLevel)
+	}
+
+	var triggered *EscalationLevel
+	for i := range levels {
+		if openFor >= levels[i].Threshold && currentLevel < levels[i].Level {
+			triggered = &levels[i]
 		}
 	}
 
-	tsData, _ := json.Marshal(now)
-	db.Put(db.BucketEscalationRules, escKey, tsData)
-
-	title, body := w.formatNotification(pr, priority, now)
-	SendNotification(context.Background(), title, body)
-
-	slog.Info("PR escalated", "pr_id", pr.ID, "priority", priority, "open_for", now.Sub(pr.CreatedAt).Round(time.Hour))
-}
-
-func (w *EscalationWorker) formatNotification(pr *models.PRRecord, priority string, now time.Time) (string, body string) {
-	openFor := now.Sub(pr.CreatedAt).Round(time.Hour)
-
-	if priority == PriorityCritical {
-		return fmt.Sprintf("🚨 CRITICAL: PR #%d needs immediate attention", pr.PRNumber),
-			fmt.Sprintf("PR '%s' by %s in %s has been open for %s without review.\nPriority: %s\nURL: %s",
-				pr.Title, pr.Author, pr.RepoGroup, openFor, priority, pr.HTMLURL)
+	if triggered == nil {
+		return
 	}
 
-	return fmt.Sprintf("⏰ PR #%d awaiting review (%s)", pr.PRNumber, priority),
-		fmt.Sprintf("PR '%s' by %s in %s has been open for %s.\nPriority: %s\nURL: %s",
-			pr.Title, pr.Author, pr.RepoGroup, openFor, priority, pr.HTMLURL)
+	w.notify(pr, priority, triggered, openFor)
+	currentLevel = triggered.Level
+	levelData, _ := json.Marshal(currentLevel)
+	db.Put(db.BucketEscalationRules, escKey, levelData)
+
+	slog.Info("PR escalated",
+		"pr_id", pr.ID,
+		"priority", priority,
+		"level", triggered.Level,
+		"target", triggered.Target,
+		"open_for", openFor.Round(time.Hour))
+}
+
+func (w *EscalationWorker) notify(pr *models.PRRecord, priority string, level *EscalationLevel, openFor time.Duration) {
+	title, body := formatEscalationMessage(pr, priority, level, openFor)
+
+	switch level.Target {
+	case "reviewer":
+		SendNotification(context.Background(), title, body)
+	case "team":
+		SendNotification(context.Background(), title, body)
+	case "tech_lead":
+		SendNotification(context.Background(), title, body)
+	}
+}
+
+func formatEscalationMessage(pr *models.PRRecord, priority string, level *EscalationLevel, openFor time.Duration) (string, string) {
+	openForStr := openFor.Round(time.Hour).String()
+
+	switch level.Target {
+	case "reviewer":
+		return fmt.Sprintf("📋 PR #%d needs your review", pr.PRNumber),
+			fmt.Sprintf("PR '%s' by %s in %s is waiting for review.\nOpen for: %s\nPriority: %s\nURL: %s",
+				pr.Title, pr.Author, pr.RepoGroup, openForStr, priority, pr.HTMLURL)
+	case "team":
+		return fmt.Sprintf("⏰ PR #%d awaiting review (%s)", pr.PRNumber, priority),
+			fmt.Sprintf("PR '%s' by %s in %s has been open for %s.\nPriority: %s\nURL: %s",
+				pr.Title, pr.Author, pr.RepoGroup, openForStr, priority, pr.HTMLURL)
+	case "tech_lead":
+		return fmt.Sprintf("🚨 CRITICAL: PR #%d needs immediate attention", pr.PRNumber),
+			fmt.Sprintf("PR '%s' by %s in %s has been open for %s without review.\nPriority: %s\nEscalation Level: %d\nURL: %s",
+				pr.Title, pr.Author, pr.RepoGroup, openForStr, priority, level.Level, pr.HTMLURL)
+	default:
+		return fmt.Sprintf("PR #%d escalation", pr.PRNumber),
+			fmt.Sprintf("PR '%s' by %s in %s has been open for %s.",
+				pr.Title, pr.Author, pr.RepoGroup, openForStr)
+	}
 }
