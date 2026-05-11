@@ -28,16 +28,16 @@ gen_version() {
 }
 
 # Build with strip (default)
-build() {
-	local version
-	version=$(gen_version)
-	local ldflags="-s -w -X 'asika/common/version.Version=${version}'"
-	echo "Building with version: ${version} (stripped)"
-	env go build -ldflags="${ldflags}" -o asikad ./cmd/asikad/main.go
-	env go build -ldflags="${ldflags}" -o asika ./cmd/asika/main.go
-	strip asika
-	strip asikad
-}
+	build() {
+		local version
+		version=$(gen_version)
+		local ldflags="-s -w -X 'asika/common/version.Version=${version}' -X 'asika/common/version.Enabled=true'"
+		echo "Building with version: ${version} (stripped)"
+		env go build -ldflags="${ldflags}" -o asikad ./cmd/asikad/main.go
+		env go build -ldflags="${ldflags}" -o asika ./cmd/asika/main.go
+		strip asika
+		strip asikad
+	}
 
 # Download dependencies
 dep() {

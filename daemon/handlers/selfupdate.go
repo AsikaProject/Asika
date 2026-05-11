@@ -56,11 +56,12 @@ func CheckForUpdate(c *gin.Context) {
 	}
 
 	latestVersion := strings.TrimPrefix(release.GetTagName(), "v")
+	upgradable := latestVersion != "" && latestVersion != version.Version
 
 	c.JSON(http.StatusOK, gin.H{
 		"current":      version.Version,
 		"latest":       latestVersion,
-		"upgradable":   version.Version != "dev" && latestVersion != version.Version,
+		"upgradable":   upgradable,
 		"url":          release.GetHTMLURL(),
 		"published_at": release.GetPublishedAt(),
 	})
