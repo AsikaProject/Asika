@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	keyEnvVar  = "ASIKA_MASTER_KEY"
-	keyLength  = 32
-	nonceSize  = 12
-	prefix     = "enc:"
+	keyEnvVar = "ASIKA_MASTER_KEY"
+	keyLength = 32
+	nonceSize = 12
+	prefix    = "enc:"
 )
 
 var masterKey []byte

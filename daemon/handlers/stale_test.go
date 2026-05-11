@@ -26,7 +26,7 @@ func setupStaleTest(t *testing.T, mgr *stale.Manager) (*gin.Engine, func()) {
 
 	auth.Init("stale-test-secret", 72*time.Hour)
 
- 	mock := testutil.NewMockPlatformClient()
+	mock := testutil.NewMockPlatformClient()
 	pr.InitClients(map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: mock,
 	})

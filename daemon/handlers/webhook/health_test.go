@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
-	"asika/common/config"
 	"asika/testutil"
 )
 

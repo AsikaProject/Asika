@@ -150,9 +150,9 @@ func UpdateConfig(c *gin.Context) {
 	if reviewRules, ok := patch["review_rules"]; ok {
 		existing["review_rules"] = reviewRules
 	}
- 	if closeReasons, ok := patch["close_reasons"]; ok {
- 		existing["close_reasons"] = closeReasons
- 	}
+	if closeReasons, ok := patch["close_reasons"]; ok {
+		existing["close_reasons"] = closeReasons
+	}
 	if workerPool, ok := patch["worker_pool"]; ok {
 		existing["worker_pool"] = workerPool
 	}

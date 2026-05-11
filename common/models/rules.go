@@ -14,8 +14,8 @@ type LabelRule struct {
 	Color       string           `json:"color,omitempty" toml:"color"`
 	Description string           `json:"description,omitempty" toml:"description"`
 	Conditions  []LabelCondition `json:"conditions,omitempty" toml:"conditions"`
-	Logic       string           `json:"logic,omitempty" toml:"logic"`     // "and" or "or", default "and"
-	Priority    int              `json:"priority,omitempty" toml:"priority"` // higher = evaluated first
+	Logic       string           `json:"logic,omitempty" toml:"logic"`         // "and" or "or", default "and"
+	Priority    int              `json:"priority,omitempty" toml:"priority"`   // higher = evaluated first
 	Exclusive   bool             `json:"exclusive,omitempty" toml:"exclusive"` // if true, stop after this rule matches
 }
 

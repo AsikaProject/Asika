@@ -14,9 +14,9 @@ func TestDryRun_ValidPatch(t *testing.T) {
 	defer db.Close()
 
 	cfg := &models.Config{
-		Server: models.ServerConfig{Listen: ":8080", Mode: "release"},
+		Server:   models.ServerConfig{Listen: ":8080", Mode: "release"},
 		Database: models.DatabaseConfig{Type: "bbolt", Path: "/tmp/test.db"},
-		Auth: models.AuthConfig{JWTSecret: "test-secret"},
+		Auth:     models.AuthConfig{JWTSecret: "test-secret"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "default", Mode: "multi", GitHub: "org/repo"},
 		},
@@ -62,9 +62,9 @@ func TestDryRun_InvalidTOML(t *testing.T) {
 	defer db.Close()
 
 	cfg := &models.Config{
-		Server: models.ServerConfig{Listen: ":8080", Mode: "release"},
+		Server:   models.ServerConfig{Listen: ":8080", Mode: "release"},
 		Database: models.DatabaseConfig{Type: "bbolt", Path: "/tmp/test.db"},
-		Auth: models.AuthConfig{JWTSecret: "test-secret"},
+		Auth:     models.AuthConfig{JWTSecret: "test-secret"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "default", Mode: "multi", GitHub: "org/repo"},
 		},

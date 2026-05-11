@@ -20,11 +20,11 @@ import (
 
 // Poller polls platforms for PR changes
 type Poller struct {
-	cfg            *models.Config
-	clients        map[platforms.PlatformType]platforms.PlatformClient
-	stop           chan struct{}
-	forcePoll      map[string]bool
-	forcePollMu    sync.RWMutex
+	cfg         *models.Config
+	clients     map[platforms.PlatformType]platforms.PlatformClient
+	stop        chan struct{}
+	forcePoll   map[string]bool
+	forcePollMu sync.RWMutex
 }
 
 // SetForcePoll enables or disables forced polling for a repo group.

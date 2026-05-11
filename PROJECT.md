@@ -27,6 +27,7 @@ graph TB
             QC[Queue Manager]
             SY[Syncer]
             LB[Labeler]
+            RV[Reviewer]
             SD[Spam Detector]
         end
 
@@ -68,8 +69,13 @@ graph TB
             SL[slack/]
         end
 
+        subgraph Feed["RSS Feed"]
+            FD[Feed Subscriber]
+            FG[RSS Generator]
+        end
+
         subgraph DB["Storage (bbolt / MongoDB)"]
-            BDB[(13 buckets)]
+            BDB[(21 buckets)]
         end
     end
 
@@ -88,6 +94,7 @@ graph TB
     RO --> QC
     RO --> SY
     RO --> SD
+    RO --> RV
 
     QC --> EB
     SY --> EB
@@ -96,6 +103,7 @@ graph TB
     WP --> WA
     WA --> BDB
     WP --> LB
+    WP --> RV
     WP --> QC
     WP --> SD
 
@@ -116,6 +124,9 @@ graph TB
     QC --> BDB
     EC --> BDB
     SD --> BDB
+
+    EB --> FD
+    FD --> FG
 ```
 
 ### Middleware Chain
@@ -136,7 +147,8 @@ Route-specific middleware:
 - `RequireRole(role)` — Checks role hierarchy (admin > operator > viewer)
 - `RequireAnyRole(roles...)` — Checks if user has any of the listed roles
 - `RequirePermission(field)` — Checks granular permission (can_approve, can_merge, can_close, can_reopen, can_spam, can_manage_queue, can_revert)
-- `RequireRepoGroupAccess()` — Checks user's allowed repo groups against URL parameter
+- `RequireRepoGroupAccess()` — Checks user's allowed repo groups against URL parameter; also supports API key `AllowedRepoGroups`
+- `RequireRepoAccess()` — Finer-grained check: resolves the actual `owner/repo` from the PR record and checks against user's `AllowedRepos` list
 
 ### Permission Model
 
@@ -155,7 +167,11 @@ Three-tier role hierarchy with six granular permissions:
 | User Management | ❌ | ❌ | ✅ |
 | Config Management | ❌ | ❌ | ✅ |
 
-Non-admin users can be assigned to specific repo groups. Empty `AllowedRepoGroups` = access to all groups (backward compatible).
+Non-admin users can be assigned to specific repo groups and repos:
+- `AllowedRepoGroups []string` — empty = access to all groups (backward compatible)
+- `AllowedRepos []string` — empty = access to all repos; format: `"owner/repo"`; resolved from PR record at request time
+
+Both fields are supported on `User` (JWT auth) and `APIKey` (API key auth).
 
 Temporary tokens: Users can generate short-lived JWT tokens (1m–24h) with a `temp: true` claim and a `permissions` map. `RequirePermission` middleware checks temp token permissions before falling through to DB permissions. Generated via `POST /api/v1/auth/temp-token`.
 
@@ -171,6 +187,40 @@ Temporary tokens: Users can generate short-lived JWT tokens (1m–24h) with a `t
 - **Webhook Health Checker** — Every 2 minutes, checks `webhook_health` bucket per repo group/platform. If no webhook received within threshold, enables forced polling for that repo group (auto-fallback).
 - **Serial Validation Worker** — Processes `serial_queue` bucket items through validation state machine: rebase onto latest main → re-validate CI → mark merge-ready. Prevents post-merge CI failures.
 - **Escalation Worker** — Hourly scans open PRs, calculates priority from labels + file paths, sends tiered notifications: reviewer → team → tech_lead based on priority and time open.
+- **Feed Subscriber** — Subscribes to the event bus, feeds PR events (opened/merged/closed/approved/reopened) into the in-memory ring buffer for RSS generation.
+
+### Reviewer Auto-Assignment
+
+The reviewer system assigns reviewers to PRs automatically through two mechanisms:
+
+1. **Review Rules** — Pattern-based rules (file path, title, author) defined globally (`[review_rules]`) or per-repo-group (`[[repo_groups.review_rules]]`). Group rules are merged with global rules, sorted by priority. Reuses the labeler's `MatchRule()` engine with `file:`, `title:`, `author:` scope prefixes.
+
+2. **CODEOWNERS** — When no review rules match, the system fetches a CODEOWNERS file from the repository (tries `CODEOWNERS`, `.github/CODEOWNERS`, `.gitlab/CODEOWNERS`, `docs/CODEOWNERS`). Parsed with GitHub-style last-match-wins semantics. Results are cached in-memory with a 5-minute TTL.
+
+Trigger flow: webhook/poller → event bus → consumer → `reviewer.HandlePROpenedWithCodeOwners()` → platform API `RequestReview()`.
+
+Manual assignment endpoints:
+- `POST /api/v1/repos/:repo_group/prs/:pr_id/assign` — Manually assign reviewers (requires `approve` permission)
+- `POST /api/v1/repos/:repo_group/prs/:pr_id/codeowners-assign` — Re-evaluate CODEOWNERS and assign (requires `approve` permission)
+
+### RSS Feed
+
+The RSS feed provides a pull-based stream of PR activity:
+
+- `GET /api/v1/feed.xml` — Global RSS feed (all repo groups). Append `?repo_group=<name>` to filter.
+- `GET /api/v1/feed/config` — View feed configuration (admin only)
+- `PUT /api/v1/feed/config` — Update feed configuration (admin only)
+
+Feed configuration (`[feed]` TOML section):
+```toml
+[feed]
+enabled     = true
+title       = "Asika PR Feed"
+max_items   = 50
+public_feed = false
+```
+
+Feed items are stored in an in-memory ring buffer (default 50 items max). The feed subscriber consumes events from the event bus: `pr_opened`, `pr_merged`, `pr_closed`, `pr_approved`, `pr_reopened`.
 
 ### Actor System (Goroutine Pools)
 
@@ -184,8 +234,8 @@ The event consumer uses an Actor-model architecture with goroutine pools for con
 
 ```
 Publisher → [100 buffer] → Event Dispatcher → Worker Pool (min..max goroutines, dynamic)
-                                                   ↓
-                                             Writer Actor (bbolt)
+                                               ↓
+                                         Writer Actor (bbolt)
 ```
 
 This architecture provides:
@@ -225,6 +275,7 @@ Buckets (21 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `pr_index_by_id` | `{prID}` → index | → `prs` bucket key |
 | `pr_index_by_rg_num` | `{repoGroup}:{prNumber}` → index | → `prs` bucket key |
 | `queue_items` | `{repoGroup}#{prID}` | QueueItem (JSON) |
+| `serial_queue` | `{repoGroup}#{prID}` | QueueItem (JSON); serial validation queue with `ValidationStatus` field |
 | `users` | `{username}` | User (JSON) |
 | `api_keys` | `{keyID}` | APIKey (JSON) |
 | `logs` | `{nanosecondTimestamp}_{randomHex}` | AuditLog (JSON) |
@@ -244,7 +295,6 @@ Buckets (21 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `issue_pr_links` | `{issueID}:{prID}` | IssuePRLink (JSON); bidirectional issue-to-PR links parsed from PR descriptions |
 | `pr_dependencies` | `{prID}:{dependsOnPRID}` | PRDependency (JSON); cross-repo PR dependencies from `Depends-on:` declarations |
 | `pr_templates` | `{repoGroup}:{platform}` | PRTemplate (JSON); fetched PR templates with checklist detection |
-| `serial_queue` | `{repoGroup}#{prID}` | QueueItem (JSON); serial validation queue with `ValidationStatus` field |
 | `cross_space_deps` | `{sourcePRID}:{targetPRID}` | CrossSpaceDep (JSON); cross-space dependency records |
 | `escalation_rules` | `{prID}` or `"default"` | Escalation state (JSON); last escalation timestamp or level |
 
@@ -264,6 +314,50 @@ Schema migrations (bbolt only):
 Config versioning:
 - Snapshots stored in `config_history` with auto-incrementing zero-padded versions
 - Auto-pruned to latest 20; rollback via `POST /api/v1/config/rollback`
+
+### Platform Clients
+
+All platform implementations live in `common/platforms/` and satisfy `PlatformClient` interface (`common/platforms/interface.go`):
+
+| Platform | File | SDK / Notes |
+|----------|------|-------------|
+| GitHub | `github.go` | `google/go-github` |
+| GitLab | `gitlab.go` | `gitlab.com/gitlab-org/api/client-go` |
+| Gitea | `gitea.go` | `code.gitea.io/sdk/gitea` |
+| Forgejo/Codeberg | `gitea.go` | Reuses Gitea client |
+| Bitbucket | `bitbucket.go` | **Pure HTTP, no SDK** |
+| Gerrit | `gerrit.go` | `andygrunwald/go-gerrit` — uses `context.Context` on all calls |
+
+### Webhook Package
+
+`daemon/handlers/webhook/` is a sub-package:
+- `webhook.go` — Core handler, `ProcessWebhook`, signature verify, event dispatch
+- `github.go`, `gitlab.go`, `gitea.go`, `bitbucket.go`, `gerrit.go` — Per-platform parsing
+- `comment.go` — `extractCommentPayload`
+- `health.go` — `GET /api/v1/webhooks/health` returns per-platform health status
+- `retry.go` — `StartWebhookRetryWorker`, exponential backoff, permanent failure notification
+
+### PR Handlers
+
+`daemon/handlers/pr/` is a sub-package for PR operation handlers:
+- `pr.go` — Shared vars, `ListPRs`, `GetPR`, exported helpers
+- `approve.go` — `ApprovePR`, `BatchApprovePR`
+- `close.go` — `ClosePR`, `MarkSpam`, `BatchClosePR`
+- `reopen.go` — `ReopenPR`
+- `comment.go` — `CommentPR`
+- `label.go` — `BatchLabelPR`
+- `logs.go` — `GetLogs`, `ExportLogs`
+
+### Reviewer Package
+
+`daemon/reviewer/` handles automatic reviewer assignment:
+- `reviewer.go` — `Reviewer` struct, `HandlePROpened()` (rules only), `HandlePROpenedWithCodeOwners()` (rules + CODEOWNERS fallback), `mergeReviewRules()` (global + per-group merge)
+- `codeowners.go` — `CodeOwners` parser, `GetCodeOwnersForRepo()` with TTL cache, `Match()`/`MatchFiles()` with last-match-wins semantics
+
+### Feed Package
+
+`daemon/feed/` provides RSS feed generation:
+- `feed.go` — `Feed` struct (ring buffer), `RSS`/`RSSChannel`/`RSSItem` XML types, `GenerateRSS()`, `StartFeedSubscriber()`, global `InitGlobalFeed()`/`GlobalFeed()`
 
 ## Development
 
@@ -299,21 +393,24 @@ graph TB
     subgraph daemon["daemon/"]
         SRV[server/ → HTTP/bootstrap]
          HAND[handlers/ → API routes]
-         PR[handlers/pr/ → PR handlers]
+         PR_H[handlers/pr/ → PR handlers]
          HOOK[handlers/webhook/ → Webhook parsing]
-        QUEUE[queue/ → Merge queue]
-        SYNC[syncer/ → Cross-sync]
-        CONS[consumer/ → Events]
-        LABEL[labeler/ → Labels]
-        POLL[polling/ → Polling]
-        TPL[templates/ → WebUI]
-        TG[telegram/ → Telegram bot]
-        FS[feishu/ → Feishu bot]
-        DC[discord/ → Discord bot]
-        SL[slack/ → Slack bot]
-        GHOK[hooks/ → Git hooks]
-        STALE[stale/ → Stale PRs]
-        SPAM[spam/ → Spam detect]
+         ASSIGN[handlers/assign.go → Reviewer assignment]
+         FEED_H[handlers/feed.go → RSS feed]
+         FEED[feed/ → Feed engine]
+         REVIEW[reviewer/ → Reviewer + CODEOWNERS]
+         QUEUE[queue/ → Merge queue]
+         SYNC[syncer/ → Cross-sync]
+         CONS[consumer/ → Events]
+         LABEL[labeler/ → Labels]
+         POLL[polling/ → Polling]
+         TPL[templates/ → WebUI]
+         TG[telegram/ → Telegram bot]
+         FS[feishu/ → Feishu bot]
+         DC[discord/ → Discord bot]
+         SL[slack/ → Slack bot]
+         GHOK[hooks/ → Git hooks]
+         STALE[stale/ → Stale PRs]
     end
 
     ASIKA --> LIB_CMD
@@ -330,7 +427,9 @@ graph TB
     HAND --> SYNC
     HAND --> CONS
     CONS --> LABEL
+    CONS --> REVIEW
     CONS --> QUEUE
+    EB --> FEED
 ```
 
 ### Running Tests

@@ -363,12 +363,12 @@ func (s *mongoStorage) PutPRDependency(dep *models.PRDependency) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	doc := bson.M{
-		"_id":             fmt.Sprintf("%s:%s", dep.PRID, dep.DependsOnPRID),
-		"pr_id":           dep.PRID,
+		"_id":              fmt.Sprintf("%s:%s", dep.PRID, dep.DependsOnPRID),
+		"pr_id":            dep.PRID,
 		"depends_on_pr_id": dep.DependsOnPRID,
-		"depends_on_url":  dep.DependsOnURL,
-		"repo_group":      dep.RepoGroup,
-		"platform":        dep.Platform,
+		"depends_on_url":   dep.DependsOnURL,
+		"repo_group":       dep.RepoGroup,
+		"platform":         dep.Platform,
 	}
 	_, err := s.coll(BucketPRDependencies).InsertOne(ctx, doc)
 	if err != nil {

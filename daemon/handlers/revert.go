@@ -13,8 +13,8 @@ import (
 	"asika/common/db"
 	"asika/common/events"
 	"asika/common/models"
-	handlerspr "asika/daemon/handlers/pr"
 	commonutil "asika/common/platformutil"
+	handlerspr "asika/daemon/handlers/pr"
 )
 
 // RevertPR handles POST /api/v1/repos/:repo_group/prs/:pr_id/revert

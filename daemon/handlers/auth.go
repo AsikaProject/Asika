@@ -4,16 +4,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 
-	"asika/common/i18n"
-	"time"
-
 	"asika/common/auth"
 	"asika/common/config"
 	"asika/common/db"
+	"asika/common/i18n"
 	"asika/common/models"
 )
 
@@ -34,7 +33,6 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Find user in DB
 	var user models.User
 	data, err := db.Get(db.BucketUsers, req.Username)
 	if err != nil {
@@ -46,20 +44,17 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
 
-	// Generate JWT
 	token, err := auth.GenerateJWT(user.Username, user.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 		return
 	}
 
-	// Set cookie for SSR page auth (browser navigations don't send Authorization header)
 	c.SetCookie(
 		"asika_token", token,
 		int(config.GenerateTokenExpiry(cfg.Auth.TokenExpiry).Seconds()),
@@ -120,6 +115,7 @@ func CreateUser(c *gin.Context) {
 		Password          string   `json:"password"`
 		Role              string   `json:"role"`
 		AllowedRepoGroups []string `json:"allowed_repo_groups"`
+		AllowedRepos      []string `json:"allowed_repos"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -141,18 +137,14 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	// Hash password
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
 		return
 	}
 
-	// Only operator can have granular permissions; viewer and admin have fixed permissions
 	perms := models.UserPermissions{}
 	if req.Role == "operator" {
-		// Permissions are not set on creation via this handler; they default to false
-		// and must be explicitly enabled via update
 	}
 
 	user := models.User{
@@ -160,6 +152,7 @@ func CreateUser(c *gin.Context) {
 		PasswordHash:      string(hash),
 		Role:              req.Role,
 		AllowedRepoGroups: req.AllowedRepoGroups,
+		AllowedRepos:      req.AllowedRepos,
 		Permissions:       perms,
 	}
 
@@ -189,6 +182,7 @@ func UpdateUser(c *gin.Context) {
 		Password          *string  `json:"password"`
 		Role              *string  `json:"role"`
 		AllowedRepoGroups []string `json:"allowed_repo_groups"`
+		AllowedRepos      []string `json:"allowed_repos"`
 		Permissions       *struct {
 			CanApprove     *bool `json:"can_approve"`
 			CanMerge       *bool `json:"can_merge"`
@@ -203,7 +197,6 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
-	// Load existing user
 	data, err := db.Get(db.BucketUsers, username)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
@@ -215,7 +208,6 @@ func UpdateUser(c *gin.Context) {
 		return
 	}
 
-	// Update fields
 	if req.Password != nil && *req.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
 		if err != nil {
@@ -231,14 +223,15 @@ func UpdateUser(c *gin.Context) {
 			return
 		}
 		user.Role = *req.Role
-		// viewer has no extra permissions; admin has all implicitly
-		// only operator can have granular permissions configured
 		if *req.Role == "viewer" {
 			user.Permissions = models.UserPermissions{}
 		}
 	}
 	if req.AllowedRepoGroups != nil {
 		user.AllowedRepoGroups = req.AllowedRepoGroups
+	}
+	if req.AllowedRepos != nil {
+		user.AllowedRepos = req.AllowedRepos
 	}
 	if req.Permissions != nil && user.Role == "operator" {
 		p := req.Permissions
@@ -292,7 +285,6 @@ func DeleteUser(c *gin.Context) {
 }
 
 // CreateTempToken handles POST /api/v1/auth/temp-token
-// Generates a short-lived token with elevated permissions for temporary access.
 func CreateTempToken(c *gin.Context) {
 	username, _ := c.Get("username")
 	role, _ := c.Get("role")
@@ -302,8 +294,8 @@ func CreateTempToken(c *gin.Context) {
 	}
 
 	var req struct {
-		Duration    string            `json:"duration"`     // e.g. "30m", "1h"
-		Permissions map[string]bool   `json:"permissions"`  // e.g. {"can_merge": true, "can_approve": true}
+		Duration    string          `json:"duration"`
+		Permissions map[string]bool `json:"permissions"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -349,7 +341,6 @@ func CreateTempToken(c *gin.Context) {
 }
 
 // SetLocale handles POST /api/v1/locale
-// Sets the UI locale via cookie.
 func SetLocale(c *gin.Context) {
 	var req struct {
 		Locale string `json:"locale"`

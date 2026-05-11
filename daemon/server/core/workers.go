@@ -13,6 +13,7 @@ import (
 	"asika/common/platforms"
 	"asika/common/utils"
 	"asika/daemon/consumer"
+	"asika/daemon/feed"
 	"asika/daemon/handlers"
 	"asika/daemon/handlers/pr"
 	"asika/daemon/handlers/webhook"
@@ -131,6 +132,11 @@ func StartWorkers(
 	// Escalation worker
 	escalationWorker := NewEscalationWorker()
 	escalationWorker.Start()
+
+	// RSS feed
+	feed.InitGlobalFeed(cfg.Feed)
+	feed.StartFeedSubscriber()
+	slog.Info("RSS feed subscriber started", "enabled", cfg.Feed.Enabled)
 
 	return
 }

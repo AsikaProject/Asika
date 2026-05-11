@@ -38,8 +38,8 @@ var criticalPaths = []string{
 
 // EscalationLevel defines who gets notified at each level.
 type EscalationLevel struct {
-	Level    int
-	Target   string        // "reviewer" | "team" | "tech_lead"
+	Level     int
+	Target    string // "reviewer" | "team" | "tech_lead"
 	Threshold time.Duration
 }
 

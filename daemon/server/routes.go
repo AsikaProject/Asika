@@ -119,6 +119,13 @@ func (s *Server) setupRoutes() {
 			}
 
 			prs.POST("/batch/label", handlers.BatchLabelPR)
+
+			prsAssign := prs.Group("")
+			prsAssign.Use(RequirePermission("approve"))
+			{
+				prsAssign.POST("/:pr_id/assign", handlers.AssignReviewers)
+				prsAssign.POST("/:pr_id/codeowners-assign", handlers.TriggerCodeOwnersAssign)
+			}
 		}
 
 		queue := protected.Group("/queue/:repo_group")
@@ -188,6 +195,14 @@ func (s *Server) setupRoutes() {
 
 		protected.GET("/webhooks/health", webhook.WebhookHealthHandler)
 		cfgGroup.POST("/dry-run", handlers.DryRunConfig)
+
+		protected.GET("/feed.xml", handlers.GetFeed)
+		feedAdmin := protected.Group("/feed")
+		feedAdmin.Use(RequireRole("admin"))
+		{
+			feedAdmin.GET("/config", handlers.GetFeedConfig)
+			feedAdmin.PUT("/config", handlers.UpdateFeedConfig)
+		}
 
 		admin := protected.Group("/admin")
 		admin.Use(RequireRole("admin"))

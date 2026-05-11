@@ -26,7 +26,7 @@ func setupQueueHandlerTest(t *testing.T) (*gin.Engine, func()) {
 
 	testutil.NewTestDB(t)
 
- 	mock := testutil.NewMockPlatformClient()
+	mock := testutil.NewMockPlatformClient()
 	testClients := map[platforms.PlatformType]platforms.PlatformClient{
 		platforms.PlatformGitHub: mock,
 	}

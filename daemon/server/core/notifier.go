@@ -97,8 +97,8 @@ type dedupEntry struct {
 }
 
 var (
-	dedupMu      sync.Mutex
-	dedupTimers  = make(map[string]*time.Timer)
+	dedupMu     sync.Mutex
+	dedupTimers = make(map[string]*time.Timer)
 )
 
 func dedupBufferKey(prID, notifierType string) string {

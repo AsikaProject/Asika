@@ -261,11 +261,11 @@ func GetTeamStats(c *gin.Context) {
 			avgLead = ad.leadTimeSum / float64(ad.leadTimeCnt)
 		}
 		stats = append(stats, models.AuthorStats{
-			Author:           name,
-			PRsOpened:        ad.opened,
-			PRsMerged:        ad.merged,
-			PRsReviewed:      ad.reviewEvents,
-			AvgLeadTimeHrs:   avgLead,
+			Author:         name,
+			PRsOpened:      ad.opened,
+			PRsMerged:      ad.merged,
+			PRsReviewed:    ad.reviewEvents,
+			AvgLeadTimeHrs: avgLead,
 		})
 	}
 
@@ -289,14 +289,14 @@ func GetTeamStats(c *gin.Context) {
 
 // BottleneckStats holds identified bottleneck PRs.
 type BottleneckStats struct {
-	PeriodDays          int              `json:"period_days"`
-	ReopenedPRs         []BottleneckPR   `json:"reopened_prs"`
-	LongReviewPRs       []BottleneckPR   `json:"long_review_prs"`
-	StalePRs            []BottleneckPR   `json:"stale_prs"`
-	FrequentRejectPRs   []BottleneckPR   `json:"frequent_reject_prs"`
-	AvgLeadTimeHrs      float64          `json:"avg_lead_time_hours"`
-	P90LeadTimeHrs      float64          `json:"p90_lead_time_hours"`
-	P95LeadTimeHrs      float64          `json:"p95_lead_time_hours"`
+	PeriodDays        int            `json:"period_days"`
+	ReopenedPRs       []BottleneckPR `json:"reopened_prs"`
+	LongReviewPRs     []BottleneckPR `json:"long_review_prs"`
+	StalePRs          []BottleneckPR `json:"stale_prs"`
+	FrequentRejectPRs []BottleneckPR `json:"frequent_reject_prs"`
+	AvgLeadTimeHrs    float64        `json:"avg_lead_time_hours"`
+	P90LeadTimeHrs    float64        `json:"p90_lead_time_hours"`
+	P95LeadTimeHrs    float64        `json:"p95_lead_time_hours"`
 }
 
 // BottleneckPR represents a single bottleneck PR entry.
@@ -322,9 +322,9 @@ func GetBottleneckStats(c *gin.Context) {
 	cutoff := time.Now().AddDate(0, 0, -periodDays)
 
 	type prAnalysis struct {
-		pr          models.PRRecord
-		reopenCount int
-		rejectCount int
+		pr             models.PRRecord
+		reopenCount    int
+		rejectCount    int
 		reviewReqCount int
 	}
 

@@ -3,8 +3,8 @@ package platforms
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"

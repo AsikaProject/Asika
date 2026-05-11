@@ -202,6 +202,23 @@ color   = "#008672"
 # priority  = 10        # higher = evaluated first
 # exclusive = true      # stop after this rule matches
 
+# Review rules — automatic reviewer assignment based on file paths, title, or author
+# Pattern scopes: file: (default), title:, author:
+# [[review_rules]]
+# pattern   = "src/frontend/**"
+# reviewers = ["frontend-lead", "ux-reviewer"]
+# priority  = 10
+#
+# [[review_rules]]
+# pattern   = "title:security"
+# reviewers = ["security-team"]
+# priority  = 20
+#
+# [[review_rules]]
+# pattern   = "author:bot-account"
+# reviewers = ["admin1"]
+# priority  = 5
+#
 # Repo groups (multi mode)
 [[repo_groups]]
 name           = "my-project"
@@ -222,6 +239,12 @@ ci_provider    = "github_actions"  # "github_actions" | "gitlab_ci" | "gitea_act
 # pattern = "frontend/**"
 # label   = "frontend"
 # color   = "#61DAFB"
+# Per-repo-group review rules (merged with global rules, group rules take precedence):
+# [[repo_groups.review_rules]]
+# pattern   = "frontend/**"
+# reviewers = ["frontend-lead"]
+# priority  = 10
+#
 
 [repo_groups.merge_queue]
 required_approvals = 2
@@ -262,6 +285,13 @@ stats_interval = "30s"
 # cron        = "weekly"    # hourly | daily | weekly | monthly | raw duration
 # period_days = 7           # stats period in days
 
+# RSS feed configuration
+# [feed]
+# enabled     = true
+# title       = "Asika PR Feed"
+# max_items   = 50
+# public_feed = false
+#
 # Self-update configuration
 [updates]
 check         = false    # periodically check for new versions

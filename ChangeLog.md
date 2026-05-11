@@ -1,5 +1,15 @@
 # ChangeLog for Asika
 
+## v20260512DEV > Unleased
+
+- **PR auto-assignment enhancement**: Review rules now support per-repo-group configuration via `[[repo_groups.review_rules]]` in TOML. Group rules are merged with global rules (group rules take precedence, sorted by priority). New `POST /api/v1/repos/:rg/prs/:id/assign` endpoint for manual reviewer assignment (requires `approve` permission). New `POST /api/v1/repos/:rg/prs/:id/codeowners-assign` endpoint re-evaluates CODEOWNERS and assigns reviewers. CODEOWNERS parser (`daemon/reviewer/codeowners.go`) fetches from standard locations, uses GitHub-style last-match-wins semantics, and caches parsed results with 5-minute TTL.
+
+- **Repo-level permissions**: New `AllowedRepos []string` field on `User` and `APIKey` models (format: `"owner/repo"`). New `RequireRepoAccess()` middleware resolves the actual repo from the PR record and checks against the user's allowed repos list. Both JWT and API key authentication support per-repo access control. Empty `AllowedRepos` = access to all repos (backward compatible).
+
+- **RSS feed subscription**: New `daemon/feed/` package with in-memory ring buffer (default 50 items) consuming PR events from the event bus. `GET /api/v1/feed.xml` returns RSS 2.0 XML feed; append `?repo_group=<name>` to filter by repo group. `GET/PUT /api/v1/feed/config` for admin configuration. Configurable via `[feed]` TOML section (`enabled`, `title`, `max_items`, `public_feed`).
+
+- **Documentation**: Update PROJECT.md with reviewer auto-assignment, RSS feed, repo-level permissions sections; update architecture diagram with Feed module; add Reviewer and Feed package descriptions.
+
 ## v20260511DEV > Unleased
 
 ### High-Difficulty Features

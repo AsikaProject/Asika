@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"asika/common/auth"
+	"asika/common/config"
 	"asika/common/db"
 	"asika/common/i18n"
 	"asika/common/models"
@@ -78,6 +79,8 @@ func AuthMiddleware() gin.HandlerFunc {
 				c.Set("username", fmt.Sprintf("apikey:%s", key.Name))
 				c.Set("role", key.Role)
 				c.Set("api_key_id", key.ID)
+				c.Set("allowed_repo_groups", key.AllowedRepoGroups)
+				c.Set("allowed_repos", key.AllowedRepos)
 				c.Next()
 				return
 			}
@@ -135,6 +138,7 @@ func SSRAuthRequired() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
 func RequireRole(role string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userRole, exists := c.Get("role")
@@ -178,7 +182,23 @@ func RequireRepoGroupAccess() gin.HandlerFunc {
 			return
 		}
 
-		// Load user from DB to get current AllowedRepoGroups
+		// API key auth: check AllowedRepoGroups on the key
+		allowedGroups, _ := c.Get("allowed_repo_groups")
+		if allowedGroups != nil {
+			groups, ok := allowedGroups.([]string)
+			if ok && len(groups) > 0 {
+				for _, g := range groups {
+					if g == repoGroup {
+						c.Next()
+						return
+					}
+				}
+				c.JSON(http.StatusForbidden, gin.H{"error": "权限不够: 无权访问仓库组 " + repoGroup, "code": 403})
+				c.Abort()
+				return
+			}
+		}
+
 		data, err := db.Get(db.BucketUsers, username.(string))
 		if err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "code": 403})
@@ -192,7 +212,6 @@ func RequireRepoGroupAccess() gin.HandlerFunc {
 			return
 		}
 
-		// Empty AllowedRepoGroups means access to all groups (backward compatible)
 		if len(user.AllowedRepoGroups) == 0 {
 			c.Next()
 			return
@@ -209,6 +228,128 @@ func RequireRepoGroupAccess() gin.HandlerFunc {
 		c.Abort()
 	}
 }
+
+// RequireRepoAccess checks if the user has access to the specific repo within a repo group.
+// This is a finer-grained check on top of RequireRepoGroupAccess.
+func RequireRepoAccess() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userRole, _ := c.Get("role")
+		if userRole != nil && userRole.(string) == "admin" {
+			c.Next()
+			return
+		}
+
+		username, _ := c.Get("username")
+		if username == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
+			c.Abort()
+			return
+		}
+
+		// API key auth: check AllowedRepos on the key
+		allowedRepos, _ := c.Get("allowed_repos")
+		if allowedRepos != nil {
+			repos, ok := allowedRepos.([]string)
+			if ok && len(repos) > 0 {
+				resolvedRepo := resolveRepoFromRequest(c)
+				if resolvedRepo == "" {
+					c.Next()
+					return
+				}
+				for _, r := range repos {
+					if r == resolvedRepo {
+						c.Next()
+						return
+					}
+				}
+				c.JSON(http.StatusForbidden, gin.H{"error": "权限不够: 无权访问仓库 " + resolvedRepo, "code": 403})
+				c.Abort()
+				return
+			}
+		}
+
+		data, err := db.Get(db.BucketUsers, username.(string))
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "code": 403})
+			c.Abort()
+			return
+		}
+		var user models.User
+		if err := json.Unmarshal(data, &user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			c.Abort()
+			return
+		}
+
+		if len(user.AllowedRepos) == 0 {
+			c.Next()
+			return
+		}
+
+		resolvedRepo := resolveRepoFromRequest(c)
+		if resolvedRepo == "" {
+			c.Next()
+			return
+		}
+
+		for _, r := range user.AllowedRepos {
+			if r == resolvedRepo {
+				c.Next()
+				return
+			}
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{"error": "权限不够: 无权访问仓库 " + resolvedRepo, "code": 403})
+		c.Abort()
+	}
+}
+
+// resolveRepoFromRequest resolves the owner/repo string from the request context.
+func resolveRepoFromRequest(c *gin.Context) string {
+	repoGroup := c.Param("repo_group")
+	prID := c.Param("pr_id")
+	if repoGroup == "" || prID == "" {
+		return ""
+	}
+
+	cfg := config.Current()
+	if cfg == nil {
+		return ""
+	}
+
+	group := config.GetRepoGroupByName(cfg, repoGroup)
+	if group == nil {
+		return ""
+	}
+
+	var platform string
+	if prID != "" {
+		var prRecord *models.PRRecord
+		db.ForEach(db.BucketPRs, func(key, value []byte) error {
+			var rec models.PRRecord
+			if json.Unmarshal(value, &rec) == nil && rec.ID == prID && rec.RepoGroup == repoGroup {
+				prRecord = &rec
+				return errStopForEach
+			}
+			return nil
+		})
+		if prRecord != nil {
+			platform = prRecord.Platform
+		}
+	}
+
+	if platform == "" {
+		platform = config.GetPlatformForGroup(group)
+	}
+
+	owner, repo := config.GetOwnerRepoFromGroup(group, platform)
+	if owner == "" || repo == "" {
+		return ""
+	}
+	return owner + "/" + repo
+}
+
+var errStopForEach = fmt.Errorf("__stop__")
 
 // RequireAnyRole requires any of the specified roles
 func RequireAnyRole(roles ...string) gin.HandlerFunc {
@@ -247,7 +388,6 @@ func RequirePermission(permField string) gin.HandlerFunc {
 		if apiKeyName, _ := c.Get("username"); apiKeyName != nil {
 			uname := apiKeyName.(string)
 			if strings.HasPrefix(uname, "apikey:") {
-				// API Key: permissions are embedded in the key
 				apiKeyID, _ := c.Get("api_key_id")
 				if apiKeyID != nil {
 					key, err := db.GetAPIKey(apiKeyID.(string))
@@ -281,7 +421,6 @@ func RequirePermission(permField string) gin.HandlerFunc {
 			}
 		}
 
-		// JWT user: check temp token permissions first, then load from DB
 		username, _ := c.Get("username")
 		if username == nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})

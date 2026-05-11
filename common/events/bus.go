@@ -11,19 +11,19 @@ import (
 type EventType string
 
 const (
-	EventPROpened      EventType = "pr_opened"
-	EventPRClosed      EventType = "pr_closed"
-	EventPRMerged      EventType = "pr_merged"
-	EventPRApproved    EventType = "pr_approved"
-	EventPRLabeled     EventType = "pr_labeled"
-	EventPRSynced      EventType = "pr_synced"
-	EventPRReopened    EventType = "pr_reopened"
-	EventPRComment     EventType = "pr_comment"
-	EventSpamDetected  EventType = "spam_detected"
-	EventBranchDeleted EventType = "branch_deleted"
-	EventSyncCompleted EventType = "sync_completed"
-	EventSyncFailed    EventType = "sync_failed"
-	EventPRReverted          EventType = "pr_reverted"
+	EventPROpened              EventType = "pr_opened"
+	EventPRClosed              EventType = "pr_closed"
+	EventPRMerged              EventType = "pr_merged"
+	EventPRApproved            EventType = "pr_approved"
+	EventPRLabeled             EventType = "pr_labeled"
+	EventPRSynced              EventType = "pr_synced"
+	EventPRReopened            EventType = "pr_reopened"
+	EventPRComment             EventType = "pr_comment"
+	EventSpamDetected          EventType = "spam_detected"
+	EventBranchDeleted         EventType = "branch_deleted"
+	EventSyncCompleted         EventType = "sync_completed"
+	EventSyncFailed            EventType = "sync_failed"
+	EventPRReverted            EventType = "pr_reverted"
 	EventNotificationEscalated EventType = "notification_escalated"
 )
 

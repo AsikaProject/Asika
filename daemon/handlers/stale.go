@@ -105,7 +105,7 @@ func HandleStaleUnmark(c *gin.Context) {
 
 	removed := false
 	for _, pt := range activePlatforms(group) {
- 		client, ok := pr.GetClients()[pt]
+		client, ok := pr.GetClients()[pt]
 		if !ok {
 			continue
 		}

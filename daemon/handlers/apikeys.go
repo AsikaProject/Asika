@@ -24,6 +24,7 @@ type apiKeyResponse struct {
 	CreatedBy         string                 `json:"created_by"`
 	LastUsedAt        time.Time              `json:"last_used_at"`
 	AllowedRepoGroups []string               `json:"allowed_repo_groups"`
+	AllowedRepos      []string               `json:"allowed_repos"`
 	Permissions       models.UserPermissions `json:"permissions"`
 	RawKey            string                 `json:"key,omitempty"` // only on creation
 }
@@ -37,13 +38,13 @@ func toAPIKeyResponse(key *models.APIKey, rawKey string) apiKeyResponse {
 		CreatedBy:         key.CreatedBy,
 		LastUsedAt:        key.LastUsedAt,
 		AllowedRepoGroups: key.AllowedRepoGroups,
+		AllowedRepos:      key.AllowedRepos,
 		Permissions:       key.Permissions,
 		RawKey:            rawKey,
 	}
 }
 
 // CreateAPIKey handles POST /api/v1/apikeys
-// Creates a new API key. Requires admin JWT.
 func CreateAPIKey(c *gin.Context) {
 	username := c.GetString("username")
 	if username == "" {
@@ -55,6 +56,7 @@ func CreateAPIKey(c *gin.Context) {
 		Name              string   `json:"name"`
 		Role              string   `json:"role"`
 		AllowedRepoGroups []string `json:"allowed_repo_groups"`
+		AllowedRepos      []string `json:"allowed_repos"`
 		Permissions       *struct {
 			CanApprove     *bool `json:"can_approve"`
 			CanMerge       *bool `json:"can_merge"`
@@ -82,7 +84,6 @@ func CreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	// Generate a random API key
 	rawKey := generateAPIKey()
 	hash, err := bcrypt.GenerateFromPassword([]byte(rawKey), bcrypt.DefaultCost)
 	if err != nil {
@@ -121,6 +122,7 @@ func CreateAPIKey(c *gin.Context) {
 		CreatedAt:         time.Now(),
 		CreatedBy:         username,
 		AllowedRepoGroups: req.AllowedRepoGroups,
+		AllowedRepos:      req.AllowedRepos,
 		Permissions:       perms,
 	}
 
@@ -129,13 +131,11 @@ func CreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	// Return the raw key only once
 	resp := toAPIKeyResponse(apiKey, rawKey)
 	c.JSON(http.StatusOK, resp)
 }
 
 // ListAPIKeys handles GET /api/v1/apikeys
-// Lists all API keys. Requires admin JWT.
 func ListAPIKeys(c *gin.Context) {
 	keys, err := db.ListAPIKeys()
 	if err != nil {
@@ -150,7 +150,6 @@ func ListAPIKeys(c *gin.Context) {
 }
 
 // RevokeAPIKey handles DELETE /api/v1/apikeys/:id
-// Revokes an API key. Requires admin JWT.
 func RevokeAPIKey(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -165,9 +164,7 @@ func RevokeAPIKey(c *gin.Context) {
 }
 
 // ValidateAPIKey checks a raw API key against stored hashes.
-// Returns the APIKey if valid, nil otherwise.
 func ValidateAPIKey(rawKey string) *models.APIKey {
-	// List all keys and compare (acceptable for small key counts)
 	keys, err := db.ListAPIKeys()
 	if err != nil {
 		return nil
@@ -180,24 +177,9 @@ func ValidateAPIKey(rawKey string) *models.APIKey {
 	return nil
 }
 
-// generateAPIKey creates a random 32-byte hex string.
-func generateAPIKey() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return "ak_" + hex.EncodeToString(b)
-}
-
-// generateAPIKeyID creates a short random ID.
-func generateAPIKeyID() string {
-	b := make([]byte, 8)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
 // APIKeyAuth returns a gin middleware that authenticates via X-API-Key header.
 func APIKeyAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Skip if JWT auth already succeeded
 		if c.GetString("username") != "" {
 			c.Next()
 			return
@@ -215,21 +197,31 @@ func APIKeyAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Update last used
 		apiKey.LastUsedAt = time.Now()
 		db.PutAPIKey(apiKey)
 
-		// Set context values (same as JWT auth)
 		c.Set("username", fmt.Sprintf("apikey:%s", apiKey.Name))
 		c.Set("role", apiKey.Role)
 		c.Set("api_key_id", apiKey.ID)
 		c.Set("allowed_repo_groups", apiKey.AllowedRepoGroups)
+		c.Set("allowed_repos", apiKey.AllowedRepos)
 		c.Set("permissions", apiKey.Permissions)
 		c.Next()
 	}
 }
 
-// init registers API key routes.
+func generateAPIKey() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return "ak_" + hex.EncodeToString(b)
+}
+
+func generateAPIKeyID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 func init() {
-	_ = auth.HasPermission // ensure auth import is used
+	_ = auth.HasPermission
 }

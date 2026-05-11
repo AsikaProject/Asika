@@ -23,12 +23,10 @@ var (
 	ConfigPath string
 )
 
-// Store stores the configuration atomically
 func Store(cfg *models.Config) {
 	current.Store(cfg)
 }
 
-// Current returns the current configuration
 func Current() *models.Config {
 	v := current.Load()
 	if v == nil {
@@ -37,7 +35,6 @@ func Current() *models.Config {
 	return v.(*models.Config)
 }
 
-// Load loads configuration from the TOML file
 func Load(path string) (*models.Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -108,6 +105,13 @@ func Load(path string) (*models.Config, error) {
 		}
 	}
 
+	if cfg.Feed.Title == "" {
+		cfg.Feed.Title = "Asika PR Feed"
+	}
+	if cfg.Feed.MaxItems <= 0 {
+		cfg.Feed.MaxItems = 50
+	}
+
 	if cfg.Events.HealthCheckInterval == "" {
 		cfg.Events.HealthCheckInterval = "2m"
 	}
@@ -115,7 +119,6 @@ func Load(path string) (*models.Config, error) {
 		cfg.Events.HealthCheckThreshold = "5m"
 	}
 
-	// Apply environment variable overrides for tokens
 	if token := os.Getenv("ASIKA_GITHUB_TOKEN"); token != "" {
 		cfg.Tokens.GitHub = token
 	}
@@ -126,7 +129,6 @@ func Load(path string) (*models.Config, error) {
 		cfg.Tokens.Gitea = token
 	}
 
-	// Validate configuration
 	if err := validate(cfg); err != nil {
 		return nil, err
 	}
@@ -140,8 +142,6 @@ func Load(path string) (*models.Config, error) {
 	return cfg, nil
 }
 
-// DryRun parses and validates a config patch without applying it.
-// Returns the merged config and any validation error.
 func DryRun(patchTOML string) (*models.Config, error) {
 	cfg := Current()
 	if cfg == nil {
@@ -181,9 +181,7 @@ func DryRun(patchTOML string) (*models.Config, error) {
 	return &merged, nil
 }
 
-// validate validates the configuration
 func validate(cfg *models.Config) error {
-	// Check repo groups
 	if len(cfg.RepoGroups) == 0 {
 		return fmt.Errorf("at least one repo_groups entry is required")
 	}
@@ -194,7 +192,7 @@ func validate(cfg *models.Config) error {
 		}
 		mode := rg.Mode
 		if mode == "" {
-			mode = "multi" // default
+			mode = "multi"
 		}
 		if mode == "single" {
 			if rg.GitHub == "" && rg.GitLab == "" && rg.Gitea == "" && rg.Forgejo == "" && rg.Codeberg == "" && rg.Bitbucket == "" {
@@ -263,13 +261,12 @@ func validate(cfg *models.Config) error {
 	return nil
 }
 
-// GetRepoGroups returns all repo groups
 func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 	groups := make([]models.RepoGroup, len(cfg.RepoGroups))
 	for i, rg := range cfg.RepoGroups {
 		mode := rg.Mode
 		if mode == "" {
-			mode = "multi" // default
+			mode = "multi"
 		}
 		groups[i] = models.RepoGroup{
 			Name:           rg.Name,
@@ -286,12 +283,12 @@ func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 			CIProvider:     rg.CIProvider,
 			MergeQueue:     rg.MergeQueue,
 			LabelRules:     rg.LabelRules,
+			ReviewRules:    rg.ReviewRules,
 		}
 	}
 	return groups
 }
 
-// GetRepoGroupByName finds a repo group by name
 func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 	var defaultGroup *models.RepoGroup
 	for i := range cfg.RepoGroups {
@@ -316,6 +313,7 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 				CIProvider:     rg.CIProvider,
 				MergeQueue:     rg.MergeQueue,
 				LabelRules:     rg.LabelRules,
+				ReviewRules:    rg.ReviewRules,
 			}
 		}
 		if rg.Name == "default" {
@@ -334,6 +332,7 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 				CIProvider:     rg.CIProvider,
 				MergeQueue:     rg.MergeQueue,
 				LabelRules:     rg.LabelRules,
+				ReviewRules:    rg.ReviewRules,
 			}
 		}
 	}
@@ -344,7 +343,6 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 	return nil
 }
 
-// GetOwnerRepoFromGroup returns the owner/repo for a platform in a repo group
 func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, repo string) {
 	var repoPath string
 	switch platform {
@@ -373,10 +371,6 @@ func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, rep
 	return repoPath[:idx], repoPath[idx+1:]
 }
 
-// GetPlatformForGroup determines the platform for a repo group.
-// In single mode, it returns the MirrorPlatform (the authoritative source).
-// In multi mode, it returns the first configured platform in priority order
-// (github > gitlab > gitea > forgejo > codeberg > bitbucket).
 func GetPlatformForGroup(group *models.RepoGroup) string {
 	if group.Mode == "single" && group.MirrorPlatform != "" {
 		return group.MirrorPlatform
@@ -405,7 +399,6 @@ func GetPlatformForGroup(group *models.RepoGroup) string {
 	return ""
 }
 
-// GetCloneURL builds the HTTPS clone URL for a platform repository.
 func GetCloneURL(platform, owner, repo string) string {
 	var baseURL string
 	switch platform {
@@ -445,7 +438,6 @@ func GetCloneURL(platform, owner, repo string) string {
 	return fmt.Sprintf("%s/%s/%s", baseURL, owner, repo)
 }
 
-// GetToken returns the API token for a given platform.
 func GetToken(cfg *models.Config, platform string) string {
 	if cfg == nil {
 		return ""
@@ -467,7 +459,6 @@ func GetToken(cfg *models.Config, platform string) string {
 	return ""
 }
 
-// GenerateTokenExpiry parses the token expiry duration
 func GenerateTokenExpiry(expiry string) time.Duration {
 	d, err := time.ParseDuration(expiry)
 	if err != nil {
@@ -477,13 +468,10 @@ func GenerateTokenExpiry(expiry string) time.Duration {
 	return d
 }
 
-// GenerateUUID generates a new UUID string
 func GenerateUUID() string {
 	return uuid.New().String()
 }
 
-// SaveToFile writes the config to the configured file path.
-// Tokens are encrypted before writing if encryption is enabled.
 func SaveToFile(cfg models.Config) error {
 	path := ConfigPath
 	if path == "" {
@@ -518,12 +506,10 @@ func SaveToFile(cfg models.Config) error {
 
 const configVersionKey = "__config_version__"
 
-// CurrentCfgVersion returns the latest stored config version number.
 func CurrentCfgVersion() int {
 	return currentConfigVersion()
 }
 
-// currentConfigVersion returns the latest stored config version number.
 func currentConfigVersion() int {
 	data, err := db.Get(db.BucketConfig, configVersionKey)
 	if err != nil || data == nil {
@@ -534,15 +520,12 @@ func currentConfigVersion() int {
 	return v
 }
 
-// incrementConfigVersion bumps the version counter and returns the new value.
 func incrementConfigVersion() int {
 	v := currentConfigVersion() + 1
 	db.Put(db.BucketConfig, configVersionKey, []byte(fmt.Sprintf("%d", v)))
 	return v
 }
 
-// SaveConfigSnapshot stores the current config as a versioned snapshot in bbolt.
-// Keeps up to maxSnapshots (default 20) entries, pruning oldest.
 func SaveConfigSnapshot() error {
 	cfg := Current()
 	if cfg == nil {
@@ -561,7 +544,6 @@ func SaveConfigSnapshot() error {
 	return nil
 }
 
-// pruneConfigSnapshots keeps only the latest N snapshots.
 func pruneConfigSnapshots(keep int) {
 	snapshots, err := db.ListConfigSnapshots(0)
 	if err != nil {
@@ -573,7 +555,6 @@ func pruneConfigSnapshots(keep int) {
 	}
 }
 
-// ListConfigVersions returns the latest N config version snapshots.
 func ListConfigVersions(limit int) ([]ConfigSnapshot, error) {
 	raw, err := db.ListConfigSnapshots(limit)
 	if err != nil {
@@ -594,17 +575,14 @@ func ListConfigVersions(limit int) ([]ConfigSnapshot, error) {
 	return result, nil
 }
 
-// cfgTime extracts a timestamp from the stored JSON for display.
 func cfgTime(data []byte) time.Time {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return time.Time{}
 	}
-	// Use current time as fallback; precise time isn't critical for snapshots
 	return time.Now()
 }
 
-// RollbackConfig restores a config from a versioned snapshot and writes it to disk.
 func RollbackConfig(version int) error {
 	data, err := db.GetConfigSnapshot(version)
 	if err != nil {
@@ -622,7 +600,6 @@ func RollbackConfig(version int) error {
 	return nil
 }
 
-// ConfigSnapshot represents a stored config version.
 type ConfigSnapshot struct {
 	Version   int            `json:"version"`
 	Config    *models.Config `json:"config"`

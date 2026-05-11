@@ -112,6 +112,7 @@ type RepoGroupConfig struct {
 	CIProvider     string           `toml:"ci_provider" json:"ci_provider"`
 	MergeQueue     MergeQueueConfig `toml:"merge_queue" json:"merge_queue"`
 	LabelRules     []LabelRule      `toml:"label_rules" json:"label_rules,omitempty"`
+	ReviewRules    []ReviewRule     `toml:"review_rules" json:"review_rules,omitempty"`
 }
 
 // SingleRepoConfig represents single repository configuration

@@ -81,11 +81,11 @@ func parseTimeMinutes(s string) int {
 // QuietHoursDefault returns the default quiet hours config.
 func QuietHoursDefault() models.QuietHoursConfig {
 	return models.QuietHoursConfig{
-		Enabled:        false,
-		StartTime:      "22:00",
-		EndTime:        "08:00",
-		Timezone:       "",
-		EscalationRole: "admin",
+		Enabled:         false,
+		StartTime:       "22:00",
+		EndTime:         "08:00",
+		Timezone:        "",
+		EscalationRole:  "admin",
 		BypassForUrgent: []string{"spam_detected", "sync_failed"},
 	}
 }

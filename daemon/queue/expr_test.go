@@ -116,8 +116,8 @@ func TestEval_Not(t *testing.T) {
 
 func TestEval_Complex(t *testing.T) {
 	ctx := EvalContext{
-		Approvals:  3,
-		CIStatus:   "success",
+		Approvals:   3,
+		CIStatus:    "success",
 		HasConflict: false,
 	}
 	result, err := Eval("approvals >= 2 AND ci == success AND NOT conflict", ctx)

@@ -8,16 +8,16 @@ import (
 
 // EvalContext holds the merge decision variables available to expressions.
 type EvalContext struct {
-	Approvals      int
-	Required       int
-	CIStatus       string
-	HasConflict    bool
-	IsDraft        bool
-	CoreApproved   int
-	Author         string
+	Approvals        int
+	Required         int
+	CIStatus         string
+	HasConflict      bool
+	IsDraft          bool
+	CoreApproved     int
+	Author           string
 	CoreContributors map[string]bool
-	AgeHours       float64
-	Labels         map[string]bool
+	AgeHours         float64
+	Labels           map[string]bool
 }
 
 // Eval evaluates a merge condition expression against the given context.
