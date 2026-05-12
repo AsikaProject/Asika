@@ -72,6 +72,7 @@ func (s *Server) setupRoutes() {
 		prs := protected.Group("/repos/:repo_group/prs")
 		prs.Use(RequireAnyRole("viewer", "operator", "admin"))
 		prs.Use(RequireRepoGroupAccess())
+		prs.Use(RequireSpaceAccess())
 		{
 			prs.GET("", handlers.ListPRs)
 			prs.POST("/sync", handlers.ListPRs)
@@ -211,6 +212,8 @@ func (s *Server) setupRoutes() {
 			admin.GET("/backups", handlers.ListBackups)
 			admin.POST("/restore", handlers.RestoreBackup)
 		}
+
+		protected.GET("/events", handlers.StreamEvents)
 
 		protected.GET("/stats/bottlenecks", handlers.GetBottleneckStats)
 
@@ -397,6 +400,14 @@ func (s *Server) setupRoutes() {
 			user := c.GetString("username")
 			c.HTML(http.StatusOK, "team.html", gin.H{
 				"title":    "Team Stats - Asika",
+				"username": user,
+			})
+		})
+
+		ssr.GET("/notifications", func(c *gin.Context) {
+			user := c.GetString("username")
+			c.HTML(http.StatusOK, "notifications.html", gin.H{
+				"title":    "Notification Preferences - Asika",
 				"username": user,
 			})
 		})

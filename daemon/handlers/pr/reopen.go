@@ -61,24 +61,34 @@ func ReopenPR(c *gin.Context) {
 		return
 	}
 
+	beforeState := pr.State
+
 	if err := client.ReopenPR(c.Request.Context(), owner, repo, prNumber); err != nil {
 		slog.Error("failed to reopen PR", "error", err)
-		db.AppendAuditLog("error", "PR reopen failed", map[string]interface{}{
-			"pr_number":  prNumber,
-			"repo_group": repoGroup,
-			"actor":      c.GetString("username"),
-			"platform":   platform,
-			"error":      err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR reopen failed",
+			Actor:     c.GetString("username"),
+			RepoGroup: repoGroup,
+			PRNumber:  prNumber,
+			Platform:  platform,
+			Action:    "reopen",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reopen PR"})
 		return
 	}
 
-	db.AppendAuditLog("info", "PR reopened", map[string]interface{}{
-		"pr_number":  prNumber,
-		"repo_group": repoGroup,
-		"actor":      c.GetString("username"),
-		"platform":   platform,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR reopened",
+		Actor:     c.GetString("username"),
+		RepoGroup: repoGroup,
+		PRNumber:  prNumber,
+		Platform:  platform,
+		Action:    "reopen",
+		Before:    map[string]interface{}{"state": beforeState},
+		After:     map[string]interface{}{"state": "open"},
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "PR reopened"})
 }

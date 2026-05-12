@@ -34,7 +34,7 @@ func newBboltStorage(dbPath string) (*bboltStorage, error) {
 			BucketSpaceSettings,
 			BucketIssuePRLinks, BucketPRDependencies, BucketPRTemplates,
 			BucketSerialQueue, BucketCrossSpaceDeps, BucketEscalationRules,
-			BucketPRStacks,
+			BucketPRStacks, BucketAuditLogIndex,
 		}
 		for _, b := range buckets {
 			if _, err := tx.CreateBucketIfNotExists([]byte(b)); err != nil {
@@ -230,7 +230,45 @@ func (s *bboltStorage) AppendAuditLogEx(entry models.AuditLog) error {
 	var randBytes [4]byte
 	rand.Read(randBytes[:])
 	key := fmt.Sprintf("%d_%08x", entry.Timestamp.UnixNano(), binary.BigEndian.Uint32(randBytes[:]))
-	return s.Put(BucketLogs, key, data)
+	err = s.Put(BucketLogs, key, data)
+	if err != nil {
+		return err
+	}
+	return s.writeAuditLogIndex(key, entry)
+}
+
+func (s *bboltStorage) writeAuditLogIndex(logKey string, entry models.AuditLog) error {
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(BucketAuditLogIndex))
+		if b == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		if entry.Actor != "" {
+			idxKey := fmt.Sprintf("actor:%s:%s", entry.Actor, logKey)
+			if err := b.Put([]byte(idxKey), []byte(logKey)); err != nil {
+				return err
+			}
+		}
+		if entry.RepoGroup != "" {
+			idxKey := fmt.Sprintf("repo_group:%s:%s", entry.RepoGroup, logKey)
+			if err := b.Put([]byte(idxKey), []byte(logKey)); err != nil {
+				return err
+			}
+		}
+		if entry.Action != "" {
+			idxKey := fmt.Sprintf("action:%s:%s", entry.Action, logKey)
+			if err := b.Put([]byte(idxKey), []byte(logKey)); err != nil {
+				return err
+			}
+		}
+		if entry.Category != "" {
+			idxKey := fmt.Sprintf("category:%s:%s", entry.Category, logKey)
+			if err := b.Put([]byte(idxKey), []byte(logKey)); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *bboltStorage) AppendAuditLog(level, message string, ctx map[string]interface{}) error {

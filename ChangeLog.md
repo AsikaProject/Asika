@@ -2,6 +2,18 @@
 
 ## v20260512DEV > Unleased
 
+- **Config auto-rollback notifier health check**: `VerifyNotifiers()` pings each configured notifier after a config update; if all notifiers fail, auto-rollback triggers alongside the existing DB health check.
+
+- **SSE event streaming**: New `GET /api/v1/events` SSE endpoint (`daemon/handlers/events.go`) subscribes to the event bus and streams PR events in real-time with 30s heartbeat. New `asika watch stream` CLI subcommand connects to the SSE endpoint for live updates without polling.
+
+- **Team space access control**: New `RequireSpaceAccess()` middleware checks if the user is a member of the team space that owns the requested repo group. Applied to all PR routes after `RequireRepoGroupAccess`. Space membership resolved via `TeamSpace.RepoGroups` and `SpaceMember` records.
+
+- **Audit log secondary index**: New `audit_log_index` bucket with prefix-based secondary indexes by actor, repo_group, action, and category. `AppendAuditLogEx` writes index entries on every log write. `GetLogs` uses index for filtered queries, falling back to full scan when no filter specified.
+
+- **Audit log Before/After tracking**: State-changing handlers (approve, close, reopen, mark_spam) now populate `AuditLog.Before` and `AuditLog.After` fields with PR state diffs (e.g. state, labels, is_approved, spam_flag).
+
+- **Notification preference center WebUI**: New `notifications.html` template and `GET /notifications` route for per-user notification management. `sendNotificationInternal` now checks `isNotifierEnabledForAnyUser()` which iterates `NotificationPreferences` to skip notifiers disabled by all users.
+
 - **PR auto-assignment enhancement**: Review rules now support per-repo-group configuration via `[[repo_groups.review_rules]]` in TOML. Group rules are merged with global rules (group rules take precedence, sorted by priority). New `POST /api/v1/repos/:rg/prs/:id/assign` endpoint for manual reviewer assignment (requires `approve` permission). New `POST /api/v1/repos/:rg/prs/:id/codeowners-assign` endpoint re-evaluates CODEOWNERS and assigns reviewers. CODEOWNERS parser (`daemon/reviewer/codeowners.go`) fetches from standard locations, uses GitHub-style last-match-wins semantics, and caches parsed results with 5-minute TTL.
 
 - **Repo-level permissions**: New `AllowedRepos []string` field on `User` and `APIKey` models (format: `"owner/repo"`). New `RequireRepoAccess()` middleware resolves the actual repo from the PR record and checks against the user's allowed repos list. Both JWT and API key authentication support per-repo access control. Empty `AllowedRepos` = access to all repos (backward compatible).

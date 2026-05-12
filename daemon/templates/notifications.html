@@ -1,0 +1,182 @@
+{{template "layout.html" .}}
+
+<div class="container mx-auto px-4 py-8">
+  <h1 class="text-2xl font-bold mb-6">{{t "notification_preferences"}}</h1>
+
+  <div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-lg font-semibold">{{t "master_switch"}}</h2>
+        <p class="text-gray-500 text-sm">{{t "master_switch_desc"}}</p>
+      </div>
+      <label class="relative inline-flex items-center cursor-pointer">
+        <input type="checkbox" id="notif-enabled" class="sr-only peer" checked>
+        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+      </label>
+    </div>
+
+    <div class="mb-6">
+      <h3 class="text-md font-semibold mb-3">{{t "digest_mode"}}</h3>
+      <div class="flex gap-4">
+        <label class="flex items-center gap-2">
+          <input type="radio" name="digest" value="realtime" checked class="text-blue-600">
+          <span>{{t "realtime"}}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="radio" name="digest" value="hourly" class="text-blue-600">
+          <span>{{t "hourly"}}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="radio" name="digest" value="daily" class="text-blue-600">
+          <span>{{t "daily"}}</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="mb-6">
+      <h3 class="text-md font-semibold mb-3">{{t "notifiers"}}</h3>
+      <div id="notifier-list" class="space-y-2">
+      </div>
+    </div>
+
+    <div class="mb-6">
+      <h3 class="text-md font-semibold mb-3">{{t "event_types"}}</h3>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_opened" checked>
+          <span>{{t "pr_opened"}}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_closed" checked>
+          <span>{{t "pr_closed"}}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_merged" checked>
+          <span>{{t "pr_merged"}}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_approved" checked>
+          <span>{{t "pr_approved"}}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_reopened">
+          <span>{{t "pr_reopened"}}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_labeled">
+          <span>{{t "pr_labeled"}}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="event-pref text-blue-600 rounded" value="spam_detected">
+          <span>{{t "spam_detected"}}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="event-pref text-blue-600 rounded" value="sync_failed">
+          <span>{{t "sync_failed"}}</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="mb-6">
+      <h3 class="text-md font-semibold mb-3">{{t "quiet_hours_override"}}</h3>
+      <div class="flex items-center gap-4">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" id="quiet-override" class="text-blue-600 rounded">
+          <span>{{t "enable_quiet_hours"}}</span>
+        </label>
+        <input type="time" id="quiet-start" value="22:00" class="border rounded px-2 py-1">
+        <span>{{t "to"}}</span>
+        <input type="time" id="quiet-end" value="08:00" class="border rounded px-2 py-1">
+      </div>
+    </div>
+
+    <button id="save-prefs" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
+      {{t "save_preferences"}}
+    </button>
+  </div>
+</div>
+
+<script>
+const username = window.location.pathname.split('/').filter(Boolean).pop();
+
+async function loadPrefs() {
+  try {
+    const resp = await fetch(`/api/v1/users/${username}/notifications`, {
+      headers: {'Authorization': 'Bearer ' + (document.cookie.match(/asika_token=([^;]+)/) || [])[1]}
+    });
+    const prefs = await resp.json();
+    document.getElementById('notif-enabled').checked = prefs.enabled !== false;
+    const digest = prefs.digest_mode || 'realtime';
+    document.querySelectorAll('input[name="digest"]').forEach(r => r.checked = (r.value === digest));
+    document.querySelectorAll('.event-pref').forEach(c => {
+      c.checked = prefs.event_prefs ? (prefs.event_prefs[c.value] !== false) : true;
+    });
+    if (prefs.quiet_hours_override) {
+      document.getElementById('quiet-override').checked = prefs.quiet_hours_override.enabled;
+      if (prefs.quiet_hours_override.start_time) document.getElementById('quiet-start').value = prefs.quiet_hours_override.start_time;
+      if (prefs.quiet_hours_override.end_time) document.getElementById('quiet-end').value = prefs.quiet_hours_override.end_time;
+    }
+  } catch (e) {
+    console.error('Failed to load preferences:', e);
+  }
+}
+
+async function loadNotifiers() {
+  try {
+    const resp = await fetch('/api/v1/config', {
+      headers: {'Authorization': 'Bearer ' + (document.cookie.match(/asika_token=([^;]+)/) || [])[1]}
+    });
+    const config = await resp.json();
+    const notifiers = config.notify || [];
+    const container = document.getElementById('notifier-list');
+    container.innerHTML = notifiers.map(n => `
+      <label class="flex items-center gap-2">
+        <input type="checkbox" class="notif-type text-blue-600 rounded" value="${n.type}" checked>
+        <span>${n.type}</span>
+      </label>
+    `).join('');
+  } catch (e) {
+    console.error('Failed to load notifiers:', e);
+  }
+}
+
+document.getElementById('save-prefs').addEventListener('click', async () => {
+  const enabledNotifiers = [...document.querySelectorAll('.notif-type:checked')].map(c => c.value);
+  const eventPrefs = {};
+  document.querySelectorAll('.event-pref').forEach(c => {
+    eventPrefs[c.value] = c.checked;
+  });
+  const prefs = {
+    username: username,
+    enabled: document.getElementById('notif-enabled').checked,
+    enabled_notifiers: enabledNotifiers,
+    event_prefs: eventPrefs,
+    digest_mode: document.querySelector('input[name="digest"]:checked')?.value || 'realtime',
+    quiet_hours_override: document.getElementById('quiet-override').checked ? {
+      enabled: true,
+      start_time: document.getElementById('quiet-start').value,
+      end_time: document.getElementById('quiet-end').value
+    } : null
+  };
+  try {
+    const resp = await fetch(`/api/v1/users/${username}/notifications`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (document.cookie.match(/asika_token=([^;]+)/) || [])[1]
+      },
+      body: JSON.stringify(prefs)
+    });
+    if (resp.ok) {
+      alert('Preferences saved');
+    } else {
+      alert('Failed to save preferences');
+    }
+  } catch (e) {
+    alert('Error saving preferences: ' + e.message);
+  }
+});
+
+loadPrefs();
+loadNotifiers();
+</script>

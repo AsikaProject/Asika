@@ -35,38 +35,91 @@ func GetLogs(c *gin.Context) {
 	}
 
 	logs := make([]models.AuditLog, 0)
-	err := db.ForEach(db.BucketLogs, func(key, value []byte) error {
-		var log models.AuditLog
-		if err := json.Unmarshal(value, &log); err != nil {
+
+	primaryFilter := ""
+	primaryPrefix := ""
+	if actor != "" {
+		primaryFilter = "actor"
+		primaryPrefix = "actor:" + actor + ":"
+	} else if repoGroup != "" {
+		primaryFilter = "repo_group"
+		primaryPrefix = "repo_group:" + repoGroup + ":"
+	} else if action != "" {
+		primaryFilter = "action"
+		primaryPrefix = "action:" + action + ":"
+	} else if category != "" {
+		primaryFilter = "category"
+		primaryPrefix = "category:" + category + ":"
+	}
+
+	if primaryPrefix != "" {
+		err := db.ForEachPrefix(db.BucketAuditLogIndex, db.BucketLogs, primaryPrefix, func(idxKey, value []byte) error {
+			var log models.AuditLog
+			if err := json.Unmarshal(value, &log); err != nil {
+				return nil
+			}
+			if level != "" && log.Level != level {
+				return nil
+			}
+			if category != "" && primaryFilter != "category" && log.Category != category {
+				return nil
+			}
+			if actor != "" && primaryFilter != "actor" && log.Actor != actor {
+				return nil
+			}
+			if repoGroup != "" && primaryFilter != "repo_group" && log.RepoGroup != repoGroup {
+				return nil
+			}
+			if action != "" && primaryFilter != "action" && log.Action != action {
+				return nil
+			}
+			if !sinceTime.IsZero() && log.Timestamp.Before(sinceTime) {
+				return nil
+			}
+			logs = append(logs, log)
+			if limit > 0 && len(logs) >= limit {
+				return errStopLogs
+			}
 			return nil
+		})
+		if err != nil && err != errStopLogs {
+			c.JSON(http.StatusOK, logs)
+			return
 		}
-		if level != "" && log.Level != level {
+	} else {
+		err := db.ForEach(db.BucketLogs, func(key, value []byte) error {
+			var log models.AuditLog
+			if err := json.Unmarshal(value, &log); err != nil {
+				return nil
+			}
+			if level != "" && log.Level != level {
+				return nil
+			}
+			if category != "" && log.Category != category {
+				return nil
+			}
+			if actor != "" && log.Actor != actor {
+				return nil
+			}
+			if repoGroup != "" && log.RepoGroup != repoGroup {
+				return nil
+			}
+			if action != "" && log.Action != action {
+				return nil
+			}
+			if !sinceTime.IsZero() && log.Timestamp.Before(sinceTime) {
+				return nil
+			}
+			logs = append(logs, log)
+			if limit > 0 && len(logs) >= limit {
+				return errStopLogs
+			}
 			return nil
+		})
+		if err != nil && err != errStopLogs {
+			c.JSON(http.StatusOK, logs)
+			return
 		}
-		if category != "" && log.Category != category {
-			return nil
-		}
-		if actor != "" && log.Actor != actor {
-			return nil
-		}
-		if repoGroup != "" && log.RepoGroup != repoGroup {
-			return nil
-		}
-		if action != "" && log.Action != action {
-			return nil
-		}
-		if !sinceTime.IsZero() && log.Timestamp.Before(sinceTime) {
-			return nil
-		}
-		logs = append(logs, log)
-		if limit > 0 && len(logs) >= limit {
-			return errStopLogs
-		}
-		return nil
-	})
-	if err != nil && err != errStopLogs {
-		c.JSON(http.StatusOK, logs)
-		return
 	}
 
 	c.JSON(http.StatusOK, logs)

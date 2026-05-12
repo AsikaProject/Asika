@@ -265,6 +265,7 @@ asika config reload            # Hot reload config
 asika watch prs [group]        # Watch PR changes (--interval 10)
 asika watch stats              # Watch DORA metrics and queue status
 asika watch team               # Watch team contributor stats
+asika watch stream             # Stream real-time events via SSE
 
 # Version
 asika version                  # Show CLI version

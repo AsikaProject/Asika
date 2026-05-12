@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -312,6 +313,27 @@ func startAutoRollbackWatch(configPath string, rollbackVersion int) {
 		rollbackAndReload(configPath, rollbackVersion)
 		return
 	}
+
+	if !VerifyNotifiers() {
+		slog.Error("post-config-change health check failed (notifiers), auto-rolling back", "version", rollbackVersion)
+		rollbackAndReload(configPath, rollbackVersion)
+		return
+	}
+}
+
+func VerifyNotifiers() bool {
+	if len(globalNotifiers) == 0 {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	okCount := 0
+	for _, n := range globalNotifiers {
+		if err := n.Send(ctx, "[Asika] Config Health Check", ""); err == nil {
+			okCount++
+		}
+	}
+	return okCount > 0 || len(globalNotifiers) == 0
 }
 
 func rollbackAndReload(configPath string, version int) {

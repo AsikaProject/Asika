@@ -149,6 +149,7 @@ Route-specific middleware:
 - `RequirePermission(field)` — Checks granular permission (can_approve, can_merge, can_close, can_reopen, can_spam, can_manage_queue, can_revert)
 - `RequireRepoGroupAccess()` — Checks user's allowed repo groups against URL parameter; also supports API key `AllowedRepoGroups`
 - `RequireRepoAccess()` — Finer-grained check: resolves the actual `owner/repo` from the PR record and checks against user's `AllowedRepos` list
+- `RequireSpaceAccess()` — Checks if the user is a member of the team space that owns the requested repo group; resolves space ownership via `TeamSpace.RepoGroups`
 
 ### Permission Model
 
@@ -202,6 +203,22 @@ Trigger flow: webhook/poller → event bus → consumer → `reviewer.HandlePROp
 Manual assignment endpoints:
 - `POST /api/v1/repos/:repo_group/prs/:pr_id/assign` — Manually assign reviewers (requires `approve` permission)
 - `POST /api/v1/repos/:repo_group/prs/:pr_id/codeowners-assign` — Re-evaluate CODEOWNERS and assign (requires `approve` permission)
+
+### Notification Preferences
+
+Per-user notification preferences are stored in `notification_prefs` bucket (key: `{username}`). Each user can configure:
+
+- `Enabled` — Master switch for all notifications
+- `EnabledNotifiers` — Which notifier types to use (e.g. `["smtp", "telegram"]`)
+- `EventPrefs` — Per-event-type enable/disable map (e.g. `{"pr_opened": true, "pr_closed": false}`)
+- `DigestMode` — `"realtime"`, `"hourly"`, or `"daily"`
+- `QuietHoursOverride` — Per-user quiet hours that override the global config
+
+The `sendNotificationInternal` function checks `isNotifierEnabledForAnyUser()` before sending, which iterates all user preferences to determine if at least one user wants the notification.
+
+Management endpoints:
+- `GET/PUT /api/v1/users/:username/notifications` — Get/update preferences
+- `GET /notifications` — WebUI preference management page
 
 ### RSS Feed
 
@@ -267,7 +284,7 @@ The project supports two database backends via a pluggable `Storage` interface (
 
 The active backend is selected at startup via `models.DatabaseConfig.Type` (`"bbolt"` or `"mongo"`). Cross-engine migration is available via `MigrateBboltToMongo()` / `MigrateMongoToBbolt()`.
 
-Buckets (21 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
+Buckets (22 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
 
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
@@ -278,7 +295,8 @@ Buckets (21 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `serial_queue` | `{repoGroup}#{prID}` | QueueItem (JSON); serial validation queue with `ValidationStatus` field |
 | `users` | `{username}` | User (JSON) |
 | `api_keys` | `{keyID}` | APIKey (JSON) |
-| `logs` | `{nanosecondTimestamp}_{randomHex}` | AuditLog (JSON) |
+| `logs` | `{nanosecondTimestamp}_{randomHex}` | AuditLog (JSON); includes `Before`/`After` diff fields for state-changing operations (approve, close, reopen, mark_spam) |
+| `audit_log_index` | `actor:{actor}:{logKey}`, `repo_group:{rg}:{logKey}`, `action:{action}:{logKey}`, `category:{cat}:{logKey}` | Secondary index (JSON); enables efficient audit log filtering |
 | `sync_history` | `{syncRecordID}` | SyncRecord (JSON) |
 | `config` | `{key}` | Config value (JSON); also stores `__migration_version__`, `__config_version__`, label rules |
 | `config_history` | `{zeroPadded6DigitVersion}` | ConfigSnapshot (JSON); max 20 snapshots, rollback-capable |
@@ -314,6 +332,7 @@ Schema migrations (bbolt only):
 Config versioning:
 - Snapshots stored in `config_history` with auto-incrementing zero-padded versions
 - Auto-pruned to latest 20; rollback via `POST /api/v1/config/rollback`
+- Auto-rollback: after `PUT /api/v1/config`, a 60s health-check timer verifies DB connectivity and notifier health; if either fails, automatically rolls back to the previous config snapshot
 
 ### Platform Clients
 
@@ -337,6 +356,12 @@ All platform implementations live in `common/platforms/` and satisfy `PlatformCl
 - `health.go` — `GET /api/v1/webhooks/health` returns per-platform health status
 - `retry.go` — `StartWebhookRetryWorker`, exponential backoff, permanent failure notification
 
+### Events Handler
+
+`daemon/handlers/events.go` provides real-time event streaming:
+
+- `StreamEvents` — `GET /api/v1/events` SSE endpoint that subscribes to the event bus and streams PR events to connected clients. Sends a ping every 30s to keep the connection alive.
+
 ### PR Handlers
 
 `daemon/handlers/pr/` is a sub-package for PR operation handlers:
@@ -346,7 +371,7 @@ All platform implementations live in `common/platforms/` and satisfy `PlatformCl
 - `reopen.go` — `ReopenPR`
 - `comment.go` — `CommentPR`
 - `label.go` — `BatchLabelPR`
-- `logs.go` — `GetLogs`, `ExportLogs`
+- `logs.go` — `GetLogs`, `ExportLogs`; uses `audit_log_index` bucket for indexed lookups by actor/repo_group/action/category; falls back to full scan when no filter specified
 
 ### Reviewer Package
 

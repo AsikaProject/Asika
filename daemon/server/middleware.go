@@ -351,6 +351,73 @@ func resolveRepoFromRequest(c *gin.Context) string {
 
 var errStopForEach = fmt.Errorf("__stop__")
 
+// RequireSpaceAccess checks if the user has access to the space that owns the
+// requested repo group. Admins bypass this check.
+func RequireSpaceAccess() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userRole, _ := c.Get("role")
+		if userRole != nil && userRole.(string) == "admin" {
+			c.Next()
+			return
+		}
+
+		username, _ := c.Get("username")
+		if username == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
+			c.Abort()
+			return
+		}
+
+		repoGroup := c.Param("repo_group")
+		if repoGroup == "" {
+			c.Next()
+			return
+		}
+
+		cfg := config.Current()
+		if cfg == nil {
+			c.Next()
+			return
+		}
+
+		group := config.GetRepoGroupByName(cfg, repoGroup)
+		if group == nil {
+			c.Next()
+			return
+		}
+
+		spaces, err := db.ListTeamSpaces()
+		if err != nil || len(spaces) == 0 {
+			c.Next()
+			return
+		}
+
+		for _, space := range spaces {
+			for _, sg := range space.RepoGroups {
+				if sg == repoGroup {
+					members, err := db.GetSpaceMembers(space.Name)
+					if err != nil {
+						continue
+					}
+					for _, m := range members {
+						if m.Username == username.(string) {
+							c.Set("space_name", space.Name)
+							c.Set("space_role", m.Role)
+							c.Next()
+							return
+						}
+					}
+					c.JSON(http.StatusForbidden, gin.H{"error": "权限不够: 不属于空间 " + space.Name, "code": 403})
+					c.Abort()
+					return
+				}
+			}
+		}
+
+		c.Next()
+	}
+}
+
 // RequireAnyRole requires any of the specified roles
 func RequireAnyRole(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {

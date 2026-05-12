@@ -216,12 +216,59 @@ func toFloat(v interface{}) float64 {
 	}
 }
 
+var watchStreamCmd = &cobra.Command{
+	Use:   "stream",
+	Short: "Stream real-time events via SSE",
+	Run: func(cmd *cobra.Command, args []string) {
+		server := GetServer(cmd)
+		token := GetToken(cmd)
+		watchStream(cmd, server, token)
+	},
+}
+
+func watchStream(cmd *cobra.Command, server, token string) {
+	url := server + "/api/v1/events"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return
+	}
+	setAuthHeader(req, token)
+	req.Header.Set("Accept", "text/event-stream")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error connecting: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "Server returned %d\n", resp.StatusCode)
+		return
+	}
+
+	fmt.Println("Streaming events (Ctrl+C to stop)")
+	buf := make([]byte, 4096)
+	for {
+		n, err := resp.Body.Read(buf)
+		if n > 0 {
+			fmt.Print(string(buf[:n]))
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "\nConnection closed: %v\n", err)
+			return
+		}
+	}
+}
+
 func init() {
 	watchCmd.PersistentFlags().IntP("interval", "i", 10, "Polling interval in seconds")
 
 	watchCmd.AddCommand(watchPRsCmd)
 	watchCmd.AddCommand(watchStatsCmd)
 	watchCmd.AddCommand(watchTeamCmd)
+	watchCmd.AddCommand(watchStreamCmd)
 
 	RootCmd.AddCommand(watchCmd)
 }

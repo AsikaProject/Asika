@@ -92,6 +92,7 @@ func AssignReviewers(c *gin.Context) {
 		PRNumber:  prRecord.PRNumber,
 		Platform:  prRecord.Platform,
 		Action:    "assign_reviewers",
+		After:     map[string]interface{}{"reviewers": req.Reviewers},
 	})
 
 	slog.Info("reviewers assigned", "pr", prRecord.PRNumber, "reviewers", req.Reviewers, "by", username)

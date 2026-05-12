@@ -64,6 +64,10 @@ func sendNotificationInternal(ctx context.Context, title, body, eventType, prID,
 			continue
 		}
 		nt := n.Type()
+		if !isNotifierEnabledForAnyUser(nt, eventType) {
+			slog.Info("notification disabled by all users", "notifier", nt, "event", eventType)
+			continue
+		}
 		if eventType != "" && prID != "" {
 			entry, buffered := appendToDedupBuffer(eventType, prID, nt, title, body)
 			if buffered {
@@ -84,6 +88,40 @@ func sendNotificationInternal(ctx context.Context, title, body, eventType, prID,
 			failureTracker.RecordSuccess(nt)
 		}
 	}
+}
+
+func isNotifierEnabledForAnyUser(notifierType, eventType string) bool {
+	prefs, err := db.ListNotificationPrefs(nil)
+	if err != nil {
+		return true
+	}
+	if len(prefs) == 0 {
+		return true
+	}
+	for _, p := range prefs {
+		if !p.Enabled {
+			continue
+		}
+		if len(p.EnabledNotifiers) > 0 {
+			found := false
+			for _, en := range p.EnabledNotifiers {
+				if en == notifierType {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		if eventType != "" && p.EventPrefs != nil {
+			if enabled, exists := p.EventPrefs[eventType]; exists && !enabled {
+				continue
+			}
+		}
+		return true
+	}
+	return false
 }
 
 type dedupEntry struct {

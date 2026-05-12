@@ -29,4 +29,5 @@ const (
 	BucketCrossSpaceDeps    = "cross_space_deps"
 	BucketEscalationRules   = "escalation_rules"
 	BucketPRStacks          = "pr_stacks"
+	BucketAuditLogIndex     = "audit_log_index"
 )

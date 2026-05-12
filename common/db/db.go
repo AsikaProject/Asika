@@ -49,6 +49,7 @@ type Storage interface {
 	PutNotificationDedup(key string, data []byte) error
 	GetNotificationDedup(key string) ([]byte, error)
 	DeleteNotificationDedup(key string) error
+	ListNotificationPrefs(usernames []string) ([]models.NotificationPreferences, error)
 	PutTeamSpace(space *models.TeamSpace) error
 	GetTeamSpace(name string) (*models.TeamSpace, error)
 	ListTeamSpaces() ([]*models.TeamSpace, error)
@@ -215,6 +216,9 @@ func GetNotificationDedup(key string) ([]byte, error) {
 }
 func DeleteNotificationDedup(key string) error {
 	return mustStorage().DeleteNotificationDedup(key)
+}
+func ListNotificationPrefs(usernames []string) ([]models.NotificationPreferences, error) {
+	return mustStorage().ListNotificationPrefs(usernames)
 }
 func PutTeamSpace(space *models.TeamSpace) error {
 	return mustStorage().PutTeamSpace(space)

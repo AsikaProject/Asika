@@ -64,14 +64,20 @@ func ClosePR(c *gin.Context) {
 		return
 	}
 
+	beforeState := pr.State
+	beforeLabels := pr.Labels
+
 	if err := client.ClosePR(c.Request.Context(), owner, repo, prNumber); err != nil {
 		slog.Error("failed to close PR", "error", err)
-		db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
-			"pr_number":  prNumber,
-			"repo_group": repoGroup,
-			"actor":      c.GetString("username"),
-			"platform":   platform,
-			"error":      err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR close failed",
+			Actor:     c.GetString("username"),
+			RepoGroup: repoGroup,
+			PRNumber:  prNumber,
+			Platform:  platform,
+			Action:    "close",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to close PR"})
 		return
@@ -100,12 +106,16 @@ func ClosePR(c *gin.Context) {
 		}
 	}
 
-	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-		"pr_number":  prNumber,
-		"repo_group": repoGroup,
-		"actor":      c.GetString("username"),
-		"platform":   platform,
-		"reason":     reason,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR closed",
+		Actor:     c.GetString("username"),
+		RepoGroup: repoGroup,
+		PRNumber:  prNumber,
+		Platform:  platform,
+		Action:    "close",
+		Before:    map[string]interface{}{"state": beforeState, "labels": beforeLabels},
+		After:     map[string]interface{}{"state": "closed", "labels": pr.Labels, "reason": reason},
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "PR closed"})
 }
@@ -162,14 +172,19 @@ func MarkSpam(c *gin.Context) {
 		return
 	}
 
+	beforeState := pr.State
+
 	if err := client.ClosePR(c.Request.Context(), owner, repo, prNumber); err != nil {
 		slog.Error("failed to mark PR as spam", "error", err)
-		db.AppendAuditLog("error", "PR spam marking failed", map[string]interface{}{
-			"pr_number":  prNumber,
-			"repo_group": repoGroup,
-			"actor":      c.GetString("username"),
-			"platform":   platform,
-			"error":      err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR spam marking failed",
+			Actor:     c.GetString("username"),
+			RepoGroup: repoGroup,
+			PRNumber:  prNumber,
+			Platform:  platform,
+			Action:    "mark_spam",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to mark as spam"})
 		return
@@ -207,11 +222,16 @@ func MarkSpam(c *gin.Context) {
 		})
 	}
 
-	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
-		"pr_number":  prNumber,
-		"repo_group": repoGroup,
-		"actor":      c.GetString("username"),
-		"platform":   platform,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "warn",
+		Message:   "PR marked as spam",
+		Actor:     c.GetString("username"),
+		RepoGroup: repoGroup,
+		PRNumber:  prNumber,
+		Platform:  platform,
+		Action:    "mark_spam",
+		Before:    map[string]interface{}{"state": beforeState, "spam_flag": false},
+		After:     map[string]interface{}{"state": "spam", "spam_flag": true},
 	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "PR marked as spam"})

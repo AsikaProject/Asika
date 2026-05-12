@@ -62,14 +62,25 @@ func ApprovePR(c *gin.Context) {
 		return
 	}
 
+	var beforeState string
+	if dbErr == nil && data != nil {
+		var existing models.PRRecord
+		if json.Unmarshal(data, &existing) == nil {
+			beforeState = existing.State
+		}
+	}
+
 	if err := client.ApprovePR(c.Request.Context(), owner, repo, prNumber); err != nil {
 		slog.Error("failed to approve PR", "error", err)
-		db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
-			"pr_number":  prNumber,
-			"repo_group": repoGroup,
-			"actor":      c.GetString("username"),
-			"platform":   platform,
-			"error":      err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR approve failed",
+			Actor:     c.GetString("username"),
+			RepoGroup: repoGroup,
+			PRNumber:  prNumber,
+			Platform:  platform,
+			Action:    "approve",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve PR"})
 		return
@@ -155,12 +166,16 @@ func ApprovePR(c *gin.Context) {
 		}
 	}
 
-	db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-		"pr_number":      prNumber,
-		"repo_group":     repoGroup,
-		"actor":          c.GetString("username"),
-		"platform":       platform,
-		"added_to_queue": addedToQueue,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR approved",
+		Actor:     c.GetString("username"),
+		RepoGroup: repoGroup,
+		PRNumber:  prNumber,
+		Platform:  platform,
+		Action:    "approve",
+		Before:    map[string]interface{}{"state": beforeState, "is_approved": false},
+		After:     map[string]interface{}{"state": pr.State, "is_approved": true, "added_to_queue": addedToQueue},
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "PR approved", "queued": addedToQueue})
 }
