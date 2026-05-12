@@ -166,6 +166,11 @@ func (c *Consumer) handlePROpened(event events.Event) {
 	}
 	pr.CreatedAt = time.Now()
 	pr.UpdatedAt = time.Now()
+	pr.Events = append(pr.Events, models.PREvent{
+		Timestamp: time.Now(),
+		Action:    "opened",
+		Actor:     pr.Author,
+	})
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
 
@@ -205,6 +210,11 @@ func (c *Consumer) handlePRClosed(event events.Event) {
 
 	pr.State = "closed"
 	pr.UpdatedAt = time.Now()
+	pr.Events = append(pr.Events, models.PREvent{
+		Timestamp: time.Now(),
+		Action:    "closed",
+		Actor:     "system",
+	})
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
 	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
@@ -222,6 +232,11 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 
 	pr.State = "merged"
 	pr.UpdatedAt = time.Now()
+	pr.Events = append(pr.Events, models.PREvent{
+		Timestamp: time.Now(),
+		Action:    "merged",
+		Actor:     "system",
+	})
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
 	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
@@ -270,6 +285,19 @@ func (c *Consumer) handleSpamDetected(event events.Event) {
 
 	slog.Warn("spam detected", "title", pr.Title, "author", pr.Author)
 
+	pr.SpamFlag = true
+	pr.UpdatedAt = time.Now()
+	pr.Events = append(pr.Events, models.PREvent{
+		Timestamp: time.Now(),
+		Action:    "marked_spam",
+		Actor:     "system",
+	})
+	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
+	data, _ := json.Marshal(pr)
+	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
+		slog.Error("failed to update PR", "error", err)
+	}
+
 	if c.spamDetector != nil {
 		c.spamDetector.HandleSpam(pr, event.RepoGroup)
 	}
@@ -286,6 +314,11 @@ func (c *Consumer) handlePRReopened(event events.Event) {
 	pr.State = "open"
 	pr.SpamFlag = false
 	pr.UpdatedAt = time.Now()
+	pr.Events = append(pr.Events, models.PREvent{
+		Timestamp: time.Now(),
+		Action:    "reopened",
+		Actor:     "system",
+	})
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
 	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {

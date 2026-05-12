@@ -267,6 +267,12 @@ func (s *bboltStorage) writeAuditLogIndex(logKey string, entry models.AuditLog) 
 				return err
 			}
 		}
+		if entry.RepoGroup != "" && entry.PRNumber > 0 {
+			idxKey := fmt.Sprintf("pr:%s:%d:%s", entry.RepoGroup, entry.PRNumber, logKey)
+			if err := b.Put([]byte(idxKey), []byte(logKey)); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 }

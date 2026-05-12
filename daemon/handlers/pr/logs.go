@@ -18,11 +18,17 @@ func GetLogs(c *gin.Context) {
 	category := c.Query("category")
 	actor := c.Query("actor")
 	repoGroup := c.Query("repo_group")
+	prNumberStr := c.Query("pr_number")
 	action := c.Query("action")
 	since := c.Query("since")
 	limit := 0
 	if l := c.Query("limit"); l != "" {
 		fmt.Sscanf(l, "%d", &limit)
+	}
+
+	var prNumber int
+	if prNumberStr != "" {
+		fmt.Sscanf(prNumberStr, "%d", &prNumber)
 	}
 
 	var sinceTime time.Time
@@ -38,7 +44,10 @@ func GetLogs(c *gin.Context) {
 
 	primaryFilter := ""
 	primaryPrefix := ""
-	if actor != "" {
+	if prNumber > 0 && repoGroup != "" {
+		primaryFilter = "pr"
+		primaryPrefix = fmt.Sprintf("pr:%s:%d:", repoGroup, prNumber)
+	} else if actor != "" {
 		primaryFilter = "actor"
 		primaryPrefix = "actor:" + actor + ":"
 	} else if repoGroup != "" {
@@ -67,7 +76,10 @@ func GetLogs(c *gin.Context) {
 			if actor != "" && primaryFilter != "actor" && log.Actor != actor {
 				return nil
 			}
-			if repoGroup != "" && primaryFilter != "repo_group" && log.RepoGroup != repoGroup {
+			if repoGroup != "" && primaryFilter != "repo_group" && primaryFilter != "pr" && log.RepoGroup != repoGroup {
+				return nil
+			}
+			if prNumber > 0 && primaryFilter != "pr" && log.PRNumber != prNumber {
 				return nil
 			}
 			if action != "" && primaryFilter != "action" && log.Action != action {
@@ -102,6 +114,9 @@ func GetLogs(c *gin.Context) {
 				return nil
 			}
 			if repoGroup != "" && log.RepoGroup != repoGroup {
+				return nil
+			}
+			if prNumber > 0 && log.PRNumber != prNumber {
 				return nil
 			}
 			if action != "" && log.Action != action {

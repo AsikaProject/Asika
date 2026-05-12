@@ -47,21 +47,51 @@
     }
     fetchCloseReasons();
     async function L(){
-        try {
-            var r = await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId);
-            if(!r.ok){ D('err:load'); return; }
-            var p = await r.json();
+         try {
+             var r = await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId);
+             if(!r.ok){ D('err:load'); return; }
+             var p = await r.json();
+
+             // Load audit log events for this PR
+             try {
+                 var prNum = parseInt(prId, 10);
+                 if (!isNaN(prNum)) {
+                     var logR = await apiRequest('/api/v1/logs?repo_group='+encodeURIComponent(repoGroup)+'&pr_number='+prNum+'&limit=50');
+                     if (logR.ok) {
+                         var auditLogs = await logR.json();
+                         if (auditLogs && auditLogs.length > 0) {
+                             var auditEvents = auditLogs.map(function(l) {
+                                 return { action: l.action || l.category || 'event', actor: l.actor || 'system', timestamp: l.timestamp, detail: l.message || '', source: 'audit' };
+                             });
+                             p.events = (p.events || []).concat(auditEvents);
+                         }
+                     }
+                 }
+             } catch(e) {
+                 console.error('Failed to load audit logs:', e);
+             }
 
             var platformLink = p.html_url
                 ? '<a href="'+escapeHtml(p.html_url)+'" target="_blank" style="color: #0066cc;">'+escapeHtml(p.platform)+' ↗</a>'
                 : escapeHtml(p.platform);
 
+            var descHtml = '';
+            if (p.body) {
+                var bodyLines = p.body.split('\n').slice(0, 10);
+                descHtml = '<div style="margin:12px 0;padding:12px;background:#f8f9fa;border-radius:4px;white-space:pre-wrap;font-size:13px;max-height:200px;overflow:auto;">' + escapeHtml(bodyLines.join('\n')) + (p.body.split('\n').length > 10 ? '\n...' : '') + '</div>';
+            }
+            var lastCommitHtml = '';
+            if (p.merge_commit_sha) {
+                lastCommitHtml = '<p><strong>{{t "pr_detail.author"}} </strong> '+escapeHtml(p.author)+'</p>' +
+                    '<p><strong>Last commit:</strong> <code style="font-size:12px;">'+escapeHtml(p.merge_commit_sha.substring(0,8))+'</code></p>';
+            }
             document.getElementById('prDetail').innerHTML =
                 '<h1>'+escapeHtml(p.title)+' <span style="font-size:14px;color:#666;">#'+p.pr_number+'</span></h1>' +
                 '<p><strong>{{t "pr_detail.author"}} </strong> '+escapeHtml(p.author)+'</p>' +
                 '<p><strong>{{t "pr_detail.state"}} </strong> <span class="status-'+escapeHtml(p.state)+'">'+escapeHtml(p.state)+'</span></p>' +
                 '<p><strong>{{t "pr_detail.platform"}} </strong> '+platformLink+'</p>' +
-                '<p><strong>{{t "pr_detail.labels"}} </strong> '+(p.labels||[]).map(function(l){return'<span class="label">'+escapeHtml(l)+'</span>'}).join('')+'</p>';
+                '<p><strong>{{t "pr_detail.labels"}} </strong> '+(p.labels||[]).map(function(l){return'<span class="label">'+escapeHtml(l)+'</span>'}).join('')+'</p>' +
+                descHtml + lastCommitHtml;
 
             var a = '';
             if(p.state === 'open'){
@@ -79,9 +109,17 @@
             }
             document.getElementById('actions').innerHTML = a;
 
-            if(p.events && p.events.length > 0){
-                document.getElementById('eventList').innerHTML = p.events.map(function(e){
-                    return '<div style="padding:10px;border-left:3px solid #0066cc;margin:10px 0;">' +
+            var allEvents = [];
+            if (p.events && p.events.length > 0) {
+                allEvents = p.events.map(function(e) {
+                    return { action: e.action, actor: e.actor, timestamp: e.timestamp, detail: e.detail || '', source: 'pr' };
+                });
+            }
+            allEvents.sort(function(a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+            if (allEvents.length > 0) {
+                document.getElementById('eventList').innerHTML = allEvents.map(function(e) {
+                    var color = e.source === 'audit' ? '#28a745' : '#0066cc';
+                    return '<div style="padding:10px;border-left:3px solid '+color+';margin:10px 0;">' +
                         '<strong>'+escapeHtml(e.action)+'</strong> by '+escapeHtml(e.actor)+' at '+new Date(e.timestamp).toLocaleString() +
                         (e.detail ? '<p style="margin:5px 0 0 0;color:#666;font-size:13px;">'+escapeHtml(e.detail)+'</p>' : '') +
                         '</div>';
