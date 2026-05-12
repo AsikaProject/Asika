@@ -3,34 +3,93 @@ package reports
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"asika/common/models"
 )
 
-func TestCronToInterval(t *testing.T) {
+func TestCronSchedule(t *testing.T) {
 	tests := []struct {
 		input    string
-		expected time.Duration
+		expected string
 	}{
-		{"hourly", 1 * time.Hour},
-		{"daily", 24 * time.Hour},
-		{"weekly", 7 * 24 * time.Hour},
-		{"monthly", 30 * 24 * time.Hour},
-		{"2h", 2 * time.Hour},
-		{"30m", 30 * time.Minute},
-		{"invalid", 7 * 24 * time.Hour},
-		{"", 7 * 24 * time.Hour},
+		{"hourly", "@hourly"},
+		{"daily", "@daily"},
+		{"weekly", "@weekly"},
+		{"monthly", "@monthly"},
+		{"0 * * * *", "0 * * * *"},
+		{"@every 1h", "@every 1h"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			got := cronToInterval(tt.input)
+			got := cronSchedule(tt.input)
 			if got != tt.expected {
-				t.Errorf("cronToInterval(%q) = %v, want %v", tt.input, got, tt.expected)
+				t.Errorf("cronSchedule(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}
+}
+
+func TestIsValidCron(t *testing.T) {
+	tests := []struct {
+		input string
+		valid bool
+	}{
+		{"hourly", true},
+		{"daily", true},
+		{"weekly", true},
+		{"monthly", true},
+		{"0 * * * *", true},
+		{"@every 1h", true},
+		{"invalid garbage", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := isValidCron(tt.input)
+			if got != tt.valid {
+				t.Errorf("isValidCron(%q) = %v, want %v", tt.input, got, tt.valid)
+			}
+		})
+	}
+}
+
+func TestNewScheduler_DefaultCron(t *testing.T) {
+	cfg := ScheduleConfig{Enabled: true, Cron: ""}
+	s := NewScheduler(cfg)
+	if s.cfg.Cron != "weekly" {
+		t.Errorf("default cron = %q, want 'weekly'", s.cfg.Cron)
+	}
+}
+
+func TestScheduler_StartDisabled(t *testing.T) {
+	cfg := ScheduleConfig{Enabled: false, Cron: "weekly"}
+	s := NewScheduler(cfg)
+	s.Start()
+	if s.cron != nil {
+		t.Error("expected nil cron when disabled")
+	}
+}
+
+func TestScheduler_StartInvalidCronFallsBack(t *testing.T) {
+	cfg := ScheduleConfig{Enabled: true, Cron: "not-a-valid-schedule"}
+	s := NewScheduler(cfg)
+	s.Start()
+	if s.cron == nil {
+		t.Fatal("expected cron to be created with fallback to weekly")
+	}
+	s.Stop()
+}
+
+func TestScheduler_StartValidCron(t *testing.T) {
+	cfg := ScheduleConfig{Enabled: true, Cron: "@every 1m"}
+	s := NewScheduler(cfg)
+	s.Start()
+	if s.cron == nil {
+		t.Fatal("expected non-nil cron for valid expression")
+	}
+	s.Stop()
 }
 
 func TestFormatReport_Full(t *testing.T) {
@@ -118,14 +177,6 @@ func TestFormatReport_ZeroFailureRate(t *testing.T) {
 
 	if !strings.Contains(report, "Failure Rate: 0.0%") {
 		t.Errorf("expected 0%% failure rate: %s", report)
-	}
-}
-
-func TestNewScheduler_DefaultCron(t *testing.T) {
-	cfg := ScheduleConfig{Enabled: true, Cron: ""}
-	s := NewScheduler(cfg)
-	if s.cfg.Cron != "weekly" {
-		t.Errorf("default cron = %q, want 'weekly'", s.cfg.Cron)
 	}
 }
 

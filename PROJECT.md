@@ -379,6 +379,12 @@ All platform implementations live in `common/platforms/` and satisfy `PlatformCl
 - `reviewer.go` — `Reviewer` struct, `HandlePROpened()` (rules only), `HandlePROpenedWithCodeOwners()` (rules + CODEOWNERS fallback), `mergeReviewRules()` (global + per-group merge)
 - `codeowners.go` — `CodeOwners` parser, `GetCodeOwnersForRepo()` with TTL cache, `Match()`/`MatchFiles()` with last-match-wins semantics
 
+### Reports Package
+
+`daemon/reports/` handles scheduled report generation:
+
+- `reports.go` — `Scheduler` with `robfig/cron/v3` for cron expression parsing. Named schedules (`hourly`, `daily`, `weekly`, `monthly`) map to standard cron shortcuts. Custom cron expressions (e.g. `0 9 * * 1` for every Monday 9am) are supported. Invalid expressions fall back to `weekly` with a warning. Generated reports are stored in `report_history` bucket. Reports include DORA metrics, PR overview, per-repo-group/platform breakdown, and top contributors.
+
 ### Feed Package
 
 `daemon/feed/` provides RSS feed generation:

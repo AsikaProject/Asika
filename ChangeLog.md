@@ -2,6 +2,8 @@
 
 ## v20260512DEV > Unleased
 
+- **Scheduled report cron enhancement**: Replaced `cronToInterval()` with `github.com/robfig/cron/v3` for real cron expression support. Named schedules (`hourly`, `daily`, `weekly`, `monthly`) map to standard cron shortcuts (`@hourly`, `@daily`, etc.). Custom cron expressions like `0 9 * * 1` (every Monday 9am) are now supported. Invalid expressions fall back to `weekly` with a warning. New `slogCronLogger` bridges cron's logger interface to `log/slog`.
+
 - **Config auto-rollback notifier health check**: `VerifyNotifiers()` pings each configured notifier after a config update; if all notifiers fail, auto-rollback triggers alongside the existing DB health check.
 
 - **SSE event streaming**: New `GET /api/v1/events` SSE endpoint (`daemon/handlers/events.go`) subscribes to the event bus and streams PR events in real-time with 30s heartbeat. New `asika watch stream` CLI subcommand connects to the SSE endpoint for live updates without polling.

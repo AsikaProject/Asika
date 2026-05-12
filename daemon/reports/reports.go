@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/robfig/cron/v3"
+
 	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
@@ -23,7 +25,7 @@ var defaultSchedule = ScheduleConfig{
 
 type Scheduler struct {
 	cfg    ScheduleConfig
-	ticker *time.Ticker
+	cron   *cron.Cron
 	stop   chan struct{}
 }
 
@@ -42,26 +44,68 @@ func (s *Scheduler) Start() {
 		slog.Info("scheduled reports disabled")
 		return
 	}
-	interval := cronToInterval(s.cfg.Cron)
-	s.ticker = time.NewTicker(interval)
-	slog.Info("scheduled reports started", "interval", interval)
 
-	go func() {
+	cronExpr := s.cfg.Cron
+	if cronExpr == "" {
+		cronExpr = "weekly"
+	}
+	if !isValidCron(cronExpr) {
+		slog.Warn("invalid cron expression, falling back to weekly", "cron", cronExpr)
+		cronExpr = "weekly"
+	}
+
+	s.cron = cron.New(cron.WithLogger(slogCronLogger{}))
+	_, err := s.cron.AddFunc(cronSchedule(cronExpr), func() {
 		s.runReport()
-		for {
-			select {
-			case <-s.ticker.C:
-				s.runReport()
-			case <-s.stop:
-				s.ticker.Stop()
-				return
-			}
-		}
-	}()
+	})
+	if err != nil {
+		slog.Error("failed to schedule report", "error", err)
+		return
+	}
+	s.cron.Start()
+	slog.Info("scheduled reports started", "cron", cronExpr)
 }
 
 func (s *Scheduler) Stop() {
+	if s.cron != nil {
+		s.cron.Stop()
+	}
 	close(s.stop)
+}
+
+func isValidCron(expr string) bool {
+	for _, v := range []string{"hourly", "daily", "weekly", "monthly"} {
+		if expr == v {
+			return true
+		}
+	}
+	_, err := cron.ParseStandard(expr)
+	return err == nil
+}
+
+func cronSchedule(expr string) string {
+	switch expr {
+	case "hourly":
+		return "@hourly"
+	case "daily":
+		return "@daily"
+	case "weekly":
+		return "@weekly"
+	case "monthly":
+		return "@monthly"
+	default:
+		return expr
+	}
+}
+
+type slogCronLogger struct{}
+
+func (l slogCronLogger) Info(msg string, keysAndValues ...interface{}) {
+	slog.Info(msg, keysAndValues...)
+}
+
+func (l slogCronLogger) Error(err error, msg string, keysAndValues ...interface{}) {
+	slog.Error(msg, "error", err)
 }
 
 func (s *Scheduler) runReport() {
@@ -335,20 +379,4 @@ func formatReportHTML(stats map[string]interface{}, teamStats *models.TeamStats,
 	return report
 }
 
-func cronToInterval(cron string) time.Duration {
-	switch cron {
-	case "hourly":
-		return 1 * time.Hour
-	case "daily":
-		return 24 * time.Hour
-	case "weekly":
-		return 7 * 24 * time.Hour
-	case "monthly":
-		return 30 * 24 * time.Hour
-	default:
-		if d, err := time.ParseDuration(cron); err == nil {
-			return d
-		}
-		return 7 * 24 * time.Hour
-	}
-}
+
