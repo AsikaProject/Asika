@@ -1,11 +1,15 @@
 package commands
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/spf13/cobra"
 )
 
 func TestIsAPIKey(t *testing.T) {
@@ -243,5 +247,97 @@ func TestNewBuffer(t *testing.T) {
 	buf := newBuffer(data)
 	if buf.String() != "hello" {
 		t.Errorf("newBuffer = %q, want hello", buf.String())
+	}
+}
+
+func TestWatchStream_SSEConnected(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") != "text/event-stream" {
+			t.Error("expected Accept: text/event-stream header")
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("event: connected\ndata: {\"status\":\"connected\"}\n\n"))
+		w.(http.Flusher).Flush()
+	}))
+	defer ts.Close()
+
+	origStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	var buf bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		cmd := &cobra.Command{}
+		cmd.Flags().String("server", ts.URL, "")
+		cmd.Flags().String("token", "test-token", "")
+		watchStream(cmd, ts.URL, "test-token")
+		close(done)
+	}()
+
+	time.Sleep(200 * time.Millisecond)
+	w.Close()
+	os.Stderr = origStderr
+	r.Close()
+
+	<-done
+	_ = buf
+}
+
+func TestWatchStream_ServerError(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	origStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	cmd := &cobra.Command{}
+	watchStream(cmd, ts.URL, "test-token")
+
+	w.Close()
+	os.Stderr = origStderr
+	r.Close()
+}
+
+func TestWatchStream_ConnectionError(t *testing.T) {
+	origStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	cmd := &cobra.Command{}
+	watchStream(cmd, "http://localhost:1", "test-token")
+
+	w.Close()
+	os.Stderr = origStderr
+	r.Close()
+}
+
+func TestWatchStream_InvalidURL(t *testing.T) {
+	origStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	cmd := &cobra.Command{}
+	watchStream(cmd, "http://invalid-host-that-does-not-exist.example:12345", "test-token")
+
+	w.Close()
+	os.Stderr = origStderr
+	r.Close()
+}
+
+func TestWatchStreamCmd_Registered(t *testing.T) {
+	found := false
+	for _, cmd := range watchCmd.Commands() {
+		if cmd.Use == "stream" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("watch stream subcommand not registered")
 	}
 }
