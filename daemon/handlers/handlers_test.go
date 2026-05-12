@@ -13,6 +13,7 @@ import (
 	"asika/common/auth"
 	"asika/common/config"
 	"asika/common/db"
+	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
 	"asika/daemon/handlers/pr"
@@ -70,6 +71,7 @@ func setupHandlerTest(t *testing.T) (*gin.Engine, func()) {
 		logs := protected.Group("/logs")
 		{
 			logs.GET("", GetLogs)
+			logs.GET("/export", ExportLogs)
 		}
 
 		conf := protected.Group("/config")
@@ -1628,6 +1630,249 @@ func TestGetLogs_FilterByAction(t *testing.T) {
 		if log["action"] != "close" {
 			t.Errorf("expected only close action, got %v", log["action"])
 		}
+	}
+}
+
+func TestGetLogs_FilterByRepoGroup(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "PR opened",
+		RepoGroup: "frontend", Actor: "alice", Category: "pr",
+	})
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "PR closed",
+		RepoGroup: "backend", Actor: "bob", Category: "pr",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs?repo_group=frontend", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result []map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	for _, log := range result {
+		if log["repo_group"] != "frontend" {
+			t.Errorf("expected only frontend repo_group, got %v", log["repo_group"])
+		}
+	}
+}
+
+func TestGetLogs_FilterByLevel(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "error", Message: "Failed to merge",
+		Actor: "system",
+	})
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "PR approved",
+		Actor: "alice",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs?level=error", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result []map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	for _, log := range result {
+		if log["level"] != "error" {
+			t.Errorf("expected only error level, got %v", log["level"])
+		}
+	}
+}
+
+func TestGetLogs_WithLimit(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	for i := 0; i < 5; i++ {
+		db.AppendAuditLogEx(models.AuditLog{
+			Timestamp: time.Now(), Level: "info", Message: "log entry",
+			Actor: "alice", Category: "pr",
+		})
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs?limit=3", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result []map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	if len(result) != 3 {
+		t.Errorf("expected 3 results, got %d", len(result))
+	}
+}
+
+func TestGetLogs_WithSince(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	oldTime := time.Now().Add(-2 * time.Hour)
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: oldTime, Level: "info", Message: "old log",
+		Actor: "alice",
+	})
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "new log",
+		Actor: "bob",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs?since=1h", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result []map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	for _, log := range result {
+		if log["message"] == "old log" {
+			t.Error("old log should be filtered out by since parameter")
+		}
+	}
+}
+
+func TestGetLogs_IndexFallbackNoFilter(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "test log",
+		Actor: "alice", Action: "approve", Category: "pr", RepoGroup: "default",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result []map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &result)
+
+	if len(result) != 1 {
+		t.Errorf("expected 1 result, got %d", len(result))
+	}
+}
+
+func TestExportLogs_JSON(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "export test",
+		Actor: "alice", Category: "pr", Action: "approve",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs/export?format=json", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if len(result) != 1 {
+		t.Errorf("expected 1 result, got %d", len(result))
+	}
+}
+
+func TestExportLogs_CSV(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	db.AppendAuditLogEx(models.AuditLog{
+		Timestamp: time.Now(), Level: "info", Message: "csv test",
+		Actor: "bob", Category: "pr",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs/export?format=csv", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "timestamp,level,category,actor,repo_group,action,message") {
+		t.Error("expected CSV header")
+	}
+	if !strings.Contains(body, "csv test") {
+		t.Error("expected CSV body to contain log message")
+	}
+}
+
+func TestExportLogs_InvalidFormat(t *testing.T) {
+	engine, cleanup := setupHandlerTest(t)
+	defer cleanup()
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/api/v1/logs/export?format=xml", nil)
+	engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestStreamEvents_Connected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	events.Init()
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("GET", "/api/v1/events", nil)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		events.PublishPR(events.EventPROpened, "default", "github", &models.PRRecord{
+			ID: "1", Title: "test PR", State: "open",
+		}, nil)
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		StreamEvents(c)
+		close(done)
+	}()
+
+	time.Sleep(300 * time.Millisecond)
+
+	body := w.Body.String()
+	if !strings.Contains(body, "connected") {
+		t.Error("expected connected event in SSE stream")
 	}
 }
 

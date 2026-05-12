@@ -1,8 +1,10 @@
 package db
 
 import (
+	"encoding/json"
 	"testing"
 
+	"asika/common/models"
 	"go.etcd.io/bbolt"
 )
 
@@ -243,5 +245,274 @@ func TestForEach_InvalidBucket(t *testing.T) {
 	})
 	if err == nil {
 		t.Error("ForEach on invalid bucket should return error")
+	}
+}
+
+func TestListNotificationPrefs_Empty(t *testing.T) {
+	initTestDB(t)
+
+	prefs, err := ListNotificationPrefs(nil)
+	if err != nil {
+		t.Fatalf("ListNotificationPrefs failed: %v", err)
+	}
+	if len(prefs) != 0 {
+		t.Errorf("expected 0 prefs, got %d", len(prefs))
+	}
+}
+
+func TestListNotificationPrefs_SingleUser(t *testing.T) {
+	initTestDB(t)
+
+	data, _ := json.Marshal(models.NotificationPreferences{
+		Username:         "alice",
+		Enabled:          true,
+		EnabledNotifiers: []string{"smtp", "telegram"},
+		EventPrefs:       map[string]bool{"pr_opened": true, "pr_closed": false},
+		DigestMode:       "realtime",
+	})
+	PutNotificationPrefs("alice", data)
+
+	prefs, err := ListNotificationPrefs(nil)
+	if err != nil {
+		t.Fatalf("ListNotificationPrefs failed: %v", err)
+	}
+	if len(prefs) != 1 {
+		t.Fatalf("expected 1 pref, got %d", len(prefs))
+	}
+	if prefs[0].Username != "alice" {
+		t.Errorf("expected alice, got %s", prefs[0].Username)
+	}
+	if !prefs[0].Enabled {
+		t.Error("expected Enabled=true")
+	}
+	if len(prefs[0].EnabledNotifiers) != 2 {
+		t.Errorf("expected 2 enabled notifiers, got %d", len(prefs[0].EnabledNotifiers))
+	}
+	if prefs[0].EventPrefs["pr_closed"] {
+		t.Error("expected pr_closed=false")
+	}
+}
+
+func TestListNotificationPrefs_MultipleUsers(t *testing.T) {
+	initTestDB(t)
+
+	for _, u := range []string{"alice", "bob", "charlie"} {
+		data, _ := json.Marshal(models.NotificationPreferences{
+			Username: u,
+			Enabled:  true,
+		})
+		PutNotificationPrefs(u, data)
+	}
+
+	prefs, err := ListNotificationPrefs(nil)
+	if err != nil {
+		t.Fatalf("ListNotificationPrefs failed: %v", err)
+	}
+	if len(prefs) != 3 {
+		t.Errorf("expected 3 prefs, got %d", len(prefs))
+	}
+}
+
+func TestListNotificationPrefs_FilterByUsernames(t *testing.T) {
+	initTestDB(t)
+
+	for _, u := range []string{"alice", "bob", "charlie"} {
+		data, _ := json.Marshal(models.NotificationPreferences{
+			Username: u,
+			Enabled:  true,
+		})
+		PutNotificationPrefs(u, data)
+	}
+
+	prefs, err := ListNotificationPrefs([]string{"alice", "charlie"})
+	if err != nil {
+		t.Fatalf("ListNotificationPrefs failed: %v", err)
+	}
+	if len(prefs) != 2 {
+		t.Errorf("expected 2 prefs, got %d", len(prefs))
+	}
+
+	names := make(map[string]bool)
+	for _, p := range prefs {
+		names[p.Username] = true
+	}
+	if !names["alice"] || !names["charlie"] {
+		t.Errorf("expected alice and charlie, got %v", names)
+	}
+	if names["bob"] {
+		t.Error("bob should not be in filtered results")
+	}
+}
+
+func TestListNotificationPrefs_InvalidJSON(t *testing.T) {
+	initTestDB(t)
+
+	PutNotificationPrefs("broken", []byte("not valid json"))
+	data, _ := json.Marshal(models.NotificationPreferences{
+		Username: "alice",
+		Enabled:  true,
+	})
+	PutNotificationPrefs("alice", data)
+
+	prefs, err := ListNotificationPrefs(nil)
+	if err != nil {
+		t.Fatalf("ListNotificationPrefs failed: %v", err)
+	}
+	if len(prefs) != 1 {
+		t.Errorf("expected 1 valid pref (broken should be skipped), got %d", len(prefs))
+	}
+	if prefs[0].Username != "alice" {
+		t.Errorf("expected alice, got %s", prefs[0].Username)
+	}
+}
+
+func TestAuditLogIndex_WriteAndQuery(t *testing.T) {
+	initTestDB(t)
+
+	logKey := "1700000000000000000_abcdef12"
+	entry := models.AuditLog{
+		Timestamp: models.ParseTime("2024-01-01T00:00:00Z"),
+		Level:     "info",
+		Message:   "PR approved",
+		Actor:     "alice",
+		RepoGroup: "frontend",
+		Action:    "approve",
+		Category:  "pr",
+	}
+	data, _ := json.Marshal(entry)
+	Put(BucketLogs, logKey, data)
+
+	s := defaultStorage.(*bboltStorage)
+	err := s.writeAuditLogIndex(logKey, entry)
+	if err != nil {
+		t.Fatalf("writeAuditLogIndex failed: %v", err)
+	}
+
+	var actorResults []models.AuditLog
+	err = ForEachPrefix(BucketAuditLogIndex, BucketLogs, "actor:alice:", func(idxKey, value []byte) error {
+		var log models.AuditLog
+		if err := json.Unmarshal(value, &log); err != nil {
+			return nil
+		}
+		actorResults = append(actorResults, log)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ForEachPrefix failed: %v", err)
+	}
+	if len(actorResults) != 1 {
+		t.Fatalf("expected 1 result for actor:alice, got %d", len(actorResults))
+	}
+	if actorResults[0].Message != "PR approved" {
+		t.Errorf("expected 'PR approved', got %s", actorResults[0].Message)
+	}
+
+	var rgResults []models.AuditLog
+	err = ForEachPrefix(BucketAuditLogIndex, BucketLogs, "repo_group:frontend:", func(idxKey, value []byte) error {
+		var log models.AuditLog
+		if err := json.Unmarshal(value, &log); err != nil {
+			return nil
+		}
+		rgResults = append(rgResults, log)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ForEachPrefix failed: %v", err)
+	}
+	if len(rgResults) != 1 {
+		t.Errorf("expected 1 result for repo_group:frontend, got %d", len(rgResults))
+	}
+
+	var actionResults []models.AuditLog
+	err = ForEachPrefix(BucketAuditLogIndex, BucketLogs, "action:approve:", func(idxKey, value []byte) error {
+		var log models.AuditLog
+		if err := json.Unmarshal(value, &log); err != nil {
+			return nil
+		}
+		actionResults = append(actionResults, log)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ForEachPrefix failed: %v", err)
+	}
+	if len(actionResults) != 1 {
+		t.Errorf("expected 1 result for action:approve, got %d", len(actionResults))
+	}
+
+	var emptyResults []models.AuditLog
+	err = ForEachPrefix(BucketAuditLogIndex, BucketLogs, "actor:nonexistent:", func(idxKey, value []byte) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ForEachPrefix failed: %v", err)
+	}
+	if len(emptyResults) != 0 {
+		t.Errorf("expected 0 results for nonexistent actor, got %d", len(emptyResults))
+	}
+}
+
+func TestAuditLogIndex_MinimalEntry(t *testing.T) {
+	initTestDB(t)
+
+	logKey := "1700000000000000001_11111111"
+	entry := models.AuditLog{
+		Timestamp: models.ParseTime("2024-01-01T00:00:00Z"),
+		Level:     "info",
+		Message:   "simple log",
+	}
+	data, _ := json.Marshal(entry)
+	Put(BucketLogs, logKey, data)
+
+	s := defaultStorage.(*bboltStorage)
+	err := s.writeAuditLogIndex(logKey, entry)
+	if err != nil {
+		t.Fatalf("writeAuditLogIndex failed: %v", err)
+	}
+
+	var count int
+	err = ForEach(BucketAuditLogIndex, func(key, value []byte) error {
+		count++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ForEach failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 index entries for minimal log, got %d", count)
+	}
+}
+
+func TestAuditLogIndex_AllFields(t *testing.T) {
+	initTestDB(t)
+
+	logKey := "1700000000000000002_22222222"
+	entry := models.AuditLog{
+		Timestamp: models.ParseTime("2024-01-01T00:00:00Z"),
+		Level:     "warn",
+		Message:   "full log",
+		Actor:     "bob",
+		RepoGroup: "backend",
+		Action:    "close",
+		Category:  "pr",
+	}
+	data, _ := json.Marshal(entry)
+	Put(BucketLogs, logKey, data)
+
+	s := defaultStorage.(*bboltStorage)
+	err := s.writeAuditLogIndex(logKey, entry)
+	if err != nil {
+		t.Fatalf("writeAuditLogIndex failed: %v", err)
+	}
+
+	var count int
+	err = ForEach(BucketAuditLogIndex, func(key, value []byte) error {
+		count++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ForEach failed: %v", err)
+	}
+	if count != 4 {
+		t.Errorf("expected 4 index entries (actor+repo_group+action+category), got %d", count)
 	}
 }

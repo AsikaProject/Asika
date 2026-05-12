@@ -6,6 +6,7 @@ import (
 	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
+	"asika/common/notifier"
 	"asika/testutil"
 )
 
@@ -103,4 +104,22 @@ func TestCurrentCfgVersion(t *testing.T) {
 	if v < 0 {
 		t.Errorf("expected non-negative version, got %d", v)
 	}
+}
+
+func TestVerifyNotifiers_NoNotifiers(t *testing.T) {
+	globalNotifiers = nil
+	if !VerifyNotifiers() {
+		t.Error("expected true when no notifiers configured")
+	}
+}
+
+func TestVerifyNotifiers_WithNotifiers(t *testing.T) {
+	globalNotifiers = []notifier.Notifier{
+		notifier.NewWebhookNotifier(map[string]interface{}{"url": "http://localhost:19999"}),
+	}
+
+	result := VerifyNotifiers()
+	_ = result
+
+	globalNotifiers = nil
 }

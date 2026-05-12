@@ -2,12 +2,15 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
+	"asika/common/db"
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
+	"asika/testutil"
 )
 
 func TestCreateNotifierFromConfig(t *testing.T) {
@@ -94,4 +97,160 @@ func TestSendNotification_WithNotifiers(t *testing.T) {
 func TestSendNotificationSync(t *testing.T) {
 	globalNotifiers = nil
 	SendNotificationSync("title", "body")
+}
+
+func TestSendNotification_WithEventType(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	globalNotifiers = []notifier.Notifier{
+		notifier.NewWebhookNotifier(map[string]interface{}{"url": "http://localhost:19999"}),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	SendNotificationWithContext(ctx, "test", "body", "pr_opened", "123", "webhook")
+
+	globalNotifiers = nil
+}
+
+func TestSendNotification_QuietHoursBypass(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	globalNotifiers = []notifier.Notifier{
+		notifier.NewWebhookNotifier(map[string]interface{}{"url": "http://localhost:19999"}),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	SendNotificationUrgent(ctx, "urgent", "body")
+
+	globalNotifiers = nil
+}
+
+func TestIsNotifierEnabledForAnyUser_NoPrefs(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	result := isNotifierEnabledForAnyUser("smtp", "pr_opened")
+	if !result {
+		t.Error("expected true when no prefs exist")
+	}
+}
+
+func TestIsNotifierEnabledForAnyUser_AllDisabled(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username: "alice",
+		Enabled:  false,
+	}))
+
+	result := isNotifierEnabledForAnyUser("smtp", "pr_opened")
+	if result {
+		t.Error("expected false when all users disabled")
+	}
+}
+
+func TestIsNotifierEnabledForAnyUser_Enabled(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username: "alice",
+		Enabled:  true,
+	}))
+
+	result := isNotifierEnabledForAnyUser("smtp", "pr_opened")
+	if !result {
+		t.Error("expected true when user has enabled prefs")
+	}
+}
+
+func TestIsNotifierEnabledForAnyUser_NotifierFiltered(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username:         "alice",
+		Enabled:          true,
+		EnabledNotifiers: []string{"telegram"},
+	}))
+
+	result := isNotifierEnabledForAnyUser("smtp", "pr_opened")
+	if result {
+		t.Error("expected false when user only enabled telegram, not smtp")
+	}
+
+	result = isNotifierEnabledForAnyUser("telegram", "pr_opened")
+	if !result {
+		t.Error("expected true when user enabled telegram")
+	}
+}
+
+func TestIsNotifierEnabledForAnyUser_EventFiltered(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username:   "alice",
+		Enabled:    true,
+		EventPrefs: map[string]bool{"pr_opened": false},
+	}))
+
+	result := isNotifierEnabledForAnyUser("smtp", "pr_opened")
+	if result {
+		t.Error("expected false when user disabled pr_opened event")
+	}
+
+	result = isNotifierEnabledForAnyUser("smtp", "pr_closed")
+	if !result {
+		t.Error("expected true when event not in user's disabled list")
+	}
+}
+
+func TestIsNotifierEnabledForAnyUser_MultipleUsers(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username: "alice",
+		Enabled:  false,
+	}))
+	db.PutNotificationPrefs("bob", mustMarshalJSON(models.NotificationPreferences{
+		Username: "bob",
+		Enabled:  true,
+	}))
+
+	result := isNotifierEnabledForAnyUser("smtp", "pr_opened")
+	if !result {
+		t.Error("expected true when at least one user (bob) is enabled")
+	}
+}
+
+func TestIsNotifierEnabledForAnyUser_NoEventType(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username: "alice",
+		Enabled:  true,
+	}))
+
+	result := isNotifierEnabledForAnyUser("smtp", "")
+	if !result {
+		t.Error("expected true when no event type specified")
+	}
+}
+
+func mustMarshalJSON(v interface{}) []byte {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

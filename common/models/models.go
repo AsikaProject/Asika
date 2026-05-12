@@ -2,6 +2,14 @@ package models
 
 import "time"
 
+func ParseTime(s string) time.Time {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Now()
+	}
+	return t
+}
+
 type UserPermissions struct {
 	CanApprove     bool `json:"can_approve" toml:"can_approve"`
 	CanMerge       bool `json:"can_merge" toml:"can_merge"`
