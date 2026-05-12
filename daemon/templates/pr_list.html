@@ -25,11 +25,19 @@
         <option value="">{{t "pr_list.state.all"}}</option>
     </select>
 </div>
-<div class="card">
+    <div id="batchBar" style="display:none;margin-bottom:12px;padding:12px;background:#e8f4fd;border-radius:4px;align-items:center;gap:8px;">
+        <span id="batchCount" style="font-weight:600;"></span>
+        <button class="btn btn-success btn-sm" onclick="batchApprove()">Batch Approve</button>
+        <button class="btn btn-danger btn-sm" onclick="batchClose()">Batch Close</button>
+        <button class="btn btn-secondary btn-sm" onclick="batchLabel()">Batch Label</button>
+        <button class="btn btn-link btn-sm" onclick="clearBatch()" style="margin-left:auto;color:#666;">Clear selection</button>
+    </div>
+    <div class="card">
     <div class="table-wrapper">
     <table>
         <thead>
              <tr>
+                 <th style="width:30px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
                  <th>{{t "pr_list.th.number"}}</th>
                  <th>{{t "pr_list.th.title"}}</th>
                  <th>{{t "pr_list.th.author"}}</th>
@@ -40,7 +48,7 @@
              </tr>
         </thead>
         <tbody id="prTableBody">
-            <tr><td colspan="7" style="text-align: center;">Loading...</td></tr>
+            <tr><td colspan="8" style="text-align: center;">Loading...</td></tr>
         </tbody>
     </table>
     </div><!-- .table-wrapper -->
@@ -52,6 +60,8 @@
     var currentPage = 1;
     var perPage = 20;
     var totalPRs = 0;
+    var selectedPRs = new Set();
+    var allPRs = [];
     async function loadRepoGroups() {
         try {
             const resp = await apiRequest('/api/v1/config');
@@ -111,7 +121,11 @@
             }
             totalPRs = total;
             currentPage = page;
-            if (prs.length === 0) { tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #999;">{{t "pr_list.no_prs"}}</td></tr>'; renderPagination(); return; }
+            allPRs = prs;
+            selectedPRs.clear();
+            document.getElementById('selectAll').checked = false;
+            updateBatchBar();
+            if (prs.length === 0) { tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #999;">{{t "pr_list.no_prs"}}</td></tr>'; renderPagination(); return; }
             tbody.innerHTML = prs.map(pr => {
                 let actions = '';
                 if (pr.state === 'open') {
@@ -127,9 +141,9 @@
                 } else {
                     actions += '<button class="btn btn-secondary" onclick="reopenPR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;">{{t "pr_detail.reopen"}}</button>';
                 }
-                return '<tr><td>'+pr.pr_number+'</td><td><a href="/repos/'+repoGroup+'/prs/'+pr.pr_number+'" style="color: #0066cc; text-decoration: none;">'+escapeHtml(pr.title)+'</a></td><td>'+escapeHtml(pr.author)+'</td><td>'+(pr.html_url?'<a href="'+escapeHtml(pr.html_url)+'" target="_blank" title="View on platform">'+escapeHtml(pr.platform)+' ↗</a>':escapeHtml(pr.platform))+'</td><td class="status-'+escapeHtml(pr.state)+'">'+escapeHtml(pr.state)+'</td><td>'+(pr.labels||[]).map(l=>'<span class="label">'+escapeHtml(l)+'</span>').join('')+'</td><td>'+actions+'</td></tr>';
+                return '<tr><td><input type="checkbox" class="pr-check" data-pr-num="'+pr.pr_number+'" onchange="togglePR('+pr.pr_number+',this.checked)"></td><td>'+pr.pr_number+'</td><td><a href="/repos/'+repoGroup+'/prs/'+pr.pr_number+'" style="color: #0066cc; text-decoration: none;">'+escapeHtml(pr.title)+'</a></td><td>'+escapeHtml(pr.author)+'</td><td>'+(pr.html_url?'<a href="'+escapeHtml(pr.html_url)+'" target="_blank" title="View on platform">'+escapeHtml(pr.platform)+' ↗</a>':escapeHtml(pr.platform))+'</td><td class="status-'+escapeHtml(pr.state)+'">'+escapeHtml(pr.state)+'</td><td>'+(pr.labels||[]).map(l=>'<span class="label">'+escapeHtml(l)+'</span>').join('')+'</td><td>'+actions+'</td></tr>';
             }).join('');
-            } catch (e) { tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #999;">No PRs found</td></tr>'; }
+             } catch (e) { tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #999;">No PRs found</td></tr>'; }
         renderPagination();
     }
     function renderPagination() {
@@ -187,6 +201,72 @@
     async function reopenPR(n) {
         const repoGroup = document.getElementById('repoGroupSelect').value;
         await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+n+'/reopen',{method:'POST'}); loadPRs();
+    }
+    function togglePR(num, checked) {
+        if (checked) selectedPRs.add(num); else selectedPRs.delete(num);
+        updateBatchBar();
+    }
+    function toggleSelectAll(cb) {
+        selectedPRs.clear();
+        if (cb.checked) allPRs.forEach(pr => selectedPRs.add(pr.pr_number));
+        document.querySelectorAll('.pr-check').forEach(function(el){ el.checked = cb.checked; });
+        updateBatchBar();
+    }
+    function updateBatchBar() {
+        var bar = document.getElementById('batchBar');
+        var count = document.getElementById('batchCount');
+        if (selectedPRs.size > 0) {
+            bar.style.display = 'flex';
+            count.textContent = selectedPRs.size + ' PR(s) selected';
+        } else {
+            bar.style.display = 'none';
+        }
+    }
+    function clearBatch() {
+        selectedPRs.clear();
+        document.querySelectorAll('.pr-check').forEach(function(el){ el.checked = false; });
+        document.getElementById('selectAll').checked = false;
+        updateBatchBar();
+    }
+    function getSelectedPRIDs() {
+        var repoGroup = document.getElementById('repoGroupSelect').value;
+        return allPRs.filter(pr => selectedPRs.has(pr.pr_number)).map(pr => repoGroup + '#' + pr.pr_number);
+    }
+    async function batchApprove() {
+        var ids = getSelectedPRIDs();
+        if (ids.length === 0) return;
+        if (!confirm('Approve ' + ids.length + ' PRs?')) return;
+        for (var i = 0; i < ids.length; i++) {
+            var parts = ids[i].split('#');
+            await apiRequest('/api/v1/repos/' + parts[0] + '/prs/' + parts[1] + '/approve', {method:'POST'});
+        }
+        clearBatch(); loadPRs();
+    }
+    async function batchClose() {
+        var ids = getSelectedPRIDs();
+        if (ids.length === 0) return;
+        var reason = prompt('Close reason (or leave blank):', '');
+        if (reason === null) return;
+        for (var i = 0; i < ids.length; i++) {
+            var parts = ids[i].split('#');
+            var url = '/api/v1/repos/' + parts[0] + '/prs/' + parts[1] + '/close';
+            if (reason.trim()) url += '?reason=' + encodeURIComponent(reason.trim());
+            await apiRequest(url, {method:'POST'});
+        }
+        clearBatch(); loadPRs();
+    }
+    async function batchLabel() {
+        var ids = getSelectedPRIDs();
+        if (ids.length === 0) return;
+        var label = prompt('Label name:', '');
+        if (!label || !label.trim()) return;
+        var color = prompt('Label color (hex, optional):', '');
+        var repoGroup = document.getElementById('repoGroupSelect').value;
+        await apiRequest('/api/v1/repos/' + repoGroup + '/prs/batch/label', {
+            method:'POST',
+            body: JSON.stringify({pr_ids: ids, label: label.trim(), color: color || ''})
+        });
+        clearBatch(); loadPRs();
     }
     loadRepoGroups();
 </script>

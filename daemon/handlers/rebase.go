@@ -224,10 +224,14 @@ func CherryPickSinglePR(c *gin.Context) {
 	repoGroup := c.Param("repo_group")
 	prID := c.Param("pr_id")
 
-	var req CherryPickRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "target_branch is required"})
-		return
+	targetBranch := c.Query("target_branch")
+	if targetBranch == "" {
+		var req CherryPickRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "target_branch is required"})
+			return
+		}
+		targetBranch = req.TargetBranch
 	}
 
 	cfg := config.Current()
@@ -237,7 +241,7 @@ func CherryPickSinglePR(c *gin.Context) {
 		return
 	}
 
-	result, err := performCherryPick(c.Request.Context(), group, repoGroup, prID, req.TargetBranch, cfg)
+	result, err := performCherryPick(c.Request.Context(), group, repoGroup, prID, targetBranch, cfg)
 	if err != nil {
 		slog.Error("cherry-pick failed", "error", err, "pr_id", prID, "repo_group", repoGroup)
 		c.JSON(http.StatusInternalServerError, CherryPickResponse{

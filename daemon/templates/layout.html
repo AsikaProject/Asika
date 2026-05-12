@@ -146,14 +146,14 @@
     })();
     function apiRequest(url, options) {
         const token = localStorage.getItem('token');
-        return fetch(url, {
-            ...options,
-            headers: {
-                'Authorization': 'Bearer ' + token,
-                'Content-Type': 'application/json',
-                ...options?.headers
-            }
-        });
+        const headers = {
+            'Authorization': 'Bearer ' + token,
+            ...options?.headers
+        };
+        if (!headers['Content-Type'] && options?.body) {
+            headers['Content-Type'] = 'application/json';
+        }
+        return fetch(url, { ...options, headers });
     }
     function logout() {
         localStorage.removeItem('token');

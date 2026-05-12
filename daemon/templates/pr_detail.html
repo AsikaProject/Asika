@@ -102,10 +102,15 @@
                 }
                 a += '<button class="btn btn-danger" onclick="C()">{{t "pr_detail.close"}}</button> ';
                 a += '<button class="btn" onclick="S()" style="background:#ffc107;color:black;">{{t "pr_detail.mark_spam"}}</button> ';
+                a += '<button class="btn btn-secondary" onclick="RB()">Rebase</button> ';
             } else if(p.state === 'merged'){
                 a += '<button class="btn btn-warning" onclick="RV()">{{t "pr_detail.revert"}}</button> ';
             } else {
                 a += '<button class="btn btn-secondary" onclick="R()">{{t "pr_detail.reopen"}}</button> ';
+            }
+            a += '<button class="btn btn-secondary" onclick="CMT()">💬 Comment</button> ';
+            if(p.state === 'merged'){
+                a += '<button class="btn btn-secondary" onclick="CP()">🍒 Cherry-pick</button> ';
             }
             document.getElementById('actions').innerHTML = a;
 
@@ -160,6 +165,32 @@
     async function R(){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/reopen',{method:'POST'}); L(); }
     async function S(){ if(confirm('Mark spam?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/spam',{method:'POST'}); L(); } }
     async function RV(){ if(confirm('Revert this merged PR?')){ await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/revert',{method:'POST'}); L(); } }
+    async function RB(){
+        if(confirm('Rebase PR #'+prId+' onto its base branch?')){
+            var resp = await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/rebase',{method:'POST'});
+            if(resp.ok){ L(); }
+        }
+    }
+    async function CMT(){
+        var body = prompt('Enter comment for PR #'+prId+':', '');
+        if(body === null || body.trim() === '') return;
+        await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/comment',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({body: body.trim()})
+        });
+        L();
+    }
+    async function CP(){
+        var target = prompt('Cherry-pick PR #'+prId+' to target branch:', '');
+        if(target === null || target.trim() === '') return;
+        var resp = await apiRequest('/api/v1/repos/'+repoGroup+'/prs/'+prId+'/cherry-pick',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({target_branch: target.trim()})
+        });
+        if(resp.ok){ L(); }
+    }
     function D(m){ document.getElementById('prDetail').innerHTML = '<p class="error">'+m+'</p>'; }
     L();
 </script>
