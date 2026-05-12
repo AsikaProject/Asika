@@ -55,6 +55,7 @@ func Push(repo *git.Repository, remoteName, branch, token string) error {
 		RefSpecs: []config.RefSpec{
 			config.RefSpec(fmt.Sprintf("refs/heads/%s:refs/heads/%s", branch, branch)),
 		},
+		Force: true,
 	}
 	if token != "" {
 		opts.Auth = &http.BasicAuth{

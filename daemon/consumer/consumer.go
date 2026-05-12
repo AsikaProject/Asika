@@ -55,6 +55,7 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 	l := labeler.NewLabeler(clients)
 	r := reviewer.NewReviewer(clients)
 	s := syncer.NewSyncer(cfg, clients)
+	s.SetNotifyFunc(handlers.SendNotificationSync)
 	sd := syncer.NewSpamDetectorWithClients(cfg, clients)
 	q := queue.NewManager(cfg, clients)
 	poolCfg := cfg.WorkerPool

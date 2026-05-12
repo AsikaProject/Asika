@@ -108,6 +108,8 @@ type RepoGroupConfig struct {
 	Bitbucket      string           `toml:"bitbucket" json:"bitbucket"`
 	Gerrit         string           `toml:"gerrit" json:"gerrit"`
 	DefaultBranch  string           `toml:"default_branch" json:"default_branch"`
+	BranchSync     string           `toml:"branch_sync" json:"branch_sync"`
+	SyncTags       bool             `toml:"sync_tags" json:"sync_tags"`
 	HookPath       string           `toml:"hookpath" json:"hookpath"`
 	CIProvider     string           `toml:"ci_provider" json:"ci_provider"`
 	MergeQueue     MergeQueueConfig `toml:"merge_queue" json:"merge_queue"`

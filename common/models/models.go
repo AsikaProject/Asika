@@ -55,6 +55,8 @@ type RepoGroup struct {
 	Bitbucket      string           `json:"bitbucket"`
 	Gerrit         string           `json:"gerrit"`
 	DefaultBranch  string           `json:"default_branch"`
+	BranchSync     string           `json:"branch_sync"`
+	SyncTags       bool             `json:"sync_tags"`
 	HookPath       string           `json:"hookpath"`
 	CIProvider     string           `json:"ci_provider"`
 	MergeQueue     MergeQueueConfig `json:"merge_queue"`

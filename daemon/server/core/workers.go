@@ -35,6 +35,7 @@ func StartWorkers(
 	staleMgr *stale.Manager,
 ) {
 	syncr := syncer.NewSyncer(cfg, clients)
+	syncr.SetNotifyFunc(SendNotificationSync)
 	handlers.InitSyncer(syncr)
 
 	// Merge queue

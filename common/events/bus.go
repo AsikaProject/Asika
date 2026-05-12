@@ -25,6 +25,8 @@ const (
 	EventSyncFailed            EventType = "sync_failed"
 	EventPRReverted            EventType = "pr_reverted"
 	EventNotificationEscalated EventType = "notification_escalated"
+	EventBranchPushed          EventType = "branch_pushed"
+	EventTagPushed             EventType = "tag_pushed"
 )
 
 // Event is the internal unified event

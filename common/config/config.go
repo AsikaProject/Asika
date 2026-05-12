@@ -278,6 +278,7 @@ func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 			Forgejo:        rg.Forgejo,
 			Codeberg:       rg.Codeberg,
 			Bitbucket:      rg.Bitbucket,
+			Gerrit:         rg.Gerrit,
 			DefaultBranch:  rg.DefaultBranch,
 			HookPath:       rg.HookPath,
 			CIProvider:     rg.CIProvider,
@@ -308,7 +309,10 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 				Forgejo:        rg.Forgejo,
 				Codeberg:       rg.Codeberg,
 				Bitbucket:      rg.Bitbucket,
+				Gerrit:         rg.Gerrit,
 				DefaultBranch:  rg.DefaultBranch,
+				BranchSync:     rg.BranchSync,
+				SyncTags:       rg.SyncTags,
 				HookPath:       rg.HookPath,
 				CIProvider:     rg.CIProvider,
 				MergeQueue:     rg.MergeQueue,
@@ -316,7 +320,7 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 				ReviewRules:    rg.ReviewRules,
 			}
 		}
-		if rg.Name == "default" {
+ 		if rg.Name == "default" {
 			defaultGroup = &models.RepoGroup{
 				Name:           rg.Name,
 				Mode:           mode,
@@ -327,7 +331,10 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 				Forgejo:        rg.Forgejo,
 				Codeberg:       rg.Codeberg,
 				Bitbucket:      rg.Bitbucket,
+				Gerrit:         rg.Gerrit,
 				DefaultBranch:  rg.DefaultBranch,
+				BranchSync:     rg.BranchSync,
+				SyncTags:       rg.SyncTags,
 				HookPath:       rg.HookPath,
 				CIProvider:     rg.CIProvider,
 				MergeQueue:     rg.MergeQueue,

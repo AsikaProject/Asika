@@ -189,6 +189,7 @@ Temporary tokens: Users can generate short-lived JWT tokens (1m–24h) with a `t
 - **Serial Validation Worker** — Processes `serial_queue` bucket items through validation state machine: rebase onto latest main → re-validate CI → mark merge-ready. Prevents post-merge CI failures.
 - **Escalation Worker** — Hourly scans open PRs, calculates priority from labels + file paths, sends tiered notifications: reviewer → team → tech_lead based on priority and time open.
 - **Feed Subscriber** — Subscribes to the event bus, feeds PR events (opened/merged/closed/approved/reopened) into the in-memory ring buffer for RSS generation.
+- **Cross-Platform Syncer** — On PR merge, syncs the merge commit to all configured target platforms (GitHub/GitLab/Gitea/Forgejo/Codeberg/Bitbucket/Gerrit). Uses cherry-pick strategy with retry (3 attempts, exponential backoff). Publishes `sync_completed`/`sync_failed` events. Sync failure triggers notifier alert.
 
 ### Reviewer Auto-Assignment
 
@@ -238,6 +239,26 @@ public_feed = false
 ```
 
 Feed items are stored in an in-memory ring buffer (default 50 items max). The feed subscriber consumes events from the event bus: `pr_opened`, `pr_merged`, `pr_closed`, `pr_approved`, `pr_reopened`.
+
+### Cross-Platform Syncer
+
+`daemon/syncer/` handles cross-platform code synchronization:
+
+- **Sync trigger**: On PR merge event, `SyncOnMerge` cherry-picks the merge commit to all configured target platforms
+- **Default branch sync**: Always syncs the default branch merge commit via cherry-pick + force push
+- **All branch sync**: When `branch_sync = "all"` is configured in `[[repo_groups]]`, enumerates all branches via `git for-each-ref` and force pushes each to all targets. Runs after default branch sync.
+- **Tag sync**: When `sync_tags = true` is configured, enumerates all tags via `git for-each-ref` and force pushes each to all targets. Tags are immutable — no conflict resolution needed.
+- **Bare repo cache**: When `[git] repo_clone_path` is set, uses persistent bare repositories (`git clone --bare`) instead of temp dirs. Bare repos are cloned once and updated with `git fetch` per sync, dramatically reducing sync time.
+- **Force push**: All push operations use `Force: true` — cross-platform sync is a deterministic overwrite, the goal is to make all platforms match the source
+- **Target platforms**: All 7 platforms (GitHub, GitLab, Gitea, Forgejo, Codeberg, Bitbucket, Gerrit) — excludes source platform, skips empty repo configs
+- **Cherry-pick retry**: `cherryPickWithRetry` retries up to 3 times with exponential backoff on conflict errors. Re-fetches source before each retry.
+- **Push retry**: `pushWithRetry` retries up to 3 times with exponential backoff on transient errors only (network issues, rate limits)
+- **Event publishing**: Publishes `EventSyncFailed` on partial/complete failure, `EventSyncCompleted` on full success
+- **Failure notification**: Wired to notifier system via `SetNotifyFunc`. Sends alert with PR title, source/target platforms, and failure reason
+- **Branch deletion sync**: `SyncBranchDeletion` syncs branch deletes to all targets with retry on transient errors
+- **Concurrency**: Per-repo-group mutex prevents concurrent syncs for the same group
+- **Sync history**: All sync attempts recorded in `sync_history` bucket with status (success/failed) and error messages
+- **Bug fix**: `GetRepoGroupByName` and `GetRepoGroups` now correctly map the `Gerrit` field (previously silently dropped)
 
 ### Actor System (Goroutine Pools)
 

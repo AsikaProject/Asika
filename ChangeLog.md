@@ -2,7 +2,27 @@
 
 ## v20260512DEV > Unleased
 
+- **Branch sync**: New `branch_sync` config option in `[[repo_groups]]`. Set to `"all"` to sync every branch (not just default) from source to all target platforms. Uses `git for-each-ref` to enumerate branches and force pushes each one. Branch sync runs after the default branch sync completes.
+
+- **Tag sync**: New `sync_tags = true` config option in `[[repo_groups]]`. When enabled, all tags from source platform are synced to all target platforms. Tags are immutable so no conflict resolution needed — simple force push of `refs/tags/*`.
+
+- **Bare repo cache**: When `[git] repo_clone_path` is configured, syncer uses persistent bare repositories instead of temp dirs. Bare repos are cloned once with `git clone --bare`, then updated with `git fetch` on each sync. Eliminates repeated full clones and dramatically speeds up sync.
+
+- **Force push for cross-platform sync**: `gitutil.Push()` now uses `Force: true` in push options. Cross-platform sync is a deterministic overwrite operation — the goal is to make all platforms match the source. Force push ensures sync succeeds regardless of target branch state. `pushWithRetry` now only retries on transient errors (network issues), not conflicts.
+
+- **Sync conflict auto-retry**: `cherryPickWithRetry` and `pushWithRetry` now retry up to 3 times with exponential backoff (2s, 4s, 8s) on conflict errors. Before each retry, re-fetches from source to get latest changes. Conflict detection via `isConflictError()` checks for "conflict", "non-fast-forward", "rejected", "failed to push" in error messages.
+
+- **Sync conflict notification**: New `SetNotifyFunc` on `Syncer` wires into the notifier system. When sync fails (cherry-pick or push), sends a notification with PR title, source/target platforms, and failure reason. Wired in both `workers.go` (handler syncer) and `consumer.go` (event consumer syncer).
+
+- **Sync event publishing**: `SyncOnMerge` now publishes `EventSyncFailed` on the event bus when sync fails (partial or complete), and `EventSyncCompleted` on full success. Enables downstream consumers to react to sync status.
+
+- **Bitbucket/Gerrit sync targets**: `getTargetPlatforms` now includes Forgejo, Codeberg, Bitbucket, and Gerrit as sync targets (previously only GitHub/GitLab/Gitea). All 7 platforms are synced to when configured.
+
+- **Sync branch deletion retry**: `SyncBranchDeletion` now retries up to 3 times with exponential backoff on transient errors (timeout, connection refused, rate limit, etc.).
+
 - **Scheduled report cron enhancement**: Replaced `cronToInterval()` with `github.com/robfig/cron/v3` for real cron expression support. Named schedules (`hourly`, `daily`, `weekly`, `monthly`) map to standard cron shortcuts (`@hourly`, `@daily`, etc.). Custom cron expressions like `0 9 * * 1` (every Monday 9am) are now supported. Invalid expressions fall back to `weekly` with a warning. New `slogCronLogger` bridges cron's logger interface to `log/slog`.
+
+- **Bug fix**: `GetRepoGroupByName` and `GetRepoGroups` now correctly map the `Gerrit` field from `RepoGroupConfig` to `RepoGroup` (previously silently dropped).
 
 - **Config auto-rollback notifier health check**: `VerifyNotifiers()` pings each configured notifier after a config update; if all notifiers fail, auto-rollback triggers alongside the existing DB health check.
 
