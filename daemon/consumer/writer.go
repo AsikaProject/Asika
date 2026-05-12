@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"fmt"
 	"log/slog"
 
 	"asika/common/db"
@@ -48,6 +49,7 @@ func (w *writerActor) run() {
 }
 
 // write submits a write request and waits for the result.
+// Returns an error if the writer has been stopped.
 func (w *writerActor) write(key string, value []byte, prID, repoGroup string, prNumber int) error {
 	req := writeRequest{
 		key:       key,
@@ -57,8 +59,12 @@ func (w *writerActor) write(key string, value []byte, prID, repoGroup string, pr
 		prNumber:  prNumber,
 		result:    make(chan error, 1),
 	}
-	w.requests <- req
-	return <-req.result
+	select {
+	case w.requests <- req:
+		return <-req.result
+	case <-w.stop:
+		return fmt.Errorf("writer actor stopped")
+	}
 }
 
 // Stop gracefully stops the writer goroutine.

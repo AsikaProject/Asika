@@ -228,7 +228,9 @@ func (s *bboltStorage) AppendAuditLogEx(entry models.AuditLog) error {
 		entry.Timestamp = time.Now()
 	}
 	var randBytes [4]byte
-	rand.Read(randBytes[:])
+	if _, err := rand.Read(randBytes[:]); err != nil {
+		return fmt.Errorf("failed to generate random bytes for audit log key: %w", err)
+	}
 	key := fmt.Sprintf("%d_%08x", entry.Timestamp.UnixNano(), binary.BigEndian.Uint32(randBytes[:]))
 	err = s.Put(BucketLogs, key, data)
 	if err != nil {
@@ -289,7 +291,9 @@ func (s *bboltStorage) AppendAuditLog(level, message string, ctx map[string]inte
 		return err
 	}
 	var randBytes [4]byte
-	rand.Read(randBytes[:])
+	if _, err := rand.Read(randBytes[:]); err != nil {
+		return fmt.Errorf("failed to generate random bytes for audit log key: %w", err)
+	}
 	key := fmt.Sprintf("%d_%08x", log.Timestamp.UnixNano(), binary.BigEndian.Uint32(randBytes[:]))
 	return s.Put(BucketLogs, key, data)
 }

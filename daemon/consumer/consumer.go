@@ -172,7 +172,11 @@ func (c *Consumer) handlePROpened(event events.Event) {
 		Actor:     pr.Author,
 	})
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, _ := json.Marshal(pr)
+	data, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal PR", "error", err)
+		return
+	}
 
 	// Use writer actor for bbolt writes
 	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
@@ -216,7 +220,11 @@ func (c *Consumer) handlePRClosed(event events.Event) {
 		Actor:     "system",
 	})
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, _ := json.Marshal(pr)
+	data, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal PR", "error", err)
+		return
+	}
 	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
 		slog.Error("failed to update PR", "error", err)
 	}
@@ -238,7 +246,11 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 		Actor:     "system",
 	})
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, _ := json.Marshal(pr)
+	data, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal PR", "error", err)
+		return
+	}
 	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
 		slog.Error("failed to update PR", "error", err)
 	}
@@ -293,7 +305,11 @@ func (c *Consumer) handleSpamDetected(event events.Event) {
 		Actor:     "system",
 	})
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, _ := json.Marshal(pr)
+	data, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal PR", "error", err)
+		return
+	}
 	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
 		slog.Error("failed to update PR", "error", err)
 	}
@@ -320,7 +336,11 @@ func (c *Consumer) handlePRReopened(event events.Event) {
 		Actor:     "system",
 	})
 	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, _ := json.Marshal(pr)
+	data, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal PR", "error", err)
+		return
+	}
 	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
 		slog.Error("failed to update PR", "error", err)
 	}

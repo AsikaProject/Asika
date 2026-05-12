@@ -1,6 +1,7 @@
 package events
 
 import (
+	"log/slog"
 	"sync"
 	"time"
 
@@ -64,13 +65,17 @@ func Subscribe() <-chan Event {
 }
 
 // Publish publishes an event to all subscribers.
-// Blocks if a subscriber's channel is full (backpressure).
-// If a subscriber is slow, this will block the publisher.
+// Uses non-blocking send: if a subscriber's channel is full, the event is dropped
+// for that subscriber and logged, preventing slow subscribers from blocking others.
 func Publish(e Event) {
 	globalBus.mu.RLock()
 	defer globalBus.mu.RUnlock()
 	for _, ch := range globalBus.subscribers {
-		ch <- e
+		select {
+		case ch <- e:
+		default:
+			slog.Warn("event dropped: subscriber channel full", "event_type", e.Type)
+		}
 	}
 }
 

@@ -16,10 +16,24 @@ func SetNotifyFunc(fn func(title, body string)) {
 	notifyFn = fn
 }
 
+var retryWorkerStop = make(chan struct{})
+
+func StopWebhookRetryWorker() {
+	close(retryWorkerStop)
+}
+
 func StartWebhookRetryWorker() {
+	retryWorkerStop = make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
-		for range ticker.C {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+			case <-retryWorkerStop:
+				slog.Info("webhook retry worker stopped")
+				return
+			}
 			retries, err := db.GetDueWebhookRetries(time.Now())
 			if err != nil {
 				slog.Error("failed to get due webhook retries", "error", err)

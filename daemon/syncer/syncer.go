@@ -69,7 +69,10 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	repoDir, cleanup := s.prepareRepoDir(pr, group)
+	repoDir, cleanup, err := s.prepareRepoDir(pr, group)
+	if err != nil {
+		return err
+	}
 	if cleanup {
 		defer gitutil.CleanupWorkdir(repoDir)
 	}
@@ -109,13 +112,16 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 
 // prepareRepoDir returns the repo directory path and whether it needs cleanup.
 // When using a bare cache, the repo is persistent and should not be cleaned up.
-func (s *Syncer) prepareRepoDir(pr *models.PRRecord, group *models.RepoGroup) (string, bool) {
+func (s *Syncer) prepareRepoDir(pr *models.PRRecord, group *models.RepoGroup) (string, bool, error) {
 	if s.cfg.Git.RepoClonePath != "" {
 		safeName := strings.ReplaceAll(pr.RepoGroup, "/", "_")
-		return filepath.Join(s.cfg.Git.RepoClonePath, "sync-"+safeName), false
+		return filepath.Join(s.cfg.Git.RepoClonePath, "sync-"+safeName), false, nil
 	}
-	dir, _ := gitutil.CreateTempWorkdir("asika-sync-")
-	return dir, true
+	dir, err := gitutil.CreateTempWorkdir("asika-sync-")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to create temp workdir: %w", err)
+	}
+	return dir, true, nil
 }
 
 // openOrClone opens an existing bare repo or clones fresh.

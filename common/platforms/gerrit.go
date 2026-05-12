@@ -2,6 +2,7 @@ package platforms
 
 import (
 	"context"
+	"crypto/hmac"
 	"fmt"
 	"io"
 	"log/slog"
@@ -348,9 +349,10 @@ func (c *GerritClient) GetApprovals(ctx context.Context, owner, repo string, num
 
 func (c *GerritClient) VerifyWebhookSignature(body []byte, signature string) bool {
 	if c.webhookSecret == "" {
-		return true
+		slog.Warn("Gerrit webhook secret not configured, rejecting all webhooks")
+		return false
 	}
-	return signature == c.webhookSecret
+	return hmac.Equal([]byte(signature), []byte(c.webhookSecret))
 }
 
 func (c *GerritClient) GetPRCommits(ctx context.Context, owner, repo string, number int) ([]string, error) {
