@@ -1,12 +1,10 @@
 package slack
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
@@ -97,30 +95,60 @@ func (b *Bot) handleShowPR(ev *slack.MessageEvent, client *socketmode.Client, ar
 		b.postMessage(client, ev.Channel, fmt.Sprintf("Invalid PR number: %s", args[2]))
 		return
 	}
-	group := config.GetRepoGroupByName(b.cfg, repoGroup)
-	if group == nil {
-		b.postMessage(client, ev.Channel, fmt.Sprintf("Repo group *%s* not found.", repoGroup))
-		return
-	}
-	platform := config.GetPlatformForGroup(group)
-	owner, repo := config.GetOwnerRepoFromGroup(group, platform)
-	if owner == "" || repo == "" {
-		b.postMessage(client, ev.Channel, fmt.Sprintf("Cannot resolve repo for platform: %s", platform))
-		return
-	}
-	pClient := b.getClientForPlatform(platform)
-	if pClient == nil {
-		b.postMessage(client, ev.Channel, fmt.Sprintf("Platform client not available: %s", platform))
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	pr, err := pClient.GetPR(ctx, owner, repo, prNumber)
-	if err != nil || pr == nil {
+	var found *models.PRRecord
+	db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		var pr models.PRRecord
+		if json.Unmarshal(value, &pr) != nil {
+			return nil
+		}
+		if pr.RepoGroup == repoGroup && pr.PRNumber == prNumber {
+			found = &pr
+		}
+		return nil
+	})
+	if found == nil {
 		b.postMessage(client, ev.Channel, fmt.Sprintf("PR #%d not found in %s.", prNumber, repoGroup))
 		return
 	}
-	text := fmt.Sprintf("*PR #%d — %s*\nState: %s\nAuthor: %s\nPlatform: %s\nURL: %s",
-		pr.PRNumber, pr.Title, pr.State, pr.Author, pr.Platform, pr.HTMLURL)
+	var desc string
+	if found.Body != "" {
+		lines := strings.Split(found.Body, "\n")
+		if len(lines) > 5 {
+			desc = strings.Join(lines[:5], "\n") + "\n..."
+		} else {
+			desc = found.Body
+		}
+	}
+	var events string
+	if len(found.Events) > 0 {
+		var sb strings.Builder
+		for _, ev := range found.Events {
+			sb.WriteString(fmt.Sprintf("  • %s by %s at %s\n", ev.Action, ev.Actor, ev.Timestamp.Format("01-02 15:04")))
+		}
+		events = sb.String()
+	}
+	text := fmt.Sprintf("*PR #%d — %s*\nState: %s\nAuthor: %s\nPlatform: %s\nLabels: %s",
+		found.PRNumber, found.Title, found.State, found.Author, found.Platform,
+		strings.Join(found.Labels, ", "))
+	if found.MergeCommitSHA != "" {
+		text += fmt.Sprintf("\nMerge Commit: `%s`", found.MergeCommitSHA[:8])
+	}
+	if found.HTMLURL != "" {
+		text += fmt.Sprintf("\nURL: %s", found.HTMLURL)
+	}
+	if desc != "" {
+		text += "\n\n*Description:*\n" + desc
+	}
+	if events != "" {
+		text += "\n\n*Events:*\n" + events
+	}
+	switch found.State {
+	case "open":
+		text += "\n\nActions: `approve` / `close [reason]` / `spam` / `rebase`"
+	case "closed", "spam":
+		text += "\n\nActions: `reopen`"
+	case "merged":
+		text += "\n\nActions: `revert` / `cherry-pick <target_branch>`"
+	}
 	b.postMessage(client, ev.Channel, text)
 }

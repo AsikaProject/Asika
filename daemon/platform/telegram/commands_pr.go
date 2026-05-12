@@ -80,13 +80,39 @@ func (b *Bot) handleShowPR(c telebot.Context) error {
 		return c.Send(fmt.Sprintf("PR #%d not found in repo group <b>%s</b>.", prNumber, html.EscapeString(repoGroup)),
 			&telebot.SendOptions{ParseMode: telebot.ModeHTML})
 	}
+	var desc string
+	if found.Body != "" {
+		lines := strings.Split(found.Body, "\n")
+		if len(lines) > 5 {
+			desc = strings.Join(lines[:5], "\n") + "\n..."
+		} else {
+			desc = found.Body
+		}
+	}
+	var events string
+	if len(found.Events) > 0 {
+		var sb strings.Builder
+		for _, ev := range found.Events {
+			sb.WriteString(fmt.Sprintf("  • %s by %s at %s\n", ev.Action, ev.Actor, ev.Timestamp.Format("01-02 15:04")))
+		}
+		events = sb.String()
+	}
 	msg := fmt.Sprintf(
-		"<b>PR #%d</b> — %s\n\n  Author: %s\n  State: %s\n  Platform: %s\n  Repo Group: %s\n  Labels: %s\n  Spam: %v\n  Created: %s\n",
+		"<b>PR #%d</b> — %s\n\n  Author: %s\n  State: %s\n  Platform: %s\n  Repo Group: %s\n  Labels: %s\n  Created: %s\n",
 		found.PRNumber, html.EscapeString(found.Title),
 		html.EscapeString(found.Author), found.State, found.Platform,
 		found.RepoGroup, html.EscapeString(strings.Join(found.Labels, ", ")),
-		found.SpamFlag, found.CreatedAt.Format(time.RFC3339),
+		found.CreatedAt.Format(time.RFC3339),
 	)
+	if found.MergeCommitSHA != "" {
+		msg += fmt.Sprintf("  Merge Commit: <code>%s</code>\n", found.MergeCommitSHA[:8])
+	}
+	if desc != "" {
+		msg += "\n<b>Description:</b>\n" + html.EscapeString(desc) + "\n"
+	}
+	if events != "" {
+		msg += "\n<b>Events:</b>\n" + events
+	}
 	selector := &telebot.ReplyMarkup{}
 	payload := fmt.Sprintf("%s#%s", repoGroup, found.ID)
 	switch found.State {
@@ -94,13 +120,15 @@ func (b *Bot) handleShowPR(c telebot.Context) error {
 		btnApprove := selector.Data("✅ Approve", "approve", "approve:"+payload)
 		btnClose := selector.Data("❌ Close", "close", "close:"+payload)
 		btnSpam := selector.Data("🚫 Spam", "spam", "spam:"+payload)
-		selector.Inline(selector.Row(btnApprove, btnClose), selector.Row(btnSpam))
+		btnRebase := selector.Data("🔄 Rebase", "rebase", "rebase:"+payload)
+		selector.Inline(selector.Row(btnApprove, btnClose), selector.Row(btnSpam, btnRebase))
 	case "closed", "spam":
 		btnReopen := selector.Data("🔄 Reopen", "reopen", "reopen:"+payload)
 		selector.Inline(selector.Row(btnReopen))
 	case "merged":
 		btnRevert := selector.Data("↩️ Revert", "revert", "revert:"+payload)
-		selector.Inline(selector.Row(btnRevert))
+		btnCherryPick := selector.Data("🍒 Cherry-pick", "cherrypick", "cherrypick:"+payload)
+		selector.Inline(selector.Row(btnRevert, btnCherryPick))
 	}
 	return c.Send(msg, &telebot.SendOptions{ParseMode: telebot.ModeHTML, ReplyMarkup: selector})
 }

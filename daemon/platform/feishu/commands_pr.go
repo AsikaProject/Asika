@@ -62,18 +62,44 @@ func (b *Bot) showPRText(repoGroup, prID string) string {
 	if pr == nil {
 		return fmt.Sprintf("PR %s not found in %s", prID, repoGroup)
 	}
+	var desc string
+	if pr.Body != "" {
+		lines := strings.Split(pr.Body, "\n")
+		if len(lines) > 5 {
+			desc = strings.Join(lines[:5], "\n") + "\n..."
+		} else {
+			desc = pr.Body
+		}
+	}
+	var events string
+	if len(pr.Events) > 0 {
+		var sb strings.Builder
+		for _, ev := range pr.Events {
+			sb.WriteString(fmt.Sprintf("  • %s by %s at %s\n", ev.Action, ev.Actor, ev.Timestamp.Format("01-02 15:04")))
+		}
+		events = sb.String()
+	}
 	msg := fmt.Sprintf(
-		"PR #%d - %s\n  Author: %s | State: %s\n  Platform: %s | Spam: %v\n  Labels: %s",
+		"PR #%d - %s\n  Author: %s | State: %s\n  Platform: %s | Labels: %s",
 		pr.PRNumber, pr.Title, pr.Author, pr.State,
-		pr.Platform, pr.SpamFlag, strings.Join(pr.Labels, ", "),
+		pr.Platform, strings.Join(pr.Labels, ", "),
 	)
+	if pr.MergeCommitSHA != "" {
+		msg += fmt.Sprintf("\n  Merge Commit: %s", pr.MergeCommitSHA[:8])
+	}
+	if desc != "" {
+		msg += "\n\nDescription:\n" + desc
+	}
+	if events != "" {
+		msg += "\n\nEvents:\n" + events
+	}
 	switch pr.State {
 	case "open":
-		msg += "\nAvailable actions: approve / close [reason] / spam"
+		msg += "\n\nAvailable actions: approve / close [reason] / spam / rebase"
 	case "closed", "spam":
-		msg += "\nAvailable actions: reopen"
+		msg += "\n\nAvailable actions: reopen"
 	case "merged":
-		msg += "\nAvailable actions: revert"
+		msg += "\n\nAvailable actions: revert / cherrypick <target_branch>"
 	}
 	return msg
 }

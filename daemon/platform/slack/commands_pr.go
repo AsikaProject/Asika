@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -295,7 +298,78 @@ func (b *Bot) handleRebasePR(ev *slack.MessageEvent, client *socketmode.Client, 
 		b.postMessage(client, ev.Channel, "Usage: rebase <repo_group> <pr_number>")
 		return
 	}
-	b.postMessage(client, ev.Channel, "Rebase via Slack bot is not yet implemented. Use the API or WebUI.")
+	repoGroup := args[1]
+	prNumber, err := strconv.Atoi(args[2])
+	if err != nil {
+		b.postMessage(client, ev.Channel, "Invalid PR number.")
+		return
+	}
+	var found *models.PRRecord
+	db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		var pr models.PRRecord
+		if json.Unmarshal(value, &pr) != nil {
+			return nil
+		}
+		if pr.RepoGroup == repoGroup && pr.PRNumber == prNumber {
+			found = &pr
+		}
+		return nil
+	})
+	if found == nil {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("PR #%d not found in %s.", prNumber, repoGroup))
+		return
+	}
+	if found.State != "open" {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("PR #%d is not open (state: %s).", prNumber, found.State))
+		return
+	}
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		b.postMessage(client, ev.Channel, "Repo group not found.")
+		return
+	}
+	pClient := b.getClientForPlatform(found.Platform)
+	if pClient == nil {
+		b.postMessage(client, ev.Channel, "Platform client not available.")
+		return
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, found.Platform)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	branchInfo, err := pClient.GetPRBranchInfo(ctx, owner, repo, prNumber)
+	if err != nil {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("Failed to get branch info: %v", err))
+		return
+	}
+	if !branchInfo.MaintainerCanModify {
+		b.postMessage(client, ev.Channel, "Rebase not allowed: PR author has not enabled 'allow edits from maintainers'.")
+		return
+	}
+	url := fmt.Sprintf("http://localhost%s/api/v1/repos/%s/prs/%d/rebase", b.cfg.Server.Listen, repoGroup, prNumber)
+	req, _ := http.NewRequest("POST", url, nil)
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("Rebase request failed: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(body, &result) != nil {
+		b.postMessage(client, ev.Channel, "Rebase request submitted (async).")
+		return
+	}
+	if success, ok := result["success"].(bool); ok && success {
+		msg, _ := result["message"].(string)
+		b.postMessage(client, ev.Channel, "✅ "+msg)
+		return
+	}
+	if errMsg, ok := result["error"].(string); ok {
+		b.postMessage(client, ev.Channel, "❌ Rebase failed: "+errMsg)
+		return
+	}
+	b.postMessage(client, ev.Channel, "Rebase request submitted.")
 }
 
 func (b *Bot) handleCherryPickPR(ev *slack.MessageEvent, client *socketmode.Client, args []string) {
@@ -303,5 +377,57 @@ func (b *Bot) handleCherryPickPR(ev *slack.MessageEvent, client *socketmode.Clie
 		b.postMessage(client, ev.Channel, "Usage: cherry-pick <repo_group> <pr_number> <target_branch>")
 		return
 	}
-	b.postMessage(client, ev.Channel, "Cherry-pick via Slack bot is not yet implemented. Use the API or WebUI.")
+	repoGroup := args[1]
+	prNumber, err := strconv.Atoi(args[2])
+	if err != nil {
+		b.postMessage(client, ev.Channel, "Invalid PR number.")
+		return
+	}
+	targetBranch := args[3]
+	var found *models.PRRecord
+	db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		var pr models.PRRecord
+		if json.Unmarshal(value, &pr) != nil {
+			return nil
+		}
+		if pr.RepoGroup == repoGroup && pr.PRNumber == prNumber {
+			found = &pr
+		}
+		return nil
+	})
+	if found == nil {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("PR #%d not found in %s.", prNumber, repoGroup))
+		return
+	}
+	if found.State != "merged" {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("PR #%d is not merged (state: %s).", prNumber, found.State))
+		return
+	}
+	url := fmt.Sprintf("http://localhost%s/api/v1/repos/%s/prs/%d/cherry-pick", b.cfg.Server.Listen, repoGroup, prNumber)
+	body := fmt.Sprintf(`{"target_branch": "%s"}`, targetBranch)
+	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("Cherry-pick request failed: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(respBody, &result) != nil {
+		b.postMessage(client, ev.Channel, "Cherry-pick request submitted (async).")
+		return
+	}
+	if success, ok := result["success"].(bool); ok && success {
+		msg, _ := result["message"].(string)
+		b.postMessage(client, ev.Channel, "🍒 "+msg)
+		return
+	}
+	if errMsg, ok := result["error"].(string); ok {
+		b.postMessage(client, ev.Channel, "❌ Cherry-pick failed: "+errMsg)
+		return
+	}
+	b.postMessage(client, ev.Channel, "Cherry-pick request submitted.")
 }
