@@ -285,8 +285,32 @@ func (s *mongoStorage) AppendAuditLogEx(entry models.AuditLog) error {
 	if entry.Timestamp.IsZero() {
 		doc["timestamp"] = time.Now()
 	}
+	logKey := doc["_id"].(string)
 	_, err = s.coll(BucketLogs).InsertOne(ctx, doc)
-	return err
+	if err != nil {
+		return err
+	}
+	if entry.Actor != "" {
+		idxKey := fmt.Sprintf("actor:%s:%s", entry.Actor, logKey)
+		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+	}
+	if entry.RepoGroup != "" {
+		idxKey := fmt.Sprintf("repo_group:%s:%s", entry.RepoGroup, logKey)
+		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+	}
+	if entry.Action != "" {
+		idxKey := fmt.Sprintf("action:%s:%s", entry.Action, logKey)
+		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+	}
+	if entry.Category != "" {
+		idxKey := fmt.Sprintf("category:%s:%s", entry.Category, logKey)
+		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+	}
+	if entry.RepoGroup != "" && entry.PRNumber > 0 {
+		idxKey := fmt.Sprintf("pr:%s:%d:%s", entry.RepoGroup, entry.PRNumber, logKey)
+		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+	}
+	return nil
 }
 
 func (s *mongoStorage) AppendAuditLog(level, message string, ctxMap map[string]interface{}) error {
