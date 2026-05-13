@@ -187,3 +187,58 @@ func TestNotificationDedup_DifferentKeys(t *testing.T) {
 		t.Fatal("expected nil for nonexistent key")
 	}
 }
+
+func TestUpdateNotificationPrefs_CacheInvalidated(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	gin.SetMode(gin.TestMode)
+
+	resetCount := 0
+	SetResetPrefsCacheFunc(func() { resetCount++ })
+
+	prefs := models.NotificationPreferences{
+		Username: "cache-inv-user",
+		Enabled:  false,
+	}
+	body, _ := json.Marshal(prefs)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("PUT", "/api/v1/users/cache-inv-user/notifications", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	setParam(c, "username", "cache-inv-user")
+
+	UpdateNotificationPrefs(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if resetCount != 1 {
+		t.Errorf("expected cache reset to be called once, got %d", resetCount)
+	}
+
+	SetResetPrefsCacheFunc(nil)
+}
+
+func TestUpdateNotificationPrefs_DBWriteFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	prefs := models.NotificationPreferences{
+		Username: "fail-user",
+		Enabled:  true,
+	}
+	body, _ := json.Marshal(prefs)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request, _ = http.NewRequest("PUT", "/api/v1/users/fail-user/notifications", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	setParam(c, "username", "fail-user")
+
+	UpdateNotificationPrefs(c)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}

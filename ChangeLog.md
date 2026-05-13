@@ -219,3 +219,9 @@
 - **Bug fix**: `handlePRLabeled` ignored `event.Payload` — stale manager's "stale" label was not added to `PR.Labels`. Now extracts string payload as label name and deduplicates before appending.
 
 - **Bug fix**: `recordSync` silently swallowed json.Marshal and DB errors — sync history silently lost. Changed signature to return error; callers now log with `slog.Error` without interrupting sync flow.
+
+- **Bug fix**: `UpdateNotificationPrefs` did not invalidate the notifier preferences cache — changes took up to 30s to take effect. Now calls `ResetNotifierPrefsCache()` on successful write.
+
+- **Bug fix**: `handlePRLabeled` ignored `event.Payload` — stale manager's string payload (e.g. "stale") was never added to `PR.Labels`. Now extracts string payload as label name with dedup.
+
+- **Note**: Reverse index buckets (`issue_pr_links_by_pr`, `pr_dependents`) only populate for new writes after deployment. Existing data requires a one-time backfill: iterate `issue_pr_links` and `pr_dependencies` buckets to populate reverse indexes.

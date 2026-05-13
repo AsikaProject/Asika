@@ -67,6 +67,8 @@ func UpdateNotificationPrefs(c *gin.Context) {
 		return
 	}
 
+	resetNotifierPrefsCache()
+
 	slog.Info("notification preferences updated", "username", username)
 	c.JSON(http.StatusOK, prefs)
 }

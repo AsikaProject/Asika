@@ -17,6 +17,20 @@ var notifyFunc func(title, body string)
 // notifyUrgentFunc is an optional external urgent notification sender (bypasses quiet hours).
 var notifyUrgentFunc func(title, body string)
 
+// resetPrefsCacheFunc resets the notifier preferences cache (set by core).
+var resetPrefsCacheFunc func()
+
+// SetResetPrefsCacheFunc registers the cache reset callback from core.
+func SetResetPrefsCacheFunc(fn func()) {
+	resetPrefsCacheFunc = fn
+}
+
+func resetNotifierPrefsCache() {
+	if resetPrefsCacheFunc != nil {
+		resetPrefsCacheFunc()
+	}
+}
+
 // SetNotifyFunc sets the external notification function.
 func SetNotifyFunc(fn func(title, body string)) {
 	notifyFunc = fn

@@ -43,6 +43,7 @@ func InitNotifiers(cfg *models.Config, clients map[platforms.PlatformType]platfo
 	})
 
 	handlers.SetNotifyFunc(SendNotificationSync)
+	handlers.SetResetPrefsCacheFunc(resetNotifierPrefsCache)
 	slog.Info("notifiers initialized", "count", len(globalNotifiers))
 }
 

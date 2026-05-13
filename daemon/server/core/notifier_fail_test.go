@@ -135,6 +135,8 @@ func TestCachedNotificationPrefs_CacheHit(t *testing.T) {
 	if len(result2) != 1 || result2[0].Username != "cache-hit-user" {
 		t.Errorf("cache returned wrong prefs: %v", result2)
 	}
+
+	ResetNotifierPrefsCache()
 }
 
 // TestCachedNotificationPrefs_DBPrefFailure verifies that when
@@ -156,6 +158,8 @@ func TestCachedNotificationPrefs_DBFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when DB fails, got nil")
 	}
+
+	ResetNotifierPrefsCache()
 }
 
 // TestCachedNotificationPrefs_ConcurrentCacheRefresh verifies that concurrent
@@ -194,6 +198,8 @@ func TestCachedNotificationPrefs_ConcurrentCacheRefresh(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+
+	ResetNotifierPrefsCache()
 }
 
 // TestSendNotificationWithContext_DedupPutFailure verifies that when
