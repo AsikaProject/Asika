@@ -225,3 +225,13 @@
 - **Bug fix**: `handlePRLabeled` ignored `event.Payload` — stale manager's string payload (e.g. "stale") was never added to `PR.Labels`. Now extracts string payload as label name with dedup.
 
 - **Note**: Reverse index buckets (`issue_pr_links_by_pr`, `pr_dependents`) only populate for new writes after deployment. Existing data requires a one-time backfill: iterate `issue_pr_links` and `pr_dependencies` buckets to populate reverse indexes.
+
+- **Bug fix**: Legacy `webhook_retries` records without `DeliveryID` (from pre-deployment) were never cleaned up. `StartWebhookRetryWorker` now scans and removes empty-`DeliveryID` records on startup.
+
+- **Bug fix**: `FindPRByID` fallback scan silently skipped corrupted entries. Now logs `slog.Warn` with count of skipped corrupted entries for observability.
+
+- **Bug fix**: GitHub webhook verification previously dropped SHA1 fallback (`X-Hub-Signature`), breaking legacy clients. Restored SHA1 fallback with constant-time `hmac.Equal` comparison alongside SHA256.
+
+- **Bug fix**: `writerActor` main-loop panic killed the writer goroutine permanently — subsequent writes blocked forever. Now auto-restarts up to 3 times on panic.
+
+- **Performance**: `dedupMu` lock in `WebhookHandler` now covers both dedup check and mark-as-processed atomically, preventing concurrent duplicate processing of the same delivery.

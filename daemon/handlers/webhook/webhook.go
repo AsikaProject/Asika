@@ -114,6 +114,7 @@ func WebhookHandler(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "webhook already processed", "duplicate": true})
 		return
 	}
+	markWebhookProcessed(deliveryID)
 	dedupMu.Unlock()
 
 	webhookID := uuid.New().String()
@@ -145,7 +146,6 @@ func WebhookHandler(c *gin.Context) {
 
 	db.DeleteWebhookRetry(webhookID)
 	db.PutWebhookHealth(repoGroup, platform, time.Now())
-	markWebhookProcessed(deliveryID)
 	c.JSON(http.StatusOK, gin.H{"message": "webhook received", "event": eventType})
 }
 
@@ -171,6 +171,9 @@ func verifyWebhookSignature(platform string, client platforms.PlatformClient, bo
 	switch platform {
 	case "github":
 		sig := c.GetHeader("X-Hub-Signature-256")
+		if sig == "" {
+			sig = c.GetHeader("X-Hub-Signature")
+		}
 		if sig == "" {
 			return false
 		}

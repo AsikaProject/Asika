@@ -23,6 +23,7 @@ type writeRequest struct {
 type writerActor struct {
 	requests chan writeRequest
 	stop     chan struct{}
+	restarts int
 }
 
 // newWriterActor creates and starts a writer goroutine.
@@ -39,7 +40,11 @@ func newWriterActor(bufferSize int) *writerActor {
 func (w *writerActor) run() {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Error("writer actor panic recovered", "error", r)
+			slog.Error("writer actor panic recovered", "error", r, "restarts", w.restarts)
+			if w.restarts < 3 {
+				w.restarts++
+				go w.run()
+			}
 		}
 	}()
 	for {

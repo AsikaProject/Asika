@@ -3,6 +3,7 @@ package platforms
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -349,19 +350,29 @@ func (c *GitHubClient) GetApprovals(ctx context.Context, owner, repo string, num
 	return approvers, nil
 }
 
-// VerifyWebhookSignature verifies the webhook signature using HMAC-SHA256.
-// The signature may arrive as "sha256=<hex>" (X-Hub-Signature-256) or
-// "sha1=<hex>" (X-Hub-Signature). Only SHA256 signatures are accepted.
+// VerifyWebhookSignature verifies the webhook signature using HMAC-SHA256 or HMAC-SHA1.
+// SHA256 (X-Hub-Signature-256) is preferred; SHA1 (X-Hub-Signature) is accepted
+// for backward compatibility with legacy clients.
 func (c *GitHubClient) VerifyWebhookSignature(body []byte, signature string) bool {
 	if c.webhookSecret == "" || signature == "" {
 		return false
 	}
 
-	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
-	mac.Write(body)
-	expectedMAC := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	if strings.HasPrefix(signature, "sha256=") {
+		mac := hmac.New(sha256.New, []byte(c.webhookSecret))
+		mac.Write(body)
+		expectedMAC := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+		return hmac.Equal([]byte(signature), []byte(expectedMAC))
+	}
 
-	return hmac.Equal([]byte(signature), []byte(expectedMAC))
+	if strings.HasPrefix(signature, "sha1=") {
+		mac := hmac.New(sha1.New, []byte(c.webhookSecret))
+		mac.Write(body)
+		expectedMAC := "sha1=" + hex.EncodeToString(mac.Sum(nil))
+		return hmac.Equal([]byte(signature), []byte(expectedMAC))
+	}
+
+	return false
 }
 
 // GetPRCommits gets the commits in a PR

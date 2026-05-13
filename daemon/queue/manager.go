@@ -304,9 +304,11 @@ func FindPRByID(prID string) (*models.PRRecord, error) {
 	}
 
 	var found *models.PRRecord
+	corrupted := 0
 	_ = db.ForEach(db.BucketPRs, func(key, value []byte) error {
 		var record models.PRRecord
 		if err := json.Unmarshal(value, &record); err != nil {
+			corrupted++
 			return nil
 		}
 		if record.ID == prID {
@@ -315,6 +317,9 @@ func FindPRByID(prID string) (*models.PRRecord, error) {
 		}
 		return nil
 	})
+	if corrupted > 0 {
+		slog.Warn("FindPRByID: skipped corrupted entries during fallback scan", "pr_id", prID, "corrupted_count", corrupted)
+	}
 	if found != nil {
 		return found, nil
 	}

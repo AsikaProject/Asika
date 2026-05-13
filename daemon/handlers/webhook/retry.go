@@ -36,8 +36,23 @@ func StopWebhookRetryWorker() {
 	}
 }
 
+func cleanupLegacyWebhookRetries() {
+	retries, err := db.GetDueWebhookRetries(time.Now().Add(100 * 365 * 24 * time.Hour))
+	if err != nil {
+		slog.Warn("failed to scan legacy webhook retries", "error", err)
+		return
+	}
+	for _, retry := range retries {
+		if retry.DeliveryID == "" {
+			slog.Info("removing legacy webhook retry without delivery_id", "id", retry.ID, "repo_group", retry.RepoGroup)
+			db.DeleteWebhookRetry(retry.ID)
+		}
+	}
+}
+
 func StartWebhookRetryWorker() {
 	StopWebhookRetryWorker()
+	cleanupLegacyWebhookRetries()
 	retryWorkerStopMu.Lock()
 	retryWorkerStop = make(chan struct{})
 	retryWorkerStopMu.Unlock()
