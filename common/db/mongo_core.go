@@ -63,6 +63,12 @@ func (s *mongoStorage) ensureIndexes(ctx context.Context) error {
 		{BucketWebhookRetries, mongo.IndexModel{
 			Keys: bson.D{{Key: "next_retry", Value: 1}},
 		}, "idx_retry_next"},
+		{BucketIssuePRLinks, mongo.IndexModel{
+			Keys: bson.D{{Key: "pr_id", Value: 1}},
+		}, "idx_ipl_pr_id"},
+		{BucketPRDependencies, mongo.IndexModel{
+			Keys: bson.D{{Key: "depends_on_pr_id", Value: 1}},
+		}, "idx_pr_dep_on"},
 	}
 	for _, idx := range indexes {
 		if _, err := s.db.Collection(idx.coll).Indexes().CreateOne(ctx, idx.model); err != nil {
@@ -352,11 +358,20 @@ func (s *mongoStorage) PutIssuePRLink(link *models.IssuePRLink) error {
 		"platform":   link.Platform,
 		"link_type":  link.LinkType,
 	}
-	_, err := s.coll(BucketIssuePRLinks).InsertOne(ctx, doc)
-	if err != nil {
-		_, err = s.coll(BucketIssuePRLinks).ReplaceOne(ctx, bson.M{"_id": doc["_id"]}, doc, options.Replace().SetUpsert(true))
+	id := doc["_id"]
+	if _, err := s.coll(BucketIssuePRLinks).InsertOne(ctx, doc); err != nil {
+		if _, err := s.coll(BucketIssuePRLinks).ReplaceOne(ctx, bson.M{"_id": id}, doc, options.Replace().SetUpsert(true)); err != nil {
+			return err
+		}
 	}
-	return err
+	revDoc := bson.M{
+		"_id":  fmt.Sprintf("%s:%s", link.PRID, link.IssueID),
+		"link": id,
+	}
+	if _, err := s.coll(BucketIssuePRLinksByPR).InsertOne(ctx, revDoc); err != nil {
+		s.coll(BucketIssuePRLinksByPR).ReplaceOne(ctx, bson.M{"_id": revDoc["_id"]}, revDoc, options.Replace().SetUpsert(true))
+	}
+	return nil
 }
 
 func (s *mongoStorage) GetIssuePRLinksByIssue(issueID string) ([]*models.IssuePRLink, error) {

@@ -1,6 +1,48 @@
 # ChangeLog for Asika
 
-## v20260510DEV > Unleased
+## v20260510DEV > Unreleased
+
+- **Bug fix**: `AppendAuditLogEx` (bbolt) set Timestamp after Marshal, causing zero-time in stored JSON. Moved zero-check before Marshal.
+
+- **Bug fix**: `AppendAuditLogEx` (MongoDB) set Timestamp after bson.Marshal and cast ObjectID to string via `.(string)` which panics. Fixed zero-check and used `.(bson.ObjectID).Hex()`.
+
+- **Bug fix**: Consumer `Start()` leaked goroutine on restart — old writer/worker pool never stopped. Added `Stop()` call at start.
+
+- **Bug fix**: Webhook retry worker `StopWebhookRetryWorker()` double-close panics. Protected with `sync.Mutex` + `select`.
+
+- **Bug fix**: Syncer `recordSync` silently dropped json.Marshal errors. Added error handling and logging.
+
+- **Bug fix**: `EventPRLabeled` only logged but didn't persist label changes to DB. Added `handlePRLabeled` handler.
+
+- **Bug fix**: Gerrit `GetFileContent` ignored HTTP error status codes and body read errors. Added status code check and error handling.
+
+- **Bug fix**: Notifier `mustMarshal` silently dropped json.Marshal errors, corrupting dedup entries. Returns nil on error, callers check.
+
+- **Bug fix**: MongoDB `ListNotificationPrefs` filtered on non-existent `username` field instead of `_id`. Fixed filter.
+
+- **Bug fix**: MongoDB `ensureIndexes` returned on first failure, skipping remaining indexes. Made per-index with warn logging.
+
+- **Bug fix**: Event bus subscribers never removed — SSE reconnect leaked channels. Added `Unsubscribe()` wired into SSE handler.
+
+- **Bug fix**: Labeler `compiledPatterns` map had concurrent read/write data race. Protected with `sync.RWMutex`.
+
+- **Bug fix**: `SyncOnMerge` goroutines used `context.Background()` with no timeout. Added 10-minute timeout.
+
+- **Bug fix**: Config hot-reload had lost-update race (concurrent PUT) and non-atomic file write. Added `sync.Mutex` and atomic tmp+rename.
+
+- **Bug fix**: Feishu bot HTTP response body leaked in fire-and-forget goroutine. Added `resp.Body.Close()`.
+
+- **Bug fix**: CLI `pr comment` and batch commands used `fmt.Sprintf` for JSON — injection if input contains quotes. Replaced with `json.Marshal`.
+
+- **Bug fix**: MongoDB `AppendAuditLogEx` index entry errors silently dropped. Added `slog.Error` logging.
+
+- **Performance**: `isNotifierEnabledForAnyUser` did full DB scan on every notification. Added 30s TTL cache.
+
+- **Performance**: `GetIssuePRLinksByPR` and `GetPRDependentsByPR` did full table scan. Added reverse index buckets.
+
+- **Performance**: MongoDB added indexes on `issue_pr_links.pr_id` and `pr_dependencies.depends_on_pr_id`.
+
+## v20260510DEV > Unreleased
 
 - **WebUI PR detail enhancements**: PR detail page now shows PR body/description, last commit SHA, and audit log events. Added Rebase, Cherry-pick, and Comment action buttons directly on the detail page.
 

@@ -159,6 +159,7 @@ func TestIsNotifierEnabledForAnyUser_AllDisabled(t *testing.T) {
 func TestIsNotifierEnabledForAnyUser_Enabled(t *testing.T) {
 	testutil.NewTestDB(t)
 	defer db.Close()
+	ResetNotifierPrefsCache()
 
 	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
 		Username: "alice",
@@ -174,6 +175,7 @@ func TestIsNotifierEnabledForAnyUser_Enabled(t *testing.T) {
 func TestIsNotifierEnabledForAnyUser_NotifierFiltered(t *testing.T) {
 	testutil.NewTestDB(t)
 	defer db.Close()
+	ResetNotifierPrefsCache()
 
 	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
 		Username:         "alice",
@@ -195,6 +197,7 @@ func TestIsNotifierEnabledForAnyUser_NotifierFiltered(t *testing.T) {
 func TestIsNotifierEnabledForAnyUser_EventFiltered(t *testing.T) {
 	testutil.NewTestDB(t)
 	defer db.Close()
+	ResetNotifierPrefsCache()
 
 	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
 		Username:   "alice",
@@ -216,6 +219,7 @@ func TestIsNotifierEnabledForAnyUser_EventFiltered(t *testing.T) {
 func TestIsNotifierEnabledForAnyUser_MultipleUsers(t *testing.T) {
 	testutil.NewTestDB(t)
 	defer db.Close()
+	ResetNotifierPrefsCache()
 
 	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
 		Username: "alice",
@@ -235,6 +239,7 @@ func TestIsNotifierEnabledForAnyUser_MultipleUsers(t *testing.T) {
 func TestIsNotifierEnabledForAnyUser_NoEventType(t *testing.T) {
 	testutil.NewTestDB(t)
 	defer db.Close()
+	ResetNotifierPrefsCache()
 
 	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
 		Username: "alice",

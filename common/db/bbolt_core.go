@@ -33,7 +33,7 @@ func newBboltStorage(dbPath string) (*bboltStorage, error) {
 			BucketWebhookHealth, BucketReportHistory, BucketNotificationPrefs,
 			BucketNotificationDedup, BucketTeamSpaces, BucketSpaceMembers,
 			BucketSpaceSettings,
-			BucketIssuePRLinks, BucketPRDependencies, BucketPRTemplates,
+			BucketIssuePRLinks, BucketIssuePRLinksByPR, BucketPRDependencies, BucketPRDependents, BucketPRTemplates,
 			BucketSerialQueue, BucketCrossSpaceDeps, BucketEscalationRules,
 			BucketPRStacks, BucketAuditLogIndex,
 		}
@@ -314,7 +314,11 @@ func (s *bboltStorage) PutIssuePRLink(link *models.IssuePRLink) error {
 		return err
 	}
 	key := fmt.Sprintf("%s:%s", link.IssueID, link.PRID)
-	return s.Put(BucketIssuePRLinks, key, data)
+	if err := s.Put(BucketIssuePRLinks, key, data); err != nil {
+		return err
+	}
+	byPRKey := fmt.Sprintf("%s:%s", link.PRID, link.IssueID)
+	return s.Put(BucketIssuePRLinksByPR, byPRKey, data)
 }
 
 func (s *bboltStorage) GetIssuePRLinksByIssue(issueID string) ([]*models.IssuePRLink, error) {
@@ -333,14 +337,13 @@ func (s *bboltStorage) GetIssuePRLinksByIssue(issueID string) ([]*models.IssuePR
 
 func (s *bboltStorage) GetIssuePRLinksByPR(prID string) ([]*models.IssuePRLink, error) {
 	var links []*models.IssuePRLink
-	err := s.ForEach(BucketIssuePRLinks, func(key, value []byte) error {
+	prefix := prID + ":"
+	err := s.BucketForEachPrefix(BucketIssuePRLinksByPR, prefix, func(key, value []byte) error {
 		var link models.IssuePRLink
 		if err := json.Unmarshal(value, &link); err != nil {
 			return nil
 		}
-		if link.PRID == prID {
-			links = append(links, &link)
-		}
+		links = append(links, &link)
 		return nil
 	})
 	return links, err
@@ -352,7 +355,11 @@ func (s *bboltStorage) PutPRDependency(dep *models.PRDependency) error {
 		return err
 	}
 	key := fmt.Sprintf("%s:%s", dep.PRID, dep.DependsOnPRID)
-	return s.Put(BucketPRDependencies, key, data)
+	if err := s.Put(BucketPRDependencies, key, data); err != nil {
+		return err
+	}
+	revKey := fmt.Sprintf("%s:%s", dep.DependsOnPRID, dep.PRID)
+	return s.Put(BucketPRDependents, revKey, data)
 }
 
 func (s *bboltStorage) GetPRDependenciesByPR(prID string) ([]*models.PRDependency, error) {
@@ -371,14 +378,13 @@ func (s *bboltStorage) GetPRDependenciesByPR(prID string) ([]*models.PRDependenc
 
 func (s *bboltStorage) GetPRDependentsByPR(prID string) ([]*models.PRDependency, error) {
 	var deps []*models.PRDependency
-	err := s.ForEach(BucketPRDependencies, func(key, value []byte) error {
+	prefix := prID + ":"
+	err := s.BucketForEachPrefix(BucketPRDependents, prefix, func(key, value []byte) error {
 		var dep models.PRDependency
 		if err := json.Unmarshal(value, &dep); err != nil {
 			return nil
 		}
-		if dep.DependsOnPRID == prID {
-			deps = append(deps, &dep)
-		}
+		deps = append(deps, &dep)
 		return nil
 	})
 	return deps, err

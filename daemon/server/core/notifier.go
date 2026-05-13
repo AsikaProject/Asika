@@ -90,8 +90,45 @@ func sendNotificationInternal(ctx context.Context, title, body, eventType, prID,
 	}
 }
 
-func isNotifierEnabledForAnyUser(notifierType, eventType string) bool {
+var (
+	notifierPrefsCache     []models.NotificationPreferences
+	notifierPrefsCacheTime time.Time
+	notifierPrefsCacheMu   sync.Mutex
+	notifierPrefsCacheTTL  = 30 * time.Second
+)
+
+func resetNotifierPrefsCache() {
+	notifierPrefsCacheMu.Lock()
+	notifierPrefsCache = nil
+	notifierPrefsCacheTime = time.Time{}
+	notifierPrefsCacheMu.Unlock()
+}
+
+func cachedNotificationPrefs() ([]models.NotificationPreferences, error) {
+	notifierPrefsCacheMu.Lock()
+	defer notifierPrefsCacheMu.Unlock()
+	if time.Since(notifierPrefsCacheTime) < notifierPrefsCacheTTL && notifierPrefsCache != nil {
+		return notifierPrefsCache, nil
+	}
 	prefs, err := db.ListNotificationPrefs(nil)
+	if err != nil {
+		return nil, err
+	}
+	notifierPrefsCache = prefs
+	notifierPrefsCacheTime = time.Now()
+	return prefs, nil
+}
+
+// ResetNotifierPrefsCache resets the notification preferences cache (for tests).
+func ResetNotifierPrefsCache() {
+	notifierPrefsCacheMu.Lock()
+	notifierPrefsCache = nil
+	notifierPrefsCacheTime = time.Time{}
+	notifierPrefsCacheMu.Unlock()
+}
+
+func isNotifierEnabledForAnyUser(notifierType, eventType string) bool {
+	prefs, err := cachedNotificationPrefs()
 	if err != nil {
 		return true
 	}
