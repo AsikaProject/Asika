@@ -221,12 +221,12 @@ func (s *bboltStorage) GetPRByIndex(prID, repoGroup string, prNumber int) ([]byt
 }
 
 func (s *bboltStorage) AppendAuditLogEx(entry models.AuditLog) error {
+	if entry.Timestamp.IsZero() {
+		entry.Timestamp = time.Now()
+	}
 	data, err := json.Marshal(entry)
 	if err != nil {
 		return err
-	}
-	if entry.Timestamp.IsZero() {
-		entry.Timestamp = time.Now()
 	}
 	var randBytes [4]byte
 	if _, err := rand.Read(randBytes[:]); err != nil {

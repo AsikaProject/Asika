@@ -497,8 +497,14 @@ func (s *Syncer) recordSync(pr *models.PRRecord, branch, targetPlatform, status,
 		Timestamp:      time.Now(),
 	}
 
-	data, _ := json.Marshal(record)
-	db.Put(db.BucketSyncHistory, record.ID, data)
+	data, err := json.Marshal(record)
+	if err != nil {
+		slog.Error("failed to marshal sync record", "error", err)
+		return
+	}
+	if err := db.Put(db.BucketSyncHistory, record.ID, data); err != nil {
+		slog.Error("failed to store sync record", "error", err)
+	}
 }
 
 // getRepoURL returns the clone URL (with .git suffix) for a platform repo.

@@ -456,6 +456,12 @@ func (c *GerritClient) GetFileContent(ctx context.Context, owner, repo, path str
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("gerrit GetFileContent: unexpected status %d for %s", resp.StatusCode, endpoint)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("gerrit GetFileContent: failed to read body: %w", err)
+	}
 	return string(body), nil
 }

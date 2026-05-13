@@ -76,8 +76,11 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 	}
 }
 
-// Start starts consuming events and dispatching to subsystem goroutine pools
+// Start starts consuming events and dispatching to subsystem goroutine pools.
+// Safe to call multiple times: stops previous goroutines before restarting.
 func (c *Consumer) Start() {
+	c.Stop()
+	c.stop = make(chan struct{})
 	c.writer = newWriterActor(256)
 	poolCfg := models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}
 	if c.cfg != nil && c.cfg.WorkerPool.MinWorkers > 0 {
@@ -143,7 +146,7 @@ func (c *Consumer) dispatch(event events.Event) {
 	case events.EventPRComment:
 		c.workers.Submit(func() { c.handlePRComment(event) })
 	case events.EventPRLabeled:
-		slog.Info("PR labeled", "repo_group", event.RepoGroup)
+		c.workers.Submit(func() { c.handlePRLabeled(event) })
 	case events.EventBranchDeleted:
 		c.workers.Submit(func() { c.handleBranchDeleted(event) })
 	case events.EventSyncCompleted:
@@ -316,6 +319,31 @@ func (c *Consumer) handleSpamDetected(event events.Event) {
 
 	if c.spamDetector != nil {
 		c.spamDetector.HandleSpam(pr, event.RepoGroup)
+	}
+}
+
+func (c *Consumer) handlePRLabeled(event events.Event) {
+	pr := event.PR
+	if pr == nil {
+		return
+	}
+
+	slog.Info("PR labeled", "repo_group", event.RepoGroup, "pr_number", pr.PRNumber)
+
+	pr.UpdatedAt = time.Now()
+	pr.Events = append(pr.Events, models.PREvent{
+		Timestamp: time.Now(),
+		Action:    "labeled",
+		Actor:     "system",
+	})
+	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
+	data, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal PR", "error", err)
+		return
+	}
+	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
+		slog.Error("failed to update PR", "error", err)
 	}
 }
 

@@ -3,6 +3,7 @@ package webhook
 import (
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"asika/common/db"
@@ -16,14 +17,26 @@ func SetNotifyFunc(fn func(title, body string)) {
 	notifyFn = fn
 }
 
-var retryWorkerStop = make(chan struct{})
+var (
+	retryWorkerStop   = make(chan struct{})
+	retryWorkerStopMu sync.Mutex
+)
 
 func StopWebhookRetryWorker() {
-	close(retryWorkerStop)
+	retryWorkerStopMu.Lock()
+	defer retryWorkerStopMu.Unlock()
+	select {
+	case <-retryWorkerStop:
+		// already closed
+	default:
+		close(retryWorkerStop)
+	}
 }
 
 func StartWebhookRetryWorker() {
+	retryWorkerStopMu.Lock()
 	retryWorkerStop = make(chan struct{})
+	retryWorkerStopMu.Unlock()
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()

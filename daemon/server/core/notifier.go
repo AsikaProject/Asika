@@ -158,7 +158,9 @@ func appendToDedupBuffer(eventType, prID, notifierType, title, body string) (*de
 				entry.Events = append(entry.Events, eventType)
 				entry.Titles = append(entry.Titles, title)
 				entry.LastSeen = now
-				db.PutNotificationDedup(key, mustMarshal(entry))
+				if data := mustMarshal(entry); data != nil {
+					db.PutNotificationDedup(key, data)
+				}
 				if len(entry.Events) == 1 {
 					scheduleDigestDispatch(key, entry)
 				}
@@ -175,7 +177,9 @@ func appendToDedupBuffer(eventType, prID, notifierType, title, body string) (*de
 		FirstSeen: now,
 		LastSeen:  now,
 	}
-	db.PutNotificationDedup(key, mustMarshal(entry))
+	if data := mustMarshal(entry); data != nil {
+		db.PutNotificationDedup(key, data)
+	}
 	scheduleDigestDispatch(key, entry)
 	return &entry, false
 }
@@ -197,7 +201,9 @@ func scheduleDigestDispatch(key string, entry dedupEntry) {
 			return
 		}
 		e.Dispatched = true
-		db.PutNotificationDedup(key, mustMarshal(e))
+		if data := mustMarshal(e); data != nil {
+			db.PutNotificationDedup(key, data)
+		}
 
 		if n := findNotifier(e.Notifier); n != nil {
 			sendDigest(context.Background(), e.Notifier, n, &e)
@@ -262,7 +268,11 @@ func recordBatchDedup(prID, notifierType string, events []string) {
 }
 
 func mustMarshal(v interface{}) []byte {
-	data, _ := json.Marshal(v)
+	data, err := json.Marshal(v)
+	if err != nil {
+		slog.Error("failed to marshal dedup entry", "error", err)
+		return nil
+	}
 	return data
 }
 
