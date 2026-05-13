@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -38,39 +39,37 @@ func NewMongoStorage(ctx context.Context, connStr, dbName string) (Storage, erro
 }
 
 func (s *mongoStorage) ensureIndexes(ctx context.Context) error {
-	_, err := s.db.Collection(BucketPRs).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "id", Value: 1}},
-		Options: options.Index().SetUnique(true).SetName("idx_pr_id"),
-	})
-	if err != nil {
-		return err
+	indexes := []struct {
+		coll  string
+		model mongo.IndexModel
+		name  string
+	}{
+		{BucketPRs, mongo.IndexModel{
+			Keys:    bson.D{{Key: "id", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		}, "idx_pr_id"},
+		{BucketPRs, mongo.IndexModel{
+			Keys:    bson.D{{Key: "repo_group", Value: 1}, {Key: "pr_number", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		}, "idx_pr_rg_num"},
+		{BucketUsers, mongo.IndexModel{
+			Keys:    bson.D{{Key: "username", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		}, "idx_user_name"},
+		{BucketAPIKeys, mongo.IndexModel{
+			Keys:    bson.D{{Key: "id", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		}, "idx_apikey_id"},
+		{BucketWebhookRetries, mongo.IndexModel{
+			Keys: bson.D{{Key: "next_retry", Value: 1}},
+		}, "idx_retry_next"},
 	}
-	_, err = s.db.Collection(BucketPRs).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "repo_group", Value: 1}, {Key: "pr_number", Value: 1}},
-		Options: options.Index().SetUnique(true).SetName("idx_pr_rg_num"),
-	})
-	if err != nil {
-		return err
+	for _, idx := range indexes {
+		if _, err := s.db.Collection(idx.coll).Indexes().CreateOne(ctx, idx.model); err != nil {
+			slog.Warn("failed to create index", "collection", idx.coll, "name", idx.name, "error", err)
+		}
 	}
-	_, err = s.db.Collection(BucketUsers).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "username", Value: 1}},
-		Options: options.Index().SetUnique(true).SetName("idx_user_name"),
-	})
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Collection(BucketAPIKeys).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "id", Value: 1}},
-		Options: options.Index().SetUnique(true).SetName("idx_apikey_id"),
-	})
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Collection(BucketWebhookRetries).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "next_retry", Value: 1}},
-		Options: options.Index().SetName("idx_retry_next"),
-	})
-	return err
+	return nil
 }
 
 func (s *mongoStorage) Close() error {
@@ -273,6 +272,11 @@ func (s *mongoStorage) GetPRByIndex(prID, repoGroup string, prNumber int) ([]byt
 func (s *mongoStorage) AppendAuditLogEx(entry models.AuditLog) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	if entry.Timestamp.IsZero() {
+		entry.Timestamp = time.Now()
+	}
+
 	data, err := bson.Marshal(entry)
 	if err != nil {
 		return err
@@ -282,33 +286,43 @@ func (s *mongoStorage) AppendAuditLogEx(entry models.AuditLog) error {
 		return err
 	}
 	doc["_id"] = bson.NewObjectID()
-	if entry.Timestamp.IsZero() {
-		doc["timestamp"] = time.Now()
-	}
-	logKey := doc["_id"].(string)
+
 	_, err = s.coll(BucketLogs).InsertOne(ctx, doc)
 	if err != nil {
 		return err
 	}
+
+	logKey := doc["_id"].(bson.ObjectID).Hex()
+
 	if entry.Actor != "" {
 		idxKey := fmt.Sprintf("actor:%s:%s", entry.Actor, logKey)
-		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
+			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
+		}
 	}
 	if entry.RepoGroup != "" {
 		idxKey := fmt.Sprintf("repo_group:%s:%s", entry.RepoGroup, logKey)
-		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
+			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
+		}
 	}
 	if entry.Action != "" {
 		idxKey := fmt.Sprintf("action:%s:%s", entry.Action, logKey)
-		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
+			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
+		}
 	}
 	if entry.Category != "" {
 		idxKey := fmt.Sprintf("category:%s:%s", entry.Category, logKey)
-		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
+			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
+		}
 	}
 	if entry.RepoGroup != "" && entry.PRNumber > 0 {
 		idxKey := fmt.Sprintf("pr:%s:%d:%s", entry.RepoGroup, entry.PRNumber, logKey)
-		s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true))
+		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
+			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
+		}
 	}
 	return nil
 }

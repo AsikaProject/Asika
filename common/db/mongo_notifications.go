@@ -70,7 +70,7 @@ func (s *mongoStorage) ListNotificationPrefs(usernames []string) ([]models.Notif
 	defer cancel()
 	filter := bson.M{}
 	if len(usernames) > 0 {
-		filter["username"] = bson.M{"$in": usernames}
+		filter["_id"] = bson.M{"$in": usernames}
 	}
 	cursor, err := s.coll(BucketNotificationPrefs).Find(ctx, filter)
 	if err != nil {
