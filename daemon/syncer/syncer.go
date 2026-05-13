@@ -218,11 +218,15 @@ func (s *Syncer) syncAllBranches(gitRepo *git.Repository, pr *models.PRRecord, g
 			targetToken := config.GetToken(s.cfg, target.name)
 			if err := s.pushRef(gitRepo, remoteName, "refs/heads/"+branch, targetToken, target.name); err != nil {
 				slog.Error("failed to push branch", "branch", branch, "target", target.name, "error", err)
-				s.recordSync(pr, branch, target.name, "failed", err.Error())
+				if err := s.recordSync(pr, branch, target.name, "failed", err.Error()); err != nil {
+					slog.Error("recordSync failed", "error", err)
+				}
 				branchFailed = true
 				continue
 			}
-			s.recordSync(pr, branch, target.name, "success", "")
+			if err := s.recordSync(pr, branch, target.name, "success", ""); err != nil {
+				slog.Error("recordSync failed", "error", err)
+			}
 		}
 
 		if branchFailed {
@@ -267,11 +271,15 @@ func (s *Syncer) syncAllTags(gitRepo *git.Repository, pr *models.PRRecord, group
 			targetToken := config.GetToken(s.cfg, target.name)
 			if err := s.pushRef(gitRepo, remoteName, "refs/tags/"+tag, targetToken, target.name); err != nil {
 				slog.Error("failed to push tag", "tag", tag, "target", target.name, "error", err)
-				s.recordSync(pr, "tag:"+tag, target.name, "failed", err.Error())
+				if err := s.recordSync(pr, "tag:"+tag, target.name, "failed", err.Error()); err != nil {
+					slog.Error("recordSync failed", "error", err)
+				}
 				tagFailed = true
 				continue
 			}
-			s.recordSync(pr, "tag:"+tag, target.name, "success", "")
+			if err := s.recordSync(pr, "tag:"+tag, target.name, "success", ""); err != nil {
+				slog.Error("recordSync failed", "error", err)
+			}
 		}
 
 		if tagFailed {
@@ -303,12 +311,16 @@ func (s *Syncer) pushBranchToTargets(gitRepo *git.Repository, pr *models.PRRecor
 
 		if err := s.pushWithRetry(gitRepo, remoteName, branch, targetToken, target.name, pr); err != nil {
 			slog.Error("push failed after retries", "target", target.name, "error", err)
-			s.recordSync(pr, branch, target.name, "failed", fmt.Sprintf("push to %s failed: %v", target.name, err))
+			if err := s.recordSync(pr, branch, target.name, "failed", fmt.Sprintf("push to %s failed: %v", target.name, err)); err != nil {
+				slog.Error("recordSync failed", "error", err)
+			}
 			failedTargets = append(failedTargets, target.name)
 			continue
 		}
 
-		s.recordSync(pr, branch, target.name, "success", "")
+		if err := s.recordSync(pr, branch, target.name, "success", ""); err != nil {
+			slog.Error("recordSync failed", "error", err)
+		}
 		slog.Info("sync completed", "target", target.name)
 	}
 
@@ -482,8 +494,9 @@ func (s *Syncer) notifySyncFailure(pr *models.PRRecord, targetPlatforms, reason 
 	s.notifyFn(title, body)
 }
 
-// recordSync records sync history in bbolt
-func (s *Syncer) recordSync(pr *models.PRRecord, branch, targetPlatform, status, errorMsg string) {
+// recordSync records sync history in bbolt.
+// Returns error on failure; callers should log and continue.
+func (s *Syncer) recordSync(pr *models.PRRecord, branch, targetPlatform, status, errorMsg string) error {
 	record := models.SyncRecord{
 		ID:             uuid.New().String(),
 		PRID:           pr.ID,
@@ -499,12 +512,12 @@ func (s *Syncer) recordSync(pr *models.PRRecord, branch, targetPlatform, status,
 
 	data, err := json.Marshal(record)
 	if err != nil {
-		slog.Error("failed to marshal sync record", "error", err)
-		return
+		return fmt.Errorf("marshal sync record: %w", err)
 	}
 	if err := db.Put(db.BucketSyncHistory, record.ID, data); err != nil {
-		slog.Error("failed to store sync record", "error", err)
+		return fmt.Errorf("store sync record: %w", err)
 	}
+	return nil
 }
 
 // getRepoURL returns the clone URL (with .git suffix) for a platform repo.

@@ -535,6 +535,9 @@ bash build.sh distclean
 ### Code Conventions
 
 - **Error handling**: All errors must be handled. Use `fmt.Errorf("context: %w", err)` for wrapping.
+  - **Critical path** (PR writes, sync records, index creation): propagate errors up the call chain.
+  - **Non-critical path** (dedup, audit indexes, sync history): log with `slog.Error` and degrade gracefully. Never silently swallow.
+  - **Cache reads**: fail-open (return default/empty on error, never block callers).
 - **Logging**: Use `log/slog` for structured logging. No `fmt.Println` in server code.
 - **i18n**: User-facing strings use `{{t "key"}}` in templates. Add translations to `common/i18n/locales/en.json` and `common/i18n/locales/zh.json`. Default locale is English.
 - **Database**: Use `PutPRWithIndex` when storing PRs (maintains indices). Use `BucketForEachPrefix` for group-scoped queries.

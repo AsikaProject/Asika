@@ -344,6 +344,19 @@ func (c *Consumer) handlePRLabeled(event events.Event) {
 
 	slog.Info("PR labeled", "repo_group", event.RepoGroup, "pr_number", pr.PRNumber)
 
+	if label, ok := event.Payload.(string); ok && label != "" {
+		found := false
+		for _, l := range pr.Labels {
+			if l == label {
+				found = true
+				break
+			}
+		}
+		if !found {
+			pr.Labels = append(pr.Labels, label)
+		}
+	}
+
 	pr.UpdatedAt = time.Now()
 	pr.Events = append(pr.Events, models.PREvent{
 		Timestamp: time.Now(),

@@ -207,3 +207,15 @@
 - **Performance**: `getPRFromDB` fallback scan used `ForEach` (full table scan). Changed to `BucketForEachPrefix` scoped to repo group, reducing from O(n) to O(k).
 
 - **Security**: GitHub/Bitbucket `VerifyWebhookSignature` — removed `strings.HasPrefix` branch before `hmac.Equal`, eliminating potential timing side-channel. Now compares full `sha256=hex` format in constant time.
+
+- **Bug fix**: `mustMarshal` returned nil on json.Marshal failure, silently skipping dedup entry writes — caused duplicate notifications. Now writes a minimal fallback JSON (`{"_id":"..."}`) to preserve dedup protection.
+
+- **Bug fix**: `cachedNotificationPrefs` held `sync.Mutex` during DB query, blocking all notification senders on cache refresh. Changed to `sync.RWMutex` with read-lock check / unlock-query-write-lock-update pattern.
+
+- **Bug fix**: `ensureIndexes` (MongoDB) swallowed all index creation errors — startup never detected partial index failure. Now aggregates errors via `errors.Join` and returns combined error if any index fails.
+
+- **Refactor**: `AppendAuditLogEx` (MongoDB) removed unnecessary `bson.Marshal` → `bson.Unmarshal` round-trip (3 serializations per write). Now constructs `bson.M` directly from entry fields. Extracted `writeAuditIndex` helper to eliminate 5 duplicate index-write blocks.
+
+- **Bug fix**: `handlePRLabeled` ignored `event.Payload` — stale manager's "stale" label was not added to `PR.Labels`. Now extracts string payload as label name and deduplicates before appending.
+
+- **Bug fix**: `recordSync` silently swallowed json.Marshal and DB errors — sync history silently lost. Changed signature to return error; callers now log with `slog.Error` without interrupting sync flow.

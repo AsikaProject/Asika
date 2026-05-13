@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
@@ -93,7 +95,7 @@ func sendNotificationInternal(ctx context.Context, title, body, eventType, prID,
 var (
 	notifierPrefsCache     []models.NotificationPreferences
 	notifierPrefsCacheTime time.Time
-	notifierPrefsCacheMu   sync.Mutex
+	notifierPrefsCacheMu   sync.RWMutex
 	notifierPrefsCacheTTL  = 30 * time.Second
 )
 
@@ -105,17 +107,23 @@ func resetNotifierPrefsCache() {
 }
 
 func cachedNotificationPrefs() ([]models.NotificationPreferences, error) {
-	notifierPrefsCacheMu.Lock()
-	defer notifierPrefsCacheMu.Unlock()
+	notifierPrefsCacheMu.RLock()
 	if time.Since(notifierPrefsCacheTime) < notifierPrefsCacheTTL && notifierPrefsCache != nil {
-		return notifierPrefsCache, nil
+		prefs := notifierPrefsCache
+		notifierPrefsCacheMu.RUnlock()
+		return prefs, nil
 	}
+	notifierPrefsCacheMu.RUnlock()
+
 	prefs, err := db.ListNotificationPrefs(nil)
 	if err != nil {
 		return nil, err
 	}
+
+	notifierPrefsCacheMu.Lock()
 	notifierPrefsCache = prefs
 	notifierPrefsCacheTime = time.Now()
+	notifierPrefsCacheMu.Unlock()
 	return prefs, nil
 }
 
@@ -195,9 +203,7 @@ func appendToDedupBuffer(eventType, prID, notifierType, title, body string) (*de
 				entry.Events = append(entry.Events, eventType)
 				entry.Titles = append(entry.Titles, title)
 				entry.LastSeen = now
-				if data := mustMarshal(entry); data != nil {
-					db.PutNotificationDedup(key, data)
-				}
+				db.PutNotificationDedup(key, mustMarshal(entry))
 				if len(entry.Events) == 1 {
 					scheduleDigestDispatch(key, entry)
 				}
@@ -214,9 +220,7 @@ func appendToDedupBuffer(eventType, prID, notifierType, title, body string) (*de
 		FirstSeen: now,
 		LastSeen:  now,
 	}
-	if data := mustMarshal(entry); data != nil {
-		db.PutNotificationDedup(key, data)
-	}
+	db.PutNotificationDedup(key, mustMarshal(entry))
 	scheduleDigestDispatch(key, entry)
 	return &entry, false
 }
@@ -238,9 +242,7 @@ func scheduleDigestDispatch(key string, entry dedupEntry) {
 			return
 		}
 		e.Dispatched = true
-		if data := mustMarshal(e); data != nil {
-			db.PutNotificationDedup(key, data)
-		}
+		db.PutNotificationDedup(key, mustMarshal(e))
 
 		if n := findNotifier(e.Notifier); n != nil {
 			sendDigest(context.Background(), e.Notifier, n, &e)
@@ -307,8 +309,9 @@ func recordBatchDedup(prID, notifierType string, events []string) {
 func mustMarshal(v interface{}) []byte {
 	data, err := json.Marshal(v)
 	if err != nil {
-		slog.Error("failed to marshal dedup entry", "error", err)
-		return nil
+		slog.Error("failed to marshal dedup entry, writing minimal fallback", "error", err)
+		fallback := fmt.Sprintf(`{"_id":"%s"}`, uuid.New().String())
+		return []byte(fallback)
 	}
 	return data
 }

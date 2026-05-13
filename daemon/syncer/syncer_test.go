@@ -237,7 +237,9 @@ func TestRecordSync(t *testing.T) {
 	}
 
 	s := &Syncer{}
-	s.recordSync(pr, "main", "gitlab", "success", "")
+	if err := s.recordSync(pr, "main", "gitlab", "success", ""); err != nil {
+		t.Fatalf("recordSync failed: %v", err)
+	}
 
 	// Verify sync record was stored
 	var found bool
@@ -282,7 +284,9 @@ func TestRecordSync_Failed(t *testing.T) {
 	}
 
 	s := &Syncer{}
-	s.recordSync(pr, "main", "gitea", "failed", "push rejected")
+	if err := s.recordSync(pr, "main", "gitea", "failed", "push rejected"); err != nil {
+		t.Fatalf("recordSync failed: %v", err)
+	}
 
 	var found bool
 	db.ForEach(db.BucketSyncHistory, func(key, value []byte) error {
@@ -543,6 +547,83 @@ func TestNotifySyncFailure_MessageFormat(t *testing.T) {
 			t.Errorf("body missing %q: %s", part, gotBody)
 		}
 	}
+}
+
+func TestRecordSync_ReturnsErrorOnDBFailure(t *testing.T) {
+	realStorage := testutil.NewTestDB(t)
+	defer db.Close()
+
+	fail := &syncFailStorage{
+		Storage:     realStorage,
+		failBuckets: map[string]bool{db.BucketSyncHistory: true},
+	}
+	db.InitWithStorage(fail)
+	t.Cleanup(func() {
+		db.Close()
+	})
+
+	pr := &models.PRRecord{
+		ID:             "pr-fail-db",
+		RepoGroup:      "test-group",
+		Platform:       "github",
+		PRNumber:       99,
+		MergeCommitSHA: "deadbeef",
+	}
+
+	s := &Syncer{}
+	err := s.recordSync(pr, "main", "gitea", "success", "")
+	if err == nil {
+		t.Fatal("expected error when DB Put fails, got nil")
+	}
+}
+
+func TestRecordSync_MarshalFailure(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+
+	pr := &models.PRRecord{
+		ID:             "pr-marshal-fail",
+		RepoGroup:      "test-group",
+		Platform:       "github",
+		PRNumber:       100,
+		MergeCommitSHA: "abc123",
+	}
+
+	s := &Syncer{}
+	err := s.recordSync(pr, "refs/heads/main", "gitlab", "success", "")
+	if err != nil {
+		t.Fatalf("recordSync should not fail for normal data: %v", err)
+	}
+
+	var found bool
+	db.ForEach(db.BucketSyncHistory, func(key, value []byte) error {
+		var record models.SyncRecord
+		if err := json.Unmarshal(value, &record); err != nil {
+			return err
+		}
+		if record.PRID == "pr-marshal-fail" {
+			found = true
+			if record.Status != "success" {
+				t.Errorf("status = %q, want success", record.Status)
+			}
+		}
+		return nil
+	})
+	if !found {
+		t.Error("sync record not found in DB")
+	}
+}
+
+type syncFailStorage struct {
+	db.Storage
+	failBuckets map[string]bool
+}
+
+func (s *syncFailStorage) Put(bucket, key string, value []byte) error {
+	if s.failBuckets[bucket] {
+		return fmt.Errorf("injected Put failure on %s", bucket)
+	}
+	return s.Storage.Put(bucket, key, value)
 }
 
 

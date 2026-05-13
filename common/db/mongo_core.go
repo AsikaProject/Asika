@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -74,10 +75,15 @@ func (s *mongoStorage) ensureIndexes(ctx context.Context) error {
 			Keys: bson.D{{Key: "depends_on_pr_id", Value: 1}},
 		}, "idx_pr_dep_on"},
 	}
+	var errs []error
 	for _, idx := range indexes {
 		if _, err := s.db.Collection(idx.coll).Indexes().CreateOne(ctx, idx.model); err != nil {
 			slog.Warn("failed to create index", "collection", idx.coll, "name", idx.name, "error", err)
+			errs = append(errs, fmt.Errorf("index %s on %s: %w", idx.name, idx.coll, err))
 		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("ensureIndexes: %d/%d failed: %w", len(errs), len(indexes), errors.Join(errs...))
 	}
 	return nil
 }
@@ -287,17 +293,41 @@ func (s *mongoStorage) AppendAuditLogEx(entry models.AuditLog) error {
 		entry.Timestamp = time.Now()
 	}
 
-	data, err := bson.Marshal(entry)
-	if err != nil {
-		return err
+	doc := bson.M{
+		"_id":       bson.NewObjectID(),
+		"timestamp": entry.Timestamp,
+		"level":     entry.Level,
+		"message":   entry.Message,
 	}
-	var doc bson.M
-	if err := bson.Unmarshal(data, &doc); err != nil {
-		return err
+	if entry.Context != nil {
+		doc["context"] = entry.Context
 	}
-	doc["_id"] = bson.NewObjectID()
+	if entry.Category != "" {
+		doc["category"] = entry.Category
+	}
+	if entry.Actor != "" {
+		doc["actor"] = entry.Actor
+	}
+	if entry.RepoGroup != "" {
+		doc["repo_group"] = entry.RepoGroup
+	}
+	if entry.PRNumber > 0 {
+		doc["pr_number"] = entry.PRNumber
+	}
+	if entry.Platform != "" {
+		doc["platform"] = entry.Platform
+	}
+	if entry.Action != "" {
+		doc["action"] = entry.Action
+	}
+	if entry.Before != nil {
+		doc["before"] = entry.Before
+	}
+	if entry.After != nil {
+		doc["after"] = entry.After
+	}
 
-	_, err = s.coll(BucketLogs).InsertOne(ctx, doc)
+	_, err := s.coll(BucketLogs).InsertOne(ctx, doc)
 	if err != nil {
 		return err
 	}
@@ -305,36 +335,27 @@ func (s *mongoStorage) AppendAuditLogEx(entry models.AuditLog) error {
 	logKey := doc["_id"].(bson.ObjectID).Hex()
 
 	if entry.Actor != "" {
-		idxKey := fmt.Sprintf("actor:%s:%s", entry.Actor, logKey)
-		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
-			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
-		}
+		s.writeAuditIndex(ctx, fmt.Sprintf("actor:%s:%s", entry.Actor, logKey), logKey)
 	}
 	if entry.RepoGroup != "" {
-		idxKey := fmt.Sprintf("repo_group:%s:%s", entry.RepoGroup, logKey)
-		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
-			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
-		}
+		s.writeAuditIndex(ctx, fmt.Sprintf("repo_group:%s:%s", entry.RepoGroup, logKey), logKey)
 	}
 	if entry.Action != "" {
-		idxKey := fmt.Sprintf("action:%s:%s", entry.Action, logKey)
-		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
-			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
-		}
+		s.writeAuditIndex(ctx, fmt.Sprintf("action:%s:%s", entry.Action, logKey), logKey)
 	}
 	if entry.Category != "" {
-		idxKey := fmt.Sprintf("category:%s:%s", entry.Category, logKey)
-		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
-			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
-		}
+		s.writeAuditIndex(ctx, fmt.Sprintf("category:%s:%s", entry.Category, logKey), logKey)
 	}
 	if entry.RepoGroup != "" && entry.PRNumber > 0 {
-		idxKey := fmt.Sprintf("pr:%s:%d:%s", entry.RepoGroup, entry.PRNumber, logKey)
-		if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
-			slog.Error("failed to write audit log index", "key", idxKey, "error", err)
-		}
+		s.writeAuditIndex(ctx, fmt.Sprintf("pr:%s:%d:%s", entry.RepoGroup, entry.PRNumber, logKey), logKey)
 	}
 	return nil
+}
+
+func (s *mongoStorage) writeAuditIndex(ctx context.Context, idxKey, logKey string) {
+	if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
+		slog.Error("failed to write audit log index", "key", idxKey, "error", err)
+	}
 }
 
 func (s *mongoStorage) AppendAuditLog(level, message string, ctxMap map[string]interface{}) error {

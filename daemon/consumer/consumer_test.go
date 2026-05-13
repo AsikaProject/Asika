@@ -960,3 +960,127 @@ func TestQueueManager_AddToQueue(t *testing.T) {
 		t.Errorf("PRID = %q, want qm-test-1", items[0].PRID)
 	}
 }
+
+func TestHandlePRLabeled_WithStringPayload(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	c := NewConsumer()
+
+	pr := &models.PRRecord{
+		ID:        "pr-label-payload",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  300,
+		Title:     "Label payload test",
+		Author:    "tester",
+		State:     "open",
+		Labels:    []string{"existing"},
+	}
+
+	c.handlePRLabeled(events.Event{
+		Type:      events.EventPRLabeled,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload:   "stale",
+	})
+
+	stored, err := db.Get(db.BucketPRs, "test-group#github#300")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	var result models.PRRecord
+	json.Unmarshal(stored, &result)
+
+	found := false
+	for _, l := range result.Labels {
+		if l == "stale" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'stale' in labels, got %v", result.Labels)
+	}
+	if len(result.Labels) != 2 {
+		t.Errorf("expected 2 labels, got %d: %v", len(result.Labels), result.Labels)
+	}
+}
+
+func TestHandlePRLabeled_DuplicateLabelNotAdded(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	c := NewConsumer()
+
+	pr := &models.PRRecord{
+		ID:        "pr-label-dup",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  301,
+		Title:     "Duplicate label test",
+		Author:    "tester",
+		State:     "open",
+		Labels:    []string{"bug", "critical"},
+	}
+
+	c.handlePRLabeled(events.Event{
+		Type:      events.EventPRLabeled,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload:   "bug",
+	})
+
+	stored, err := db.Get(db.BucketPRs, "test-group#github#301")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	var result models.PRRecord
+	json.Unmarshal(stored, &result)
+
+	if len(result.Labels) != 2 {
+		t.Errorf("expected 2 labels (no duplicate), got %d: %v", len(result.Labels), result.Labels)
+	}
+}
+
+func TestHandlePRLabeled_NilPayload(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	c := NewConsumer()
+
+	pr := &models.PRRecord{
+		ID:        "pr-label-nil",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  302,
+		Title:     "Nil payload test",
+		Author:    "tester",
+		State:     "open",
+		Labels:    []string{"existing"},
+	}
+
+	c.handlePRLabeled(events.Event{
+		Type:      events.EventPRLabeled,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+		Payload:   nil,
+	})
+
+	stored, err := db.Get(db.BucketPRs, "test-group#github#302")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	var result models.PRRecord
+	json.Unmarshal(stored, &result)
+
+	if len(result.Labels) != 1 {
+		t.Errorf("expected 1 label (unchanged), got %d: %v", len(result.Labels), result.Labels)
+	}
+}
