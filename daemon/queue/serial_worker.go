@@ -47,7 +47,10 @@ func (w *SerialWorker) Start() {
 }
 
 func (w *SerialWorker) Stop() {
-	close(w.stop)
+	if w.stop != nil {
+		close(w.stop)
+		w.stop = nil
+	}
 }
 
 func (w *SerialWorker) Enqueue(item *models.QueueItem) error {

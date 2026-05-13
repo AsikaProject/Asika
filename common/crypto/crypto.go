@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"log/slog"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -27,6 +28,8 @@ var masterKey []byte
 func init() {
 	if key := os.Getenv(keyEnvVar); key != "" {
 		masterKey = deriveKey(key)
+	} else {
+		slog.Warn("encryption not enabled: " + keyEnvVar + " environment variable not set; tokens will be stored in plaintext")
 	}
 }
 

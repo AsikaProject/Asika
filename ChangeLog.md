@@ -183,3 +183,27 @@
 - WebUI settings page adds CPU Threads section for min_procs and max_procs.
 - All platform bots (Telegram, Discord, Slack, Feishu) display CPU thread config in /config command.
 - Add notification channel fault alerting: when a notifier fails 3 consecutive times, an alert is sent through all other configured notifiers (excluding the failed one).
+
+## v20260514DEV > Unreleased
+
+- **Bug fix**: Webhook idempotency — duplicate webhooks from platforms (e.g. GitHub retries) were processed multiple times. Added `webhook_dedup` bucket and delivery ID extraction (`X-GitHub-Delivery`, `X-Gitlab-Event-ID`, etc.) for dedup check.
+
+- **Bug fix**: Webhook request body had no size limit. Added 1MB max via `http.MaxBytesReader` to prevent memory exhaustion attacks.
+
+- **Bug fix**: `BatchClosePR` did not update local PR state in DB (only called platform API + audit log). Added `db.PutPRWithIndex` to persist `State: "closed"` like single `ClosePR`.
+
+- **Bug fix**: `Consumer.Stop()` double-close panic on restart — `close(c.stop)` without nil check. Added nil guard and set to nil after close.
+
+- **Bug fix**: `Manager/Poller/SerialWorker/SpamDetector.Stop()` double-close panic. Added nil guard and set to nil after close.
+
+- **Bug fix**: `StartWebhookRetryWorker()` leaked goroutine on restart — old worker never stopped. Now calls `StopWebhookRetryWorker()` before creating new one.
+
+- **Bug fix**: `writerActor` had no panic recovery — a single `db.PutPRWithIndex` panic would kill the writer goroutine permanently. Added `recover()` in both the main loop and per-request handler.
+
+- **Bug fix**: `crypto.init()` silently disabled encryption when `ASIKA_MASTER_KEY` was unset. Now logs `slog.Warn` to alert operators that tokens are stored in plaintext.
+
+- **Bug fix**: `FindPRByID` fallback scan returned early on `json.Unmarshal` errors (corrupted entries skipped remaining PRs). Changed to `return nil` to continue scanning.
+
+- **Performance**: `getPRFromDB` fallback scan used `ForEach` (full table scan). Changed to `BucketForEachPrefix` scoped to repo group, reducing from O(n) to O(k).
+
+- **Security**: GitHub/Bitbucket `VerifyWebhookSignature` — removed `strings.HasPrefix` branch before `hmac.Equal`, eliminating potential timing side-channel. Now compares full `sha256=hex` format in constant time.

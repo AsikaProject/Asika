@@ -32,4 +32,5 @@ const (
 	BucketEscalationRules   = "escalation_rules"
 	BucketPRStacks          = "pr_stacks"
 	BucketAuditLogIndex     = "audit_log_index"
+	BucketWebhookDedup      = "webhook_dedup"
 )

@@ -72,6 +72,8 @@ type Storage interface {
 	GetPRStack(id string) (*models.PRStack, error)
 	ListPRStacks() ([]*models.PRStack, error)
 	DeletePRStack(id string) error
+	PutWebhookDedup(deliveryID string, ts []byte) error
+	GetWebhookDedup(deliveryID string) ([]byte, error)
 }
 
 // ConfigSnapshotEntry represents a stored config version.
@@ -285,4 +287,10 @@ func ListPRStacks() ([]*models.PRStack, error) {
 }
 func DeletePRStack(id string) error {
 	return mustStorage().DeletePRStack(id)
+}
+func PutWebhookDedup(deliveryID string, ts []byte) error {
+	return mustStorage().PutWebhookDedup(deliveryID, ts)
+}
+func GetWebhookDedup(deliveryID string) ([]byte, error) {
+	return mustStorage().GetWebhookDedup(deliveryID)
 }

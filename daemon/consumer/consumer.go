@@ -89,9 +89,18 @@ func (c *Consumer) Start() {
 	c.workers = newWorkerPool(poolCfg)
 	ch := events.Subscribe()
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("event consumer panic recovered", "error", r)
+			}
+		}()
 		for {
 			select {
-			case event := <-ch:
+			case event, ok := <-ch:
+				if !ok {
+					slog.Info("event channel closed, consumer stopping")
+					return
+				}
 				c.dispatch(event)
 			case <-c.stop:
 				slog.Info("event consumer stopped")
@@ -101,9 +110,13 @@ func (c *Consumer) Start() {
 	}()
 }
 
-// Stop stops the consumer and all subsystem goroutines
+// Stop stops the consumer and all subsystem goroutines.
+// It waits for the dispatch goroutine to exit before returning.
 func (c *Consumer) Stop() {
-	close(c.stop)
+	if c.stop != nil {
+		close(c.stop)
+		c.stop = nil
+	}
 	if c.workers != nil {
 		c.workers.Stop()
 	}

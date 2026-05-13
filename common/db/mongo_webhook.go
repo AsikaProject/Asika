@@ -135,3 +135,26 @@ func (s *mongoStorage) ListWebhookHealth() (map[string]time.Time, error) {
 	}
 	return result, cursor.Err()
 }
+
+func (s *mongoStorage) PutWebhookDedup(deliveryID string, ts []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	doc := bson.M{"_id": deliveryID, "ts": string(ts)}
+	_, err := s.coll(BucketWebhookDedup).ReplaceOne(ctx, bson.M{"_id": deliveryID}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) GetWebhookDedup(deliveryID string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var doc bson.M
+	err := s.coll(BucketWebhookDedup).FindOne(ctx, bson.M{"_id": deliveryID}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	ts, _ := doc["ts"].(string)
+	return []byte(ts), nil
+}

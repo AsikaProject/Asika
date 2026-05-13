@@ -25,15 +25,19 @@ var (
 func StopWebhookRetryWorker() {
 	retryWorkerStopMu.Lock()
 	defer retryWorkerStopMu.Unlock()
-	select {
-	case <-retryWorkerStop:
-		// already closed
-	default:
-		close(retryWorkerStop)
+	if retryWorkerStop != nil {
+		select {
+		case <-retryWorkerStop:
+			// already closed
+		default:
+			close(retryWorkerStop)
+		}
+		retryWorkerStop = nil
 	}
 }
 
 func StartWebhookRetryWorker() {
+	StopWebhookRetryWorker()
 	retryWorkerStopMu.Lock()
 	retryWorkerStop = make(chan struct{})
 	retryWorkerStopMu.Unlock()

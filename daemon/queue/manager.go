@@ -296,33 +296,32 @@ func (m *Manager) merge(item *models.QueueItem) error {
 // FindPRByID finds a PR by its ID in bbolt (exported for use by serial worker).
 func FindPRByID(prID string) (*models.PRRecord, error) {
 	data, err := db.GetPRByIndex(prID, "", 0)
-	if err != nil || data == nil {
-		var pr *models.PRRecord
-		err := db.ForEach(db.BucketPRs, func(key, value []byte) error {
-			var record models.PRRecord
-			if err := json.Unmarshal(value, &record); err != nil {
-				return err
-			}
-			if record.ID == prID {
-				pr = &record
-			}
-			return nil
-		})
-		if err != nil {
-			return nil, err
+	if err == nil && data != nil {
+		var pr models.PRRecord
+		if err := json.Unmarshal(data, &pr); err == nil {
+			return &pr, nil
 		}
-		if pr == nil {
-			return nil, fmt.Errorf("PR not found: %s", prID)
-		}
-		return pr, nil
 	}
 
-	var pr models.PRRecord
-	if err := json.Unmarshal(data, &pr); err != nil {
-		return nil, err
+	var found *models.PRRecord
+	_ = db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		var record models.PRRecord
+		if err := json.Unmarshal(value, &record); err != nil {
+			return nil
+		}
+		if record.ID == prID {
+			found = &record
+			return errStopEach
+		}
+		return nil
+	})
+	if found != nil {
+		return found, nil
 	}
-	return &pr, nil
+	return nil, fmt.Errorf("PR not found: %s", prID)
 }
+
+var errStopEach = fmt.Errorf("stop")
 
 // GetQueueItems returns all queue items for a repo group
 func (m *Manager) GetQueueItems(repoGroup string) ([]models.QueueItem, error) {
@@ -376,6 +375,7 @@ func (m *Manager) ClearQueue(repoGroup string) (int, error) {
 func (m *Manager) Stop() {
 	if m.stop != nil {
 		close(m.stop)
+		m.stop = nil
 	}
 }
 

@@ -63,6 +63,10 @@ func (s *mongoStorage) ensureIndexes(ctx context.Context) error {
 		{BucketWebhookRetries, mongo.IndexModel{
 			Keys: bson.D{{Key: "next_retry", Value: 1}},
 		}, "idx_retry_next"},
+		{BucketWebhookDedup, mongo.IndexModel{
+			Keys:    bson.D{{Key: "_id", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		}, "idx_wh_dedup_id"},
 		{BucketIssuePRLinks, mongo.IndexModel{
 			Keys: bson.D{{Key: "pr_id", Value: 1}},
 		}, "idx_ipl_pr_id"},

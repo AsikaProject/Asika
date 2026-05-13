@@ -445,16 +445,14 @@ func (c *GitLabClient) GetApprovals(ctx context.Context, owner, repo string, num
 // GitLab uses X-Hub-Signature-256 header for system/service integration hooks,
 // and X-GitLab-Token for basic integration hooks.
 func (c *GitLabClient) VerifyWebhookSignature(body []byte, signature string) bool {
-	if c.webhookSecret == "" {
+	if c.webhookSecret == "" || signature == "" {
 		return false
 	}
 
-	// Try token-based verification first (X-GitLab-Token)
-	if signature == c.webhookSecret {
+	if hmac.Equal([]byte(signature), []byte(c.webhookSecret)) {
 		return true
 	}
 
-	// Try HMAC-SHA256 verification (X-Hub-Signature-256)
 	if strings.HasPrefix(signature, "sha256=") {
 		signature = strings.TrimPrefix(signature, "sha256=")
 	}

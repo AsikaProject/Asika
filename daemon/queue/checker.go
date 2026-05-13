@@ -265,9 +265,10 @@ func getPRFromDB(repoGroup, prID string) (*models.PRRecord, error) {
 			return &pr, nil
 		}
 	}
-	// Last resort: scan all PRs (for test compatibility)
+	// Last resort: scan PRs by repoGroup prefix (bounded scan, not full table)
 	var found *models.PRRecord
-	_ = db.ForEach(db.BucketPRs, func(k, v []byte) error {
+	prefix := repoGroup + "#"
+	_ = db.BucketForEachPrefix(db.BucketPRs, prefix, func(k, v []byte) error {
 		var pr models.PRRecord
 		if json.Unmarshal(v, &pr) != nil {
 			return nil

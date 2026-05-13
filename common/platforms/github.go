@@ -349,19 +349,17 @@ func (c *GitHubClient) GetApprovals(ctx context.Context, owner, repo string, num
 	return approvers, nil
 }
 
-// VerifyWebhookSignature verifies the webhook signature using HMAC-SHA256
+// VerifyWebhookSignature verifies the webhook signature using HMAC-SHA256.
+// The signature may arrive as "sha256=<hex>" (X-Hub-Signature-256) or
+// "sha1=<hex>" (X-Hub-Signature). Only SHA256 signatures are accepted.
 func (c *GitHubClient) VerifyWebhookSignature(body []byte, signature string) bool {
-	if c.webhookSecret == "" {
+	if c.webhookSecret == "" || signature == "" {
 		return false
 	}
 
 	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
 	mac.Write(body)
-	expectedMAC := hex.EncodeToString(mac.Sum(nil))
-
-	if strings.HasPrefix(signature, "sha256=") {
-		signature = strings.TrimPrefix(signature, "sha256=")
-	}
+	expectedMAC := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 
 	return hmac.Equal([]byte(signature), []byte(expectedMAC))
 }

@@ -3,6 +3,7 @@ package webhook
 import (
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,11 +16,48 @@ import (
 	"asika/common/platforms"
 )
 
-var webhookClients map[platforms.PlatformType]platforms.PlatformClient
+var (
+	webhookClients map[platforms.PlatformType]platforms.PlatformClient
+	dedupMu        sync.Mutex
+)
 
 // SetClients sets the platform clients for the webhook package.
 func SetClients(c map[platforms.PlatformType]platforms.PlatformClient) {
 	webhookClients = c
+}
+
+func extractDeliveryID(platform string, c *gin.Context) string {
+	switch platform {
+	case "github":
+		return c.GetHeader("X-GitHub-Delivery")
+	case "gitlab":
+		return c.GetHeader("X-Gitlab-Event-ID")
+	case "gitea", "forgejo", "codeberg":
+		return c.GetHeader("X-Gitea-Delivery")
+	case "bitbucket":
+		return c.GetHeader("X-Request-UUID")
+	case "gerrit":
+		return c.GetHeader("X-Gerrit-Event-ID")
+	}
+	return ""
+}
+
+func isDuplicateWebhook(deliveryID string) bool {
+	if deliveryID == "" {
+		return false
+	}
+	data, err := db.GetWebhookDedup(deliveryID)
+	if err != nil || data == nil {
+		return false
+	}
+	return true
+}
+
+func markWebhookProcessed(deliveryID string) {
+	if deliveryID == "" {
+		return
+	}
+	db.PutWebhookDedup(deliveryID, []byte(time.Now().Format(time.RFC3339)))
 }
 
 func WebhookHandler(c *gin.Context) {
@@ -54,8 +92,10 @@ func WebhookHandler(c *gin.Context) {
 		return
 	}
 
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 	body, err := c.GetRawData()
 	if err != nil {
+		slog.Warn("failed to read webhook body", "error", err, "platform", platform)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
 	}
@@ -65,15 +105,27 @@ func WebhookHandler(c *gin.Context) {
 		return
 	}
 
+	deliveryID := extractDeliveryID(platform, c)
+
+	dedupMu.Lock()
+	if isDuplicateWebhook(deliveryID) {
+		dedupMu.Unlock()
+		slog.Info("duplicate webhook, skipping", "delivery_id", deliveryID, "platform", platform, "repo_group", repoGroup)
+		c.JSON(http.StatusOK, gin.H{"message": "webhook already processed", "duplicate": true})
+		return
+	}
+	dedupMu.Unlock()
+
 	webhookID := uuid.New().String()
 	retry := &models.WebhookRetry{
-		ID:         webhookID,
-		RepoGroup:  repoGroup,
-		Platform:   platform,
-		Body:       body,
-		FailCount:  0,
-		LastFailed: time.Time{},
-		NextRetry:  time.Time{},
+		ID:          webhookID,
+		DeliveryID:  deliveryID,
+		RepoGroup:   repoGroup,
+		Platform:    platform,
+		Body:        body,
+		FailCount:   0,
+		LastFailed:  time.Time{},
+		NextRetry:   time.Time{},
 	}
 	if err := db.PutWebhookRetry(retry); err != nil {
 		slog.Warn("failed to store webhook for retry", "error", err)
@@ -93,6 +145,7 @@ func WebhookHandler(c *gin.Context) {
 
 	db.DeleteWebhookRetry(webhookID)
 	db.PutWebhookHealth(repoGroup, platform, time.Now())
+	markWebhookProcessed(deliveryID)
 	c.JSON(http.StatusOK, gin.H{"message": "webhook received", "event": eventType})
 }
 
@@ -119,7 +172,7 @@ func verifyWebhookSignature(platform string, client platforms.PlatformClient, bo
 	case "github":
 		sig := c.GetHeader("X-Hub-Signature-256")
 		if sig == "" {
-			sig = c.GetHeader("X-Hub-Signature")
+			return false
 		}
 		return client.VerifyWebhookSignature(body, sig)
 	case "gitlab":

@@ -75,7 +75,7 @@ graph TB
         end
 
         subgraph DB["Storage (bbolt / MongoDB)"]
-            BDB[(21 buckets)]
+            BDB[(33 buckets)]
         end
     end
 
@@ -184,7 +184,8 @@ Temporary tokens: Users can generate short-lived JWT tokens (1m–24h) with a `t
 - **Poller** — Fetches PRs from platforms at configured intervals (polling mode)
 - **Event Consumer** — Dispatches events from the event bus to the worker pool
 - **Stale Checker** — Periodically checks for and handles stale PRs
-- **Webhook Retry Worker** — Retries failed webhook deliveries with exponential backoff
+- **Webhook Retry Worker** — Retries failed webhook deliveries with exponential backoff. Deduplicates webhooks using delivery ID (`webhook_dedup` bucket) to prevent duplicate processing.
+- **Webhook Handler** — Enforces 1MB max request body size via `http.MaxBytesReader`. Extracts platform-specific delivery ID headers (`X-GitHub-Delivery`, `X-Gitlab-Event-ID`, `X-Gitea-Delivery`, `X-Request-UUID`, `X-Gerrit-Event-ID`) for idempotency dedup check against `webhook_dedup` bucket.
 - **Webhook Health Checker** — Every 2 minutes, checks `webhook_health` bucket per repo group/platform. If no webhook received within threshold, enables forced polling for that repo group (auto-fallback).
 - **Serial Validation Worker** — Processes `serial_queue` bucket items through validation state machine: rebase onto latest main → re-validate CI → mark merge-ready. Prevents post-merge CI failures.
 - **Escalation Worker** — Hourly scans open PRs, calculates priority from labels + file paths, sends tiered notifications: reviewer → team → tech_lead based on priority and time open.
@@ -305,7 +306,7 @@ The project supports two database backends via a pluggable `Storage` interface (
 
 The active backend is selected at startup via `models.DatabaseConfig.Type` (`"bbolt"` or `"mongo"`). Cross-engine migration is available via `MigrateBboltToMongo()` / `MigrateMongoToBbolt()`.
 
-Buckets (32 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
+Buckets (33 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
 
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
@@ -322,6 +323,7 @@ Buckets (32 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `config` | `{key}` | Config value (JSON); also stores `__migration_version__`, `__config_version__`, label rules |
 | `config_history` | `{zeroPadded6DigitVersion}` | ConfigSnapshot (JSON); max 20 snapshots, rollback-capable |
 | `webhook_retries` | `{retryID}` | WebhookRetry (JSON) |
+| `webhook_dedup` | `{deliveryID}` | Processed timestamp (RFC3339); prevents duplicate webhook processing |
 | `repos` | — | Repository records (used only during cross-engine migration) |
 | `spam_authors` | `{author}:{platform}` | SpamAuthor (JSON); tracks spam PR authors with count and timestamps |
 | `webhook_health` | `{repoGroup}:{platform}` | Last successful webhook timestamp (RFC3339) |
@@ -343,7 +345,7 @@ Performance optimizations:
 - Two secondary index buckets: by PR UUID and by repo_group+PR number
 - Prefix-based queue iteration (scan only relevant repo group)
 - Single-writer actor (`consumer/writer.go`) serializes all bbolt writes through a buffered channel (buffer=256), eliminating write contention
-- MongoDB native indexes: unique on `prs.id`, unique compound on `(repo_group, pr_number)`, unique on `users.username`, unique on `api_keys.id`, non-unique on `webhook_retries.next_retry`
+- MongoDB native indexes: unique on `prs.id`, unique compound on `(repo_group, pr_number)`, unique on `users.username`, unique on `api_keys.id`, non-unique on `webhook_retries.next_retry`, unique on `webhook_dedup._id`
 
 Schema migrations (bbolt only):
 - Tracked via `__migration_version__` key in `BucketConfig`

@@ -286,6 +286,19 @@ func BatchClosePR(c *gin.Context) {
 			slog.Warn("batch close failed", "pr_id", prID, "error", err)
 		} else {
 			results[prID] = "success"
+
+			data, dbErr := db.GetPRByIndex("", repoGroup, prNumber)
+			if dbErr == nil && data != nil {
+				var pr models.PRRecord
+				if json.Unmarshal(data, &pr) == nil {
+					pr.State = "closed"
+					pr.UpdatedAt = time.Now()
+					prData, _ := json.Marshal(pr)
+					dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
+					db.PutPRWithIndex(dbKey, prData, pr.ID, repoGroup, prNumber)
+				}
+			}
+
 			db.AppendAuditLog("info", "PR closed (batch)", map[string]interface{}{
 				"pr_number":  prNumber,
 				"repo_group": repoGroup,

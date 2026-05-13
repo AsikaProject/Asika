@@ -37,10 +37,23 @@ func newWriterActor(bufferSize int) *writerActor {
 }
 
 func (w *writerActor) run() {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("writer actor panic recovered", "error", r)
+		}
+	}()
 	for {
 		select {
 		case req := <-w.requests:
-			req.result <- db.PutPRWithIndex(req.key, req.value, req.prID, req.repoGroup, req.prNumber)
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("write request panic recovered", "error", r)
+						req.result <- fmt.Errorf("write panic: %v", r)
+					}
+				}()
+				req.result <- db.PutPRWithIndex(req.key, req.value, req.prID, req.repoGroup, req.prNumber)
+			}()
 		case <-w.stop:
 			slog.Info("writer actor stopped")
 			return

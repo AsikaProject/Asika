@@ -62,6 +62,14 @@ func (s *bboltStorage) GetWebhookHealth(repoGroup, platform string) (time.Time, 
 	return time.Parse(time.RFC3339, string(data))
 }
 
+func (s *bboltStorage) PutWebhookDedup(deliveryID string, ts []byte) error {
+	return s.Put(BucketWebhookDedup, deliveryID, ts)
+}
+
+func (s *bboltStorage) GetWebhookDedup(deliveryID string) ([]byte, error) {
+	return s.Get(BucketWebhookDedup, deliveryID)
+}
+
 func (s *bboltStorage) ListWebhookHealth() (map[string]time.Time, error) {
 	result := make(map[string]time.Time)
 	err := s.ForEach(BucketWebhookHealth, func(key, value []byte) error {

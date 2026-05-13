@@ -123,7 +123,10 @@ func (p *Poller) PollOnce() {
 
 // Stop stops the poller
 func (p *Poller) Stop() {
-	close(p.stop)
+	if p.stop != nil {
+		close(p.stop)
+		p.stop = nil
+	}
 }
 
 func (p *Poller) pollOnce() {

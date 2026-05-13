@@ -388,15 +388,12 @@ func (c *BitbucketClient) GetApprovals(ctx context.Context, owner, repo string, 
 }
 
 func (c *BitbucketClient) VerifyWebhookSignature(body []byte, signature string) bool {
-	if c.webhookSecret == "" {
+	if c.webhookSecret == "" || signature == "" {
 		return false
 	}
 	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
 	mac.Write(body)
-	expectedMAC := hex.EncodeToString(mac.Sum(nil))
-	if strings.HasPrefix(signature, "sha256=") {
-		signature = strings.TrimPrefix(signature, "sha256=")
-	}
+	expectedMAC := "sha256=" + hex.EncodeToString(mac.Sum(nil))
 	return hmac.Equal([]byte(signature), []byte(expectedMAC))
 }
 

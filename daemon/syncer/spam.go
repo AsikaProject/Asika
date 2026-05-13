@@ -198,6 +198,7 @@ func (d *SpamDetector) sendSpamNotification(pr *models.PRRecord) {
 func (d *SpamDetector) Stop() {
 	if d.stop != nil {
 		close(d.stop)
+		d.stop = nil
 	}
 }
 

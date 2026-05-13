@@ -407,12 +407,8 @@ func (c *GiteaClient) GetApprovals(ctx context.Context, owner, repo string, numb
 
 // VerifyWebhookSignature verifies the webhook signature using HMAC-SHA256
 func (c *GiteaClient) VerifyWebhookSignature(body []byte, signature string) bool {
-	if c.webhookSecret == "" {
+	if c.webhookSecret == "" || signature == "" {
 		return false
-	}
-
-	if strings.HasPrefix(signature, "sha256=") {
-		signature = strings.TrimPrefix(signature, "sha256=")
 	}
 
 	mac := hmac.New(sha256.New, []byte(c.webhookSecret))
