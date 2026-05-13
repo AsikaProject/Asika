@@ -69,7 +69,11 @@ func (m *Manager) Recover() {
 		}
 		entry.item.Status = "waiting"
 		entry.item.FailureReason = ""
-		data, _ := json.Marshal(entry.item)
+		data, err := json.Marshal(entry.item)
+		if err != nil {
+			slog.Error("queue recovery: failed to marshal item", "pr_id", entry.item.PRID, "error", err)
+			continue
+		}
 		if putErr := db.Put(db.BucketQueueItems, entry.key, data); putErr != nil {
 			slog.Error("queue recovery: failed to reset item", "pr_id", entry.item.PRID, "error", putErr)
 		} else {
@@ -197,7 +201,11 @@ func (m *Manager) CheckQueue() {
 				item.Status = "failed"
 				item.FailureReason = err.Error()
 			}
-			updated, _ := json.Marshal(item)
+			updated, err := json.Marshal(item)
+			if err != nil {
+				slog.Error("failed to marshal queue item", "error", err, "pr_id", item.PRID)
+				continue
+			}
 			if putErr := db.Put(db.BucketQueueItems, keys[i], updated); putErr != nil {
 				slog.Error("failed to update queue item", "error", putErr, "pr_id", item.PRID)
 			}
@@ -206,7 +214,11 @@ func (m *Manager) CheckQueue() {
 			if err := m.merge(&item); err != nil {
 				item.Status = "failed"
 				item.FailureReason = err.Error()
-				updated, _ := json.Marshal(item)
+				updated, err := json.Marshal(item)
+				if err != nil {
+					slog.Error("failed to marshal queue item", "error", err, "pr_id", item.PRID)
+					continue
+				}
 				if putErr := db.Put(db.BucketQueueItems, keys[i], updated); putErr != nil {
 					slog.Error("failed to update queue item", "error", putErr, "pr_id", item.PRID)
 				}
@@ -219,7 +231,11 @@ func (m *Manager) CheckQueue() {
 			}
 		} else {
 			item.Status = "waiting"
-			updated, _ := json.Marshal(item)
+			updated, err := json.Marshal(item)
+			if err != nil {
+				slog.Error("failed to marshal queue item", "error", err, "pr_id", item.PRID)
+				continue
+			}
 			if putErr := db.Put(db.BucketQueueItems, keys[i], updated); putErr != nil {
 				slog.Error("failed to update queue item", "error", putErr, "pr_id", item.PRID)
 			}
@@ -287,13 +303,18 @@ func (m *Manager) merge(item *models.QueueItem) error {
 			pr.UpdatedAt = time.Now()
 		}
 		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
-		data, _ := json.Marshal(pr)
-		db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
+		data, marshalErr := json.Marshal(pr)
+		if marshalErr != nil {
+			slog.Error("failed to marshal PR after merge", "error", marshalErr, "pr_id", pr.ID)
+		} else {
+			db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
+		}
 	}
 	return err
 }
 
-// FindPRByID finds a PR by its ID in bbolt (exported for use by serial worker).
+// FindPRByID finds a PR by its ID using the primary index first,
+// then falling back to a full scan only when the index bucket does not exist.
 func FindPRByID(prID string) (*models.PRRecord, error) {
 	data, err := db.GetPRByIndex(prID, "", 0)
 	if err == nil && data != nil {
@@ -301,6 +322,10 @@ func FindPRByID(prID string) (*models.PRRecord, error) {
 		if err := json.Unmarshal(data, &pr); err == nil {
 			return &pr, nil
 		}
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("PR lookup failed for %s: %w", prID, err)
 	}
 
 	var found *models.PRRecord

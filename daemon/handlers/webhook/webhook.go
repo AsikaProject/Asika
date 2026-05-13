@@ -119,14 +119,14 @@ func WebhookHandler(c *gin.Context) {
 
 	webhookID := uuid.New().String()
 	retry := &models.WebhookRetry{
-		ID:          webhookID,
-		DeliveryID:  deliveryID,
-		RepoGroup:   repoGroup,
-		Platform:    platform,
-		Body:        body,
-		FailCount:   0,
-		LastFailed:  time.Time{},
-		NextRetry:   time.Time{},
+		ID:         webhookID,
+		DeliveryID: deliveryID,
+		RepoGroup:  repoGroup,
+		Platform:   platform,
+		Body:       body,
+		FailCount:  0,
+		LastFailed: time.Time{},
+		NextRetry:  time.Time{},
 	}
 	if err := db.PutWebhookRetry(retry); err != nil {
 		slog.Warn("failed to store webhook for retry", "error", err)
@@ -141,6 +141,13 @@ func WebhookHandler(c *gin.Context) {
 		retry.NextRetry = time.Now().Add(time.Duration(1<<uint(retry.FailCount)) * time.Second)
 		db.PutWebhookRetry(retry)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to process webhook"})
+		return
+	}
+
+	if eventType == "" {
+		slog.Info("webhook processed with no actionable event, cleaning up retry record", "webhook_id", webhookID, "platform", platform)
+		db.DeleteWebhookRetry(webhookID)
+		c.JSON(http.StatusOK, gin.H{"message": "webhook received", "event": ""})
 		return
 	}
 

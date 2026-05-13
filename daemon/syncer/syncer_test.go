@@ -103,17 +103,22 @@ func TestGetRepoURL(t *testing.T) {
 		platform string
 		repo     string
 		want     string
+		wantErr  bool
 	}{
-		{"github", "org/repo", "https://github.com/org/repo.git"},
-		{"gitlab", "group/repo", "https://gitlab.com/group/repo.git"},
-		{"gitea", "user/repo", "https://gitea.example.com/user/repo.git"},
-		{"unknown", "org/repo", ""},
-		{"github", "invalid", ""},
+		{"github", "org/repo", "https://github.com/org/repo.git", false},
+		{"gitlab", "group/repo", "https://gitlab.com/group/repo.git", false},
+		{"gitea", "user/repo", "https://gitea.example.com/user/repo.git", false},
+		{"unknown", "org/repo", "", true},
+		{"github", "invalid", "", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.platform+"/"+tt.repo, func(t *testing.T) {
-			got := s.getRepoURL(tt.platform, tt.repo)
+			got, err := s.getRepoURL(tt.platform, tt.repo)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("getRepoURL(%q, %q) error = %v, wantErr %v", tt.platform, tt.repo, err, tt.wantErr)
+				return
+			}
 			if got != tt.want {
 				t.Errorf("getRepoURL(%q, %q) = %q, want %q", tt.platform, tt.repo, got, tt.want)
 			}
@@ -139,7 +144,11 @@ func TestGetRepoURL_CustomBaseURLs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.platform, func(t *testing.T) {
-			got := s.getRepoURL(tt.platform, tt.repo)
+			got, err := s.getRepoURL(tt.platform, tt.repo)
+			if err != nil {
+				t.Errorf("getRepoURL(%q, %q) unexpected error: %v", tt.platform, tt.repo, err)
+				return
+			}
 			if got != tt.want {
 				t.Errorf("getRepoURL(%q, %q) = %q, want %q", tt.platform, tt.repo, got, tt.want)
 			}
@@ -354,15 +363,15 @@ func TestGetTargetPlatforms_AllPlatforms(t *testing.T) {
 	defer cleanup()
 
 	group := &models.RepoGroup{
-		Name:    "all-platforms",
-		Mode:    "multi",
-		GitHub:  "org/repo-gh",
-		GitLab:  "group/repo-gl",
-		Gitea:   "user/repo-gt",
-		Forgejo: "org/repo-fj",
-		Codeberg: "org/repo-cb",
+		Name:      "all-platforms",
+		Mode:      "multi",
+		GitHub:    "org/repo-gh",
+		GitLab:    "group/repo-gl",
+		Gitea:     "user/repo-gt",
+		Forgejo:   "org/repo-fj",
+		Codeberg:  "org/repo-cb",
 		Bitbucket: "org/repo-bb",
-		Gerrit:  "project",
+		Gerrit:    "project",
 	}
 
 	targets := s.getTargetPlatforms(group, "github")
@@ -625,5 +634,3 @@ func (s *syncFailStorage) Put(bucket, key string, value []byte) error {
 	}
 	return s.Storage.Put(bucket, key, value)
 }
-
-

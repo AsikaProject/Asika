@@ -114,34 +114,34 @@ func (b *Bot) handleShowPR(s *discordgo.Session, m *discordgo.MessageCreate, arg
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d not found in repo group **%s**.", prNumber, repoGroup))
 		return
 	}
-    var desc string
-    if found.Body != "" {
-        lines := strings.Split(found.Body, "\n")
-        if len(lines) > 5 {
-            desc = strings.Join(lines[:5], "\n") + "\n..."
-        } else {
-            desc = found.Body
-        }
-    }
-    var events string
-    if len(found.Events) > 0 {
-        var sb strings.Builder
-        for _, ev := range found.Events {
-            sb.WriteString(fmt.Sprintf("  • %s by %s at %s\n", ev.Action, ev.Actor, ev.Timestamp.Format("2006-01-02 15:04")))
-        }
-        events = sb.String()
-    }
-    msg := fmt.Sprintf(
-        "**PR #%d** — %s\n\n  Author: %s\n  State: %s\n  Platform: %s\n  Repo Group: %s\n  Labels: %s\n  Created: %s\n",
-        found.PRNumber, found.Title, found.Author, found.State, found.Platform,
-        found.RepoGroup, strings.Join(found.Labels, ", "), found.CreatedAt.Format(time.RFC3339),
-    )
-    if desc != "" {
-        msg += "\n**Description:**\n" + desc + "\n"
-    }
-    if events != "" {
-        msg += "\n**Events:**\n" + events
-    }
+	var desc string
+	if found.Body != "" {
+		lines := strings.Split(found.Body, "\n")
+		if len(lines) > 5 {
+			desc = strings.Join(lines[:5], "\n") + "\n..."
+		} else {
+			desc = found.Body
+		}
+	}
+	var events string
+	if len(found.Events) > 0 {
+		var sb strings.Builder
+		for _, ev := range found.Events {
+			sb.WriteString(fmt.Sprintf("  • %s by %s at %s\n", ev.Action, ev.Actor, ev.Timestamp.Format("2006-01-02 15:04")))
+		}
+		events = sb.String()
+	}
+	msg := fmt.Sprintf(
+		"**PR #%d** — %s\n\n  Author: %s\n  State: %s\n  Platform: %s\n  Repo Group: %s\n  Labels: %s\n  Created: %s\n",
+		found.PRNumber, found.Title, found.Author, found.State, found.Platform,
+		found.RepoGroup, strings.Join(found.Labels, ", "), found.CreatedAt.Format(time.RFC3339),
+	)
+	if desc != "" {
+		msg += "\n**Description:**\n" + desc + "\n"
+	}
+	if events != "" {
+		msg += "\n**Events:**\n" + events
+	}
 	switch found.State {
 	case "open":
 		msg += "\nAvailable actions: `!approve` / `!close [reason]` / `!spam`"

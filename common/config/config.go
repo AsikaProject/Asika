@@ -235,6 +235,12 @@ func validate(cfg *models.Config) error {
 		cfg.CloseReasons.Reasons = []string{"no longer needed", "duplicate", "invalid", "won't fix"}
 	}
 
+	if cfg.Tokens.Gerrit.URL != "" {
+		if !strings.HasPrefix(cfg.Tokens.Gerrit.URL, "http://") && !strings.HasPrefix(cfg.Tokens.Gerrit.URL, "https://") {
+			return fmt.Errorf("gerrit URL must start with http:// or https://, got %q", cfg.Tokens.Gerrit.URL)
+		}
+	}
+
 	if cfg.Spam.Enabled {
 		if cfg.Spam.Threshold <= 0 {
 			return fmt.Errorf("spam.threshold must be greater than 0 when spam is enabled")
@@ -320,7 +326,7 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 				ReviewRules:    rg.ReviewRules,
 			}
 		}
- 		if rg.Name == "default" {
+		if rg.Name == "default" {
 			defaultGroup = &models.RepoGroup{
 				Name:           rg.Name,
 				Mode:           mode,

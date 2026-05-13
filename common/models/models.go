@@ -169,15 +169,15 @@ type MergeQueueConfig struct {
 }
 
 type WebhookRetry struct {
-	ID          string    `json:"id"`
-	DeliveryID  string    `json:"delivery_id"`
-	RepoGroup   string    `json:"repo_group"`
-	Platform    string    `json:"platform"`
-	Body        []byte    `json:"body"`
-	FailCount   int       `json:"fail_count"`
-	LastError   string    `json:"last_error"`
-	LastFailed  time.Time `json:"last_failed"`
-	NextRetry   time.Time `json:"next_retry"`
+	ID         string    `json:"id"`
+	DeliveryID string    `json:"delivery_id"`
+	RepoGroup  string    `json:"repo_group"`
+	Platform   string    `json:"platform"`
+	Body       []byte    `json:"body"`
+	FailCount  int       `json:"fail_count"`
+	LastError  string    `json:"last_error"`
+	LastFailed time.Time `json:"last_failed"`
+	NextRetry  time.Time `json:"next_retry"`
 }
 
 type SpamAuthor struct {

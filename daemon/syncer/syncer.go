@@ -135,7 +135,10 @@ func (s *Syncer) openOrClone(repoDir string, pr *models.PRRecord, group *models.
 		return nil, fmt.Errorf("no repo configured for source platform %s", pr.Platform)
 	}
 
-	sourceURL := s.getRepoURL(pr.Platform, sourceRepo)
+	sourceURL, err := s.getRepoURL(pr.Platform, sourceRepo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get source repo URL: %w", err)
+	}
 	sourceToken := config.GetToken(s.cfg, pr.Platform)
 
 	if s.cfg.Git.RepoClonePath != "" {
@@ -212,7 +215,13 @@ func (s *Syncer) syncAllBranches(gitRepo *git.Repository, pr *models.PRRecord, g
 		branchFailed := false
 		for _, target := range targetPlatforms {
 			remoteName := "target-" + target.name
-			if err := gitutil.AddRemote(gitRepo, remoteName, s.getRepoURL(target.name, target.repo)); err != nil {
+			targetURL, urlErr := s.getRepoURL(target.name, target.repo)
+			if urlErr != nil {
+				slog.Error("failed to get target repo URL", "target", target.name, "error", urlErr)
+				branchFailed = true
+				continue
+			}
+			if err := gitutil.AddRemote(gitRepo, remoteName, targetURL); err != nil {
 				slog.Warn("add remote failed", "remote", remoteName, "error", err)
 			}
 			targetToken := config.GetToken(s.cfg, target.name)
@@ -265,7 +274,13 @@ func (s *Syncer) syncAllTags(gitRepo *git.Repository, pr *models.PRRecord, group
 		tagFailed := false
 		for _, target := range targetPlatforms {
 			remoteName := "target-" + target.name
-			if err := gitutil.AddRemote(gitRepo, remoteName, s.getRepoURL(target.name, target.repo)); err != nil {
+			targetURL, urlErr := s.getRepoURL(target.name, target.repo)
+			if urlErr != nil {
+				slog.Error("failed to get target repo URL", "target", target.name, "error", urlErr)
+				tagFailed = true
+				continue
+			}
+			if err := gitutil.AddRemote(gitRepo, remoteName, targetURL); err != nil {
 				slog.Warn("add remote failed", "remote", remoteName, "error", err)
 			}
 			targetToken := config.GetToken(s.cfg, target.name)
@@ -301,7 +316,12 @@ func (s *Syncer) pushBranchToTargets(gitRepo *git.Repository, pr *models.PRRecor
 	for _, target := range targetPlatforms {
 		slog.Info("syncing to platform", "target", target.name, "repo", target.repo, "branch", branch)
 
-		targetURL := s.getRepoURL(target.name, target.repo)
+		targetURL, err := s.getRepoURL(target.name, target.repo)
+		if err != nil {
+			slog.Error("failed to get target repo URL", "target", target.name, "error", err)
+			failedTargets = append(failedTargets, target.name)
+			continue
+		}
 		targetToken := config.GetToken(s.cfg, target.name)
 		remoteName := "target-" + target.name
 
@@ -521,49 +541,48 @@ func (s *Syncer) recordSync(pr *models.PRRecord, branch, targetPlatform, status,
 }
 
 // getRepoURL returns the clone URL (with .git suffix) for a platform repo.
-func (s *Syncer) getRepoURL(platform, repo string) string {
-	parts := strings.SplitN(repo, "/", 2)
+func (s *Syncer) getRepoURL(platform, repo string) (string, error) {
+	parts := strings.Split(repo, "/")
 	if len(parts) != 2 {
-		return ""
+		return "", fmt.Errorf("invalid repo format %q: expected owner/repo", repo)
 	}
-
 	switch platforms.PlatformType(platform) {
 	case platforms.PlatformGitHub:
-		return fmt.Sprintf("https://github.com/%s/%s.git", parts[0], parts[1])
+		return fmt.Sprintf("https://github.com/%s/%s.git", parts[0], parts[1]), nil
 	case platforms.PlatformGitLab:
 		base := s.cfg.GitLabBaseURL
 		if base == "" {
 			base = "https://gitlab.com"
 		}
 		base = strings.TrimSuffix(base, "/")
-		return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
+		return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1]), nil
 	case platforms.PlatformGitea:
 		base := s.cfg.GiteaBaseURL
 		if base == "" {
 			base = "https://gitea.example.com"
 		}
 		base = strings.TrimSuffix(base, "/")
-		return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
+		return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1]), nil
 	case platforms.PlatformForgejo:
 		base := s.cfg.ForgejoBaseURL
 		if base == "" {
 			base = "https://forgejo.example.com"
 		}
 		base = strings.TrimSuffix(base, "/")
-		return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1])
+		return fmt.Sprintf("%s/%s/%s.git", base, parts[0], parts[1]), nil
 	case platforms.PlatformCodeberg:
-		return fmt.Sprintf("https://codeberg.org/%s/%s.git", parts[0], parts[1])
+		return fmt.Sprintf("https://codeberg.org/%s/%s.git", parts[0], parts[1]), nil
 	case platforms.PlatformBitbucket:
-		return fmt.Sprintf("https://bitbucket.org/%s/%s.git", parts[0], parts[1])
+		return fmt.Sprintf("https://bitbucket.org/%s/%s.git", parts[0], parts[1]), nil
 	case platforms.PlatformGerrit:
 		base := s.cfg.Tokens.Gerrit.URL
 		if base == "" {
-			return ""
+			return "", fmt.Errorf("gerrit URL is not configured")
 		}
 		base = strings.TrimSuffix(base, "/")
-		return fmt.Sprintf("%s/%s", base, repo)
+		return fmt.Sprintf("%s/%s", base, repo), nil
 	}
-	return ""
+	return "", fmt.Errorf("unsupported platform: %s", platform)
 }
 
 func (s *Syncer) getOrCreateLock(repoGroup string) *sync.Mutex {

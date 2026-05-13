@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 
 	"asika/common/config"
-	"asika/common/db"
 	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
@@ -202,21 +201,44 @@ func (c *Consumer) handlePROpened(event events.Event) {
 
 	// These can run in parallel via separate goroutines
 	if c.labeler != nil {
-		go c.labeler.HandlePROpened(pr, event.RepoGroup)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("labeler panic recovered", "error", r, "pr_number", pr.PRNumber, "repo_group", event.RepoGroup)
+				}
+			}()
+			c.labeler.HandlePROpened(pr, event.RepoGroup)
+		}()
 	}
 	if c.reviewer != nil {
-		go c.reviewer.HandlePROpened(pr, event.RepoGroup)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("reviewer panic recovered", "error", r, "pr_number", pr.PRNumber, "repo_group", event.RepoGroup)
+				}
+			}()
+			c.reviewer.HandlePROpened(pr, event.RepoGroup)
+		}()
 	}
 	if c.staleMgr != nil {
 		c.staleMgr.HandleActivity(pr, event.RepoGroup)
 	}
-	go syncPRLinks(pr)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("syncPRLinks panic recovered", "error", r, "pr_number", pr.PRNumber)
+			}
+		}()
+		syncPRLinks(c.writer, pr)
+	}()
 }
 
-func syncPRLinks(pr *models.PRRecord) {
+func syncPRLinks(w *writerActor, pr *models.PRRecord) {
 	links := parseIssueLinksFromPR(pr)
 	for _, link := range links {
-		db.PutIssuePRLink(&link)
+		if err := w.writeIssueLink(&link); err != nil {
+			slog.Error("failed to store issue-PRLink", "error", err, "pr_id", pr.ID)
+		}
 	}
 }
 
@@ -283,10 +305,24 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 	}
 
 	// Check cross-space dependencies
-	go handlers.NotifyCrossSpaceDeps(pr)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("NotifyCrossSpaceDeps panic recovered", "error", r, "pr_number", pr.PRNumber)
+			}
+		}()
+		handlers.NotifyCrossSpaceDeps(pr)
+	}()
 
 	// Update PR stack member state
-	go handlers.UpdateStackMemberStateOnMerge(pr)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("UpdateStackMemberStateOnMerge panic recovered", "error", r, "pr_number", pr.PRNumber)
+			}
+		}()
+		handlers.UpdateStackMemberStateOnMerge(pr)
+	}()
 }
 
 func (c *Consumer) handlePRApproved(event events.Event) {
@@ -332,7 +368,11 @@ func (c *Consumer) handleSpamDetected(event events.Event) {
 	}
 
 	if c.spamDetector != nil {
-		c.spamDetector.HandleSpam(pr, event.RepoGroup)
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			c.spamDetector.HandleSpamWithContext(ctx, pr, event.RepoGroup)
+		}()
 	}
 }
 

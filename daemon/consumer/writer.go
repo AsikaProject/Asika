@@ -1,10 +1,12 @@
 package consumer
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 
 	"asika/common/db"
+	"asika/common/models"
 )
 
 // writeRequest is a request to the writer goroutine
@@ -63,6 +65,26 @@ func (w *writerActor) run() {
 			slog.Info("writer actor stopped")
 			return
 		}
+	}
+}
+
+// writeIssueLink stores an issue-PR link through the writer actor.
+func (w *writerActor) writeIssueLink(link *models.IssuePRLink) error {
+	data, err := json.Marshal(link)
+	if err != nil {
+		return fmt.Errorf("marshal issue-pr link: %w", err)
+	}
+	key := fmt.Sprintf("%s:%s:%s", link.RepoGroup, link.IssueID, link.PRID)
+	req := writeRequest{
+		key:    key,
+		value:  data,
+		result: make(chan error, 1),
+	}
+	select {
+	case w.requests <- req:
+		return <-req.result
+	case <-w.stop:
+		return fmt.Errorf("writer actor stopped")
 	}
 }
 

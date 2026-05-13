@@ -216,18 +216,17 @@ func matchSinglePattern(pattern, file string) bool {
 		}
 	}
 
-	compiledPatternsMu.RLock()
+	compiledPatternsMu.Lock()
 	re, ok := compiledPatterns[pattern]
-	compiledPatternsMu.RUnlock()
 	if !ok {
 		var err error
 		re, err = regexp.Compile(pattern)
 		if err != nil {
+			compiledPatternsMu.Unlock()
 			return false
 		}
-		compiledPatternsMu.Lock()
 		compiledPatterns[pattern] = re
-		compiledPatternsMu.Unlock()
 	}
+	compiledPatternsMu.Unlock()
 	return re.MatchString(file)
 }

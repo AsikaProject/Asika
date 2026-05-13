@@ -218,8 +218,56 @@ func (s *bboltStorage) GetPRByIndex(prID, repoGroup string, prNumber int) ([]byt
 		}
 		return nil
 	})
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	if result != nil {
+		return result, nil
+	}
+
+	if prID == "" {
+		return nil, nil
+	}
+
+	var fallbackKey string
+	var fallbackVal []byte
+	fallbackErr := s.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(BucketPRs))
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var pr models.PRRecord
+			if err := json.Unmarshal(v, &pr); err != nil {
+				continue
+			}
+			if pr.ID == prID {
+				fallbackKey = string(k)
+				fallbackVal = make([]byte, len(v))
+				copy(fallbackVal, v)
+				result = fallbackVal
+				return errStopScan
+			}
+		}
+		return nil
+	})
+	if fallbackErr != nil && fallbackErr != errStopScan {
+		return nil, fallbackErr
+	}
+	if result != nil && fallbackKey != "" {
+		s.db.Update(func(tx *bbolt.Tx) error {
+			idxB := tx.Bucket([]byte(BucketPRIndexByID))
+			if idxB != nil {
+				idxB.Put([]byte(prID), []byte(fallbackKey))
+			}
+			return nil
+		})
+	}
+	return result, nil
 }
+
+var errStopScan = fmt.Errorf("stop scan")
 
 func (s *bboltStorage) AppendAuditLogEx(entry models.AuditLog) error {
 	if entry.Timestamp.IsZero() {

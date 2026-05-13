@@ -146,8 +146,8 @@ func TestCachedNotificationPrefs_DBFailure(t *testing.T) {
 	defer db.Close()
 
 	fail := &failStorage{
-		Storage:      realStorage,
-		failBuckets:  map[string]bool{"prefs": true},
+		Storage:     realStorage,
+		failBuckets: map[string]bool{"prefs": true},
 	}
 	db.InitWithStorage(fail)
 	t.Cleanup(func() { db.Close() })
@@ -209,8 +209,8 @@ func TestSendNotificationWithContext_DedupPutFailure(t *testing.T) {
 	defer db.Close()
 
 	fail := &failStorage{
-		Storage:      realStorage,
-		failBuckets:  map[string]bool{db.BucketNotificationDedup: true},
+		Storage:     realStorage,
+		failBuckets: map[string]bool{db.BucketNotificationDedup: true},
 	}
 	db.InitWithStorage(fail)
 	t.Cleanup(func() { db.Close() })
@@ -236,8 +236,8 @@ func TestIsNotifierEnabledForAnyUser_DowngradeOnDBFailure(t *testing.T) {
 	defer db.Close()
 
 	fail := &failStorage{
-		Storage:      realStorage,
-		failBuckets:  map[string]bool{"prefs": true},
+		Storage:     realStorage,
+		failBuckets: map[string]bool{"prefs": true},
 	}
 	db.InitWithStorage(fail)
 	t.Cleanup(func() { db.Close() })

@@ -59,7 +59,9 @@ func (d *SpamDetector) Scan() {
 	spamPRs := d.detectSpam(prs)
 
 	for _, pr := range spamPRs {
-		d.HandleSpam(pr, pr.RepoGroup)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		d.HandleSpamWithContext(ctx, pr, pr.RepoGroup)
+		cancel()
 		events.PublishPR(events.EventSpamDetected, pr.RepoGroup, pr.Platform, pr, nil)
 	}
 
@@ -120,17 +122,25 @@ func (d *SpamDetector) detectSpam(prs []*models.PRRecord) []*models.PRRecord {
 	return result
 }
 
-// HandleSpam marks a PR as spam, closes it via platform API, and sends notifications
+// HandleSpam marks a PR as spam, closes it via platform API, and sends notifications.
+// Uses context.Background() for backward compatibility.
 func (d *SpamDetector) HandleSpam(pr *models.PRRecord, repoGroup string) {
-	ctx := context.Background()
+	d.HandleSpamWithContext(context.Background(), pr, repoGroup)
+}
 
+// HandleSpamWithContext marks a PR as spam with a context for timeout/cancellation control.
+func (d *SpamDetector) HandleSpamWithContext(ctx context.Context, pr *models.PRRecord, repoGroup string) {
 	// Mark as spam in bbolt
 	pr.SpamFlag = true
 	pr.State = "spam"
 	pr.UpdatedAt = time.Now()
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
-	data, _ := json.Marshal(pr)
-	db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
+	data, marshalErr := json.Marshal(pr)
+	if marshalErr != nil {
+		slog.Error("failed to marshal spam PR", "error", marshalErr, "pr_id", pr.ID)
+	} else {
+		db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
+	}
 
 	// Close PR via platform API
 	if d.clients != nil {
@@ -155,13 +165,21 @@ func (d *SpamDetector) HandleSpam(pr *models.PRRecord, repoGroup string) {
 		}
 	}
 
-	// Send notifications
-	d.sendSpamNotification(pr)
+	// Send notifications with timeout
+	notifCtx, notifCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer notifCancel()
+	d.sendSpamNotificationWithContext(notifCtx, pr)
 	slog.Warn("spam handled", "pr_id", pr.ID, "author", pr.Author)
 }
 
-// sendSpamNotification sends notifications via all configured channels
+// sendSpamNotification sends notifications via all configured channels.
+// Uses context.Background() for backward compatibility.
 func (d *SpamDetector) sendSpamNotification(pr *models.PRRecord) {
+	d.sendSpamNotificationWithContext(context.Background(), pr)
+}
+
+// sendSpamNotificationWithContext sends notifications with a context for timeout/cancellation control.
+func (d *SpamDetector) sendSpamNotificationWithContext(ctx context.Context, pr *models.PRRecord) {
 	for _, nc := range d.cfg.Notify {
 		var n notifier.Notifier
 		switch nc.Type {

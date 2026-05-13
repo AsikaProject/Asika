@@ -24,9 +24,9 @@ var defaultSchedule = ScheduleConfig{
 }
 
 type Scheduler struct {
-	cfg    ScheduleConfig
-	cron   *cron.Cron
-	stop   chan struct{}
+	cfg  ScheduleConfig
+	cron *cron.Cron
+	stop chan struct{}
 }
 
 func NewScheduler(cfg ScheduleConfig) *Scheduler {
@@ -378,5 +378,3 @@ func formatReportHTML(stats map[string]interface{}, teamStats *models.TeamStats,
 
 	return report
 }
-
-
