@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"asika/common/models"
@@ -229,6 +230,7 @@ func (s *bboltStorage) AppendAuditLogEx(entry models.AuditLog) error {
 	}
 	var randBytes [4]byte
 	if _, err := rand.Read(randBytes[:]); err != nil {
+		slog.Error("failed to generate random bytes for audit log key", "error", err)
 		return fmt.Errorf("failed to generate random bytes for audit log key: %w", err)
 	}
 	key := fmt.Sprintf("%d_%08x", entry.Timestamp.UnixNano(), binary.BigEndian.Uint32(randBytes[:]))
@@ -292,6 +294,7 @@ func (s *bboltStorage) AppendAuditLog(level, message string, ctx map[string]inte
 	}
 	var randBytes [4]byte
 	if _, err := rand.Read(randBytes[:]); err != nil {
+		slog.Error("failed to generate random bytes for audit log key", "error", err)
 		return fmt.Errorf("failed to generate random bytes for audit log key: %w", err)
 	}
 	key := fmt.Sprintf("%d_%08x", log.Timestamp.UnixNano(), binary.BigEndian.Uint32(randBytes[:]))
