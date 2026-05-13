@@ -120,68 +120,74 @@ See `asika.toml.example` for the full reference — it covers notifications, spa
 
 Use natural language commands in any channel the bot is invited to:
 
-```
-prs my-project        → List PRs
-pr my-project 42      → Show PR #42
-approve my-project 42 → Approve
-close my-project 42   → Close
-reopen my-project 42  → Reopen
-spam my-project 42    → Mark as spam
-queue my-project      → Check merge queue
-recheck my-project    → Trigger recheck
-config                → Show config summary
-help                  → All commands
-```
+ ```
+ prs my-project        → List PRs
+ pr my-project 42      → Show PR #42 (with description, events, rebase/cherry-pick buttons)
+ approve my-project 42 → Approve
+ close my-project 42   → Close
+ reopen my-project 42  → Reopen
+ spam my-project 42    → Mark as spam
+ rebase my-project 42  → Rebase PR onto base branch
+ cherrypick my-project 42 <branch> → Cherry-pick merged PR
+ queue my-project      → Check merge queue
+ recheck my-project    → Trigger recheck
+ config                → Show config summary
+ help                  → All commands
+ ```
 
 ### Telegram
 
 Start a chat with your bot:
 
 ```
-/prs my-project        → List PRs
-/pr my-project 42      → Show PR #42
-/approve my-project 42 → Approve
-/close my-project 42   → Close
-/reopen my-project 42  → Reopen
-/spam my-project 42    → Mark as spam
-/queue my-project      → Check merge queue
-/recheck my-project    → Trigger recheck
-/config                → Show config summary
-/help                  → All commands
-```
+ /prs my-project        → List PRs
+ /pr my-project 42      → Show PR #42 (with description, events, rebase/cherry-pick buttons)
+ /approve my-project 42 → Approve
+ /close my-project 42   → Close
+ /reopen my-project 42  → Reopen
+ /spam my-project 42    → Mark as spam
+ /rebase my-project 42  → Rebase PR onto base branch
+ /cherrypick my-project 42 <branch> → Cherry-pick merged PR
+ /queue my-project      → Check merge queue
+ /recheck my-project    → Trigger recheck
+ /config                → Show config summary
+ /help                  → All commands
+ ```
 
 ### Feishu (Lark)
 
 Send messages directly to the bot:
 
 ```
-prs my-project    → List PRs
-pr my-project 42  → Show PR #42
-approve my-project 42 → Approve
-close my-project 42   → Close
-spam my-project 42    → Mark as spam
-queue my-project      → Check queue
-recheck my-project    → Trigger recheck
-config                → Show config
-help                  → All commands
-```
+ prs my-project    → List PRs
+ pr my-project 42  → Show PR #42 (with description, events, rebase/cherry-pick buttons)
+ approve my-project 42 → Approve
+ close my-project 42   → Close
+ spam my-project 42    → Mark as spam
+ rebase my-project 42  → Rebase PR onto base branch
+ cherrypick my-project 42 <branch> → Cherry-pick merged PR
+ queue my-project      → Check queue
+ recheck my-project    → Trigger recheck
+ config                → Show config
+ help                  → All commands
+ ```
 
 ### Discord
 
 Use slash commands or prefix commands in your Discord server:
 
 ```
-!prs my-project        → List PRs
-!pr my-project 42      → Show PR #42
-!approve my-project 42 → Approve
-!close my-project 42   → Close
-!reopen my-project 42  → Reopen
-!spam my-project 42    → Mark as spam
-!queue my-project      → Check merge queue
-!recheck my-project    → Trigger recheck
-!config                → Show config summary
-!help                  → All commands
-```
+ !prs my-project        → List PRs
+ !pr my-project 42      → Show PR #42 (with description and events)
+ !approve my-project 42 → Approve
+ !close my-project 42   → Close
+ !reopen my-project 42  → Reopen
+ !spam my-project 42    → Mark as spam
+ !queue my-project      → Check merge queue
+ !recheck my-project    → Trigger recheck
+ !config                → Show config summary
+ !help                  → All commands
+ ```
 
 Or use Discord slash commands: `/prs`, `/pr`, `/approve`, `/close`, `/spam`, `/queue`, etc.
 
@@ -554,7 +560,7 @@ Please check this notifier's configuration and connectivity.
 - **Serial Merge Validation** — Before merging, PRs are rebased onto latest `main` and CI is re-validated to prevent post-merge failures
 - **PR Stack / Chain** — Track cross-platform PR chains (e.g., GitHub PR #42 ↔ GitLab MR #15). Auto-detects links from PR descriptions. Stack state tracks overall progress
 - **Token Encryption** — Platform tokens encrypted at rest with AES-256-GCM. Master key from `ASIKA_MASTER_KEY` environment variable
-- **PR Management** — List, detail view, approve, close, reopen, spam/mark, comment, rebase, cherry-pick
+ - **PR Management** — List with batch operations (approve/close/label), detail view with PR body, last commit SHA, audit log events, approve, close, reopen, spam/mark, comment, rebase, cherry-pick
 - **Merge Queue** — View queue status, recheck, clear, remove individual items, schedule future merges
 - **Reports** — View generated report history with per-group and per-platform breakdowns
 - **System Usage** — Real-time CPU/memory monitoring with auto-refresh, GOMEMLIMIT tracking, color-coded progress bar

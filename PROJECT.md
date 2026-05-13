@@ -267,7 +267,7 @@ The event consumer uses an Actor-model architecture with goroutine pools for con
 - **Event Dispatcher** — Single goroutine reads from the event bus and dispatches events to the worker pool
 - **Worker Pool** — Dynamic pool of goroutines processing events concurrently. Scales between `min_workers` (default 2) and `max_workers` (default 8) based on channel utilization. Scale up when >= `scale_up_pct` (default 75%), scale down when <= `scale_down_pct` (default 25%), with cooldown (default 30s) to prevent thrashing. Configurable via `[worker_pool]` TOML section, hot-reloadable at runtime.
 - **Writer Actor** — Dedicated goroutine serializing all bbolt writes through a channel (buffer=256). Eliminates write contention since bbolt requires serialized transactions
-- **Event Bus** — Blocking publish with backpressure (no silent event drops)
+- **Event Bus** — Non-blocking publish; slow subscribers are skipped (dropped events are logged with warn)
 - **Pool Metrics** — Tracks worker count, total/active tasks, utilization%, scale up/down event counts, goroutine count. Exposed via `poolMetrics.snapshot()`.
 
 ```
@@ -305,7 +305,7 @@ The project supports two database backends via a pluggable `Storage` interface (
 
 The active backend is selected at startup via `models.DatabaseConfig.Type` (`"bbolt"` or `"mongo"`). Cross-engine migration is available via `MigrateBboltToMongo()` / `MigrateMongoToBbolt()`.
 
-Buckets (22 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
+Buckets (32 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
 
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
@@ -317,7 +317,7 @@ Buckets (22 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `users` | `{username}` | User (JSON) |
 | `api_keys` | `{keyID}` | APIKey (JSON) |
 | `logs` | `{nanosecondTimestamp}_{randomHex}` | AuditLog (JSON); includes `Before`/`After` diff fields for state-changing operations (approve, close, reopen, mark_spam) |
-| `audit_log_index` | `actor:{actor}:{logKey}`, `repo_group:{rg}:{logKey}`, `action:{action}:{logKey}`, `category:{cat}:{logKey}` | Secondary index (JSON); enables efficient audit log filtering |
+| `audit_log_index` | `actor:{actor}:{logKey}`, `repo_group:{rg}:{logKey}`, `action:{action}:{logKey}`, `category:{cat}:{logKey}`, `pr:{rg}:{prNumber}:{logKey}` | Secondary index (JSON); enables efficient audit log filtering by actor, repo group, action, category, and PR number |
 | `sync_history` | `{syncRecordID}` | SyncRecord (JSON) |
 | `config` | `{key}` | Config value (JSON); also stores `__migration_version__`, `__config_version__`, label rules |
 | `config_history` | `{zeroPadded6DigitVersion}` | ConfigSnapshot (JSON); max 20 snapshots, rollback-capable |
@@ -336,6 +336,7 @@ Buckets (22 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `pr_templates` | `{repoGroup}:{platform}` | PRTemplate (JSON); fetched PR templates with checklist detection |
 | `cross_space_deps` | `{sourcePRID}:{targetPRID}` | CrossSpaceDep (JSON); cross-space dependency records |
 | `escalation_rules` | `{prID}` or `"default"` | Escalation state (JSON); last escalation timestamp or level |
+| `pr_stacks` | `{stackID}` | PRStack (JSON); cross-platform PR chain tracking |
 
 Performance optimizations:
 - Index-based PR lookups via `PutPRWithIndex` / `GetPRByIndex` (O(1) vs O(n) scan)

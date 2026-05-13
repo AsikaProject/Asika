@@ -1,6 +1,34 @@
 # ChangeLog for Asika
 
-## v20260512DEV > Unleased
+## v20260510DEV > Unleased
+
+- **WebUI PR detail enhancements**: PR detail page now shows PR body/description, last commit SHA, and audit log events. Added Rebase, Cherry-pick, and Comment action buttons directly on the detail page.
+
+- **WebUI batch operations**: PR list page now supports batch approve, batch close, and batch label operations via checkboxes.
+
+- **Bot PR detail enhancements**: All platform bots (Telegram, Discord, Feishu, Slack) now display PR description and audit log events in the PR detail view. Telegram, Feishu, and Slack additionally provide Rebase and Cherry-pick inline buttons.
+
+- **Slack rebase/cherry-pick**: Implemented actual rebase and cherry-pick functionality for Slack bot (previously returned "not yet implemented").
+
+- **Consumer Events**: Webhook events (opened/closed/merged/reopened/spam) now auto-append to `PR.Events` for display in PR detail views.
+
+- **GetLogs pr_number filter**: `GetLogs` endpoint now supports `pr_number` query parameter for filtering audit log entries by specific PR, using the `audit_log_index` bucket for efficient lookup.
+
+- **Bug fix**: `VerifyNotifiers()` — empty Gerrit webhook secret now correctly rejects all webhooks (previously silently accepted all).
+
+- **Bug fix**: `consumer.go` — 5x `json.Marshal` errors now properly checked and logged (previously silently discarded).
+
+- **Bug fix**: Event bus `Publish` is now non-blocking — slow subscribers no longer block all event processing. Dropped events are logged with warn.
+
+- **Bug fix**: `writerActor` write() now checks the stop channel, preventing deadlock on `Stop()`.
+
+- **Bug fix**: `prepareRepoDir` now returns an error to the caller (previously ignored).
+
+- **Bug fix**: 2x `rand.Read` failures now logged with `slog.Error` before returning (previously silently propagated).
+
+- **Bug fix**: Webhook retry worker now has a proper `Stop()` method with stop channel, preventing goroutine leak on shutdown.
+
+- **Bug fix**: `TestPublishBackpressure` rewritten for non-blocking event bus behavior.
 
 - **Branch sync**: New `branch_sync` config option in `[[repo_groups]]`. Set to `"all"` to sync every branch (not just default) from source to all target platforms. Uses `git for-each-ref` to enumerate branches and force pushes each one. Branch sync runs after the default branch sync completes.
 
@@ -43,8 +71,6 @@
 - **RSS feed subscription**: New `daemon/feed/` package with in-memory ring buffer (default 50 items) consuming PR events from the event bus. `GET /api/v1/feed.xml` returns RSS 2.0 XML feed; append `?repo_group=<name>` to filter by repo group. `GET/PUT /api/v1/feed/config` for admin configuration. Configurable via `[feed]` TOML section (`enabled`, `title`, `max_items`, `public_feed`).
 
 - **Documentation**: Update PROJECT.md with reviewer auto-assignment, RSS feed, repo-level permissions sections; update architecture diagram with Feed module; add Reviewer and Feed package descriptions.
-
-## v20260511DEV > Unleased
 
 ### High-Difficulty Features
 
