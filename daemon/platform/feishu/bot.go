@@ -267,7 +267,12 @@ func (b *Bot) sendDM(receiverID string, text string) {
 		delReq, _ := http.NewRequest("DELETE", delURL, nil)
 		delReq.Header.Set("Authorization", "Bearer "+tokenResult.TenantAccessToken)
 		delReq.Header.Set("Content-Type", "application/json")
-		http.DefaultClient.Do(delReq)
+		resp, err := http.DefaultClient.Do(delReq)
+		if err != nil {
+			slog.Warn("feishu: failed to auto-delete DM", "message_id", sendResult.Data.MessageID, "error", err)
+			return
+		}
+		resp.Body.Close()
 		slog.Info("feishu: auto-deleted DM API key message", "message_id", sendResult.Data.MessageID)
 	}()
 }

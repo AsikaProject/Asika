@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -20,6 +21,7 @@ import (
 var (
 	workerPoolConfigReloadFuncs []func(models.WorkerPoolConfig)
 	procsReloadFuncs            []func(minProcs, maxProcs int)
+	configReloadMu              sync.Mutex
 )
 
 // OnProcsReload registers a callback invoked when min_procs/max_procs config changes.
@@ -78,6 +80,9 @@ func GetConfig(c *gin.Context) {
 // UpdateConfig handles PUT /api/v1/config (8.4)
 // Updates hot-reloadable config items
 func UpdateConfig(c *gin.Context) {
+	configReloadMu.Lock()
+	defer configReloadMu.Unlock()
+
 	var req struct {
 		Toml string `json:"toml"`
 	}

@@ -25,6 +25,7 @@ func StreamEvents(c *gin.Context) {
 
 	ch := events.Subscribe()
 	defer func() {
+		events.Unsubscribe(ch)
 		slog.Debug("event stream client disconnected")
 	}()
 

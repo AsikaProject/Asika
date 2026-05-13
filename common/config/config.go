@@ -497,14 +497,23 @@ func SaveToFile(cfg models.Config) error {
 		return fmt.Errorf("failed to encrypt tokens: %w", err)
 	}
 
-	f, err := os.Create(path)
+	tmpPath := path + ".tmp"
+	f, err := os.Create(tmpPath)
 	if err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
 	}
-	defer f.Close()
-
 	if err := toml.NewEncoder(f).Encode(cfg); err != nil {
+		f.Close()
+		os.Remove(tmpPath)
 		return fmt.Errorf("failed to encode config: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to close config file: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename config file: %w", err)
 	}
 
 	ConfigPath = path

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"asika/common/config"
 	"asika/common/models"
@@ -202,7 +203,10 @@ func matchPattern(pattern string, files []string) bool {
 	return false
 }
 
-var compiledPatterns = make(map[string]*regexp.Regexp)
+var (
+	compiledPatterns   = make(map[string]*regexp.Regexp)
+	compiledPatternsMu sync.RWMutex
+)
 
 func matchSinglePattern(pattern, file string) bool {
 	if strings.ContainsAny(pattern, "*?[") {
@@ -212,14 +216,18 @@ func matchSinglePattern(pattern, file string) bool {
 		}
 	}
 
+	compiledPatternsMu.RLock()
 	re, ok := compiledPatterns[pattern]
+	compiledPatternsMu.RUnlock()
 	if !ok {
 		var err error
 		re, err = regexp.Compile(pattern)
 		if err != nil {
 			return false
 		}
+		compiledPatternsMu.Lock()
 		compiledPatterns[pattern] = re
+		compiledPatternsMu.Unlock()
 	}
 	return re.MatchString(file)
 }

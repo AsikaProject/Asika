@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -160,8 +162,8 @@ var prCommentCmd = &cobra.Command{
 		)
 
 		// Create a request with JSON body
-		reqBody := fmt.Sprintf(`{"body": "%s"}`, body)
-		req, err := http.NewRequest("POST", url, strings.NewReader(reqBody))
+		reqBody, _ := json.Marshal(map[string]string{"body": body})
+		req, err := http.NewRequest("POST", url, bytes.NewReader(reqBody))
 		if err != nil {
 			fmt.Printf("Error: %v\n", err)
 			return
@@ -241,9 +243,8 @@ var prBatchApproveCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		prIDs := strings.Split(args[1], ",")
 		url := fmt.Sprintf("%s/api/v1/repos/%s/prs/batch/approve", GetServer(cmd), args[0])
-		body := fmt.Sprintf(`{"pr_ids": ["%s"]`, strings.Join(prIDs, `","`))
-		body += "}"
-		resp := doBatchRequest(cmd, url, body)
+		body, _ := json.Marshal(map[string][]string{"pr_ids": prIDs})
+		resp := doBatchRequestBytes(cmd, url, body)
 		if resp == nil {
 			return
 		}
@@ -258,9 +259,8 @@ var prBatchCloseCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		prIDs := strings.Split(args[1], ",")
 		url := fmt.Sprintf("%s/api/v1/repos/%s/prs/batch/close", GetServer(cmd), args[0])
-		body := fmt.Sprintf(`{"pr_ids": ["%s"]`, strings.Join(prIDs, `","`))
-		body += "}"
-		resp := doBatchRequest(cmd, url, body)
+		body, _ := json.Marshal(map[string][]string{"pr_ids": prIDs})
+		resp := doBatchRequestBytes(cmd, url, body)
 		if resp == nil {
 			return
 		}
@@ -281,8 +281,8 @@ var prBatchLabelCmd = &cobra.Command{
 		}
 		color, _ := cmd.Flags().GetString("color")
 		url := fmt.Sprintf("%s/api/v1/repos/%s/prs/batch/label", GetServer(cmd), args[0])
-		body := fmt.Sprintf(`{"pr_ids": ["%s"], "label": "%s", "color": "%s"}`, strings.Join(prIDs, `","`), label, color)
-		resp := doBatchRequest(cmd, url, body)
+		body, _ := json.Marshal(map[string]interface{}{"pr_ids": prIDs, "label": label, "color": color})
+		resp := doBatchRequestBytes(cmd, url, body)
 		if resp == nil {
 			return
 		}
@@ -290,8 +290,8 @@ var prBatchLabelCmd = &cobra.Command{
 	},
 }
 
-func doBatchRequest(cmd *cobra.Command, url, body string) *http.Response {
-	req, err := http.NewRequest("POST", url, strings.NewReader(body))
+func doBatchRequestBytes(cmd *cobra.Command, url string, body []byte) *http.Response {
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return nil

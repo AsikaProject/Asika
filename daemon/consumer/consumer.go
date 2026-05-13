@@ -261,7 +261,8 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 	// Trigger code sync in background
 	if c.syncer != nil {
 		go func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
 			if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
 				slog.Error("sync failed", "error", err, "repo_group", event.RepoGroup)
 			}

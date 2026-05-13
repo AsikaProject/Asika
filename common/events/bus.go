@@ -55,13 +55,25 @@ func Init() {
 	}
 }
 
-// Subscribe subscribes to events, returns a channel to receive events
+// Subscribe subscribes to events, returns a channel to receive events and a subscription ID.
 func Subscribe() <-chan Event {
 	ch := make(chan Event, 100)
 	globalBus.mu.Lock()
 	globalBus.subscribers = append(globalBus.subscribers, ch)
 	globalBus.mu.Unlock()
 	return ch
+}
+
+// Unsubscribe removes a subscriber channel from the event bus.
+func Unsubscribe(ch <-chan Event) {
+	globalBus.mu.Lock()
+	defer globalBus.mu.Unlock()
+	for i, sub := range globalBus.subscribers {
+		if sub == ch {
+			globalBus.subscribers = append(globalBus.subscribers[:i], globalBus.subscribers[i+1:]...)
+			return
+		}
+	}
 }
 
 // Publish publishes an event to all subscribers.
