@@ -118,6 +118,7 @@ func (c *Consumer) Start() {
 
 // Stop stops the consumer and all subsystem goroutines.
 // It waits for the dispatch goroutine to exit before returning.
+// Safe to call multiple times.
 func (c *Consumer) Stop() {
 	if c.cancel != nil {
 		c.cancel()
@@ -129,9 +130,11 @@ func (c *Consumer) Stop() {
 	}
 	if c.workers != nil {
 		c.workers.Stop()
+		c.workers = nil
 	}
 	if c.writer != nil {
 		c.writer.Stop()
+		c.writer = nil
 	}
 }
 

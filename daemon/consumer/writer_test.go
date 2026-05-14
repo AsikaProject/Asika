@@ -194,7 +194,7 @@ func TestWriterActor_WriteIssueLink(t *testing.T) {
 		t.Fatalf("writeIssueLink failed: %v", err)
 	}
 
-	stored, err := db.Get(db.BucketIssuePRLinks, "rg:org/repo#100:link-pr-1")
+	stored, err := db.Get(db.BucketIssuePRLinks, "org/repo#100:link-pr-1")
 	if err != nil {
 		t.Fatalf("issue link not found in DB: %v", err)
 	}

@@ -353,3 +353,164 @@ func TestStartWebhookRetryWorker_Idempotent(t *testing.T) {
 	StartWebhookRetryWorker()
 	StopWebhookRetryWorker()
 }
+
+func TestWebhookRetry_StateTransition_FailedRetry(t *testing.T) {
+	cleanup := setupRetryTest(t)
+	defer cleanup()
+
+	retryID := "state-fail-retry"
+	now := time.Now()
+	retry := &models.WebhookRetry{
+		ID:         retryID,
+		DeliveryID: "del-state-fail",
+		RepoGroup:  "test-group",
+		Platform:   "github",
+		Body:       []byte(`{"action":"opened","number":1}`),
+		FailCount:  3,
+		LastError:  "connection refused",
+		LastFailed: now,
+		NextRetry:  now.Add(8 * time.Second),
+	}
+	db.PutWebhookRetry(retry)
+
+	retry.FailCount++
+	retry.LastError = "timeout"
+	retry.LastFailed = time.Now()
+	backoff := time.Duration(1<<uint(min(retry.FailCount, 10))) * time.Second
+	retry.NextRetry = time.Now().Add(backoff)
+	db.PutWebhookRetry(retry)
+
+	stored, err := db.GetWebhookRetry(retryID)
+	if err != nil {
+		t.Fatalf("GetWebhookRetry failed: %v", err)
+	}
+	if stored == nil {
+		t.Fatal("retry record should exist")
+	}
+	if stored.FailCount != 4 {
+		t.Errorf("FailCount = %d, want 4", stored.FailCount)
+	}
+	if stored.LastError != "timeout" {
+		t.Errorf("LastError = %q, want timeout", stored.LastError)
+	}
+	if !stored.NextRetry.After(time.Now()) {
+		t.Errorf("NextRetry should be in the future, got %v", stored.NextRetry)
+	}
+}
+
+func TestWebhookRetry_StateTransition_MaxAttempts(t *testing.T) {
+	cleanup := setupRetryTest(t)
+	defer cleanup()
+
+	var notified int32
+	SetNotifyFunc(func(title, body string) {
+		atomic.AddInt32(&notified, 1)
+	})
+	defer SetNotifyFunc(nil)
+
+	retryID := "state-max-retry"
+	retry := &models.WebhookRetry{
+		ID:         retryID,
+		DeliveryID: "del-state-max",
+		RepoGroup:  "test-group",
+		Platform:   "github",
+		Body:       []byte(`{"action":"opened","number":1}`),
+		FailCount:  9,
+		LastError:  "timeout",
+		LastFailed: time.Now(),
+	}
+	db.PutWebhookRetry(retry)
+
+	retry.FailCount = 10
+	retry.LastError = "max retries exceeded"
+	retry.LastFailed = time.Now()
+	notifyWebhookPermanentFailure(retry)
+	db.DeleteWebhookRetry(retryID)
+
+	stored, _ := db.GetWebhookRetry(retryID)
+	if stored != nil {
+		t.Error("retry record should be removed after max attempts")
+	}
+	if atomic.LoadInt32(&notified) != 1 {
+		t.Error("expected permanent failure notification")
+	}
+}
+
+func TestWebhookRetry_DueItemsFilteredByTime(t *testing.T) {
+	cleanup := setupRetryTest(t)
+	defer cleanup()
+
+	now := time.Now()
+
+	dueRetry := &models.WebhookRetry{
+		ID:        "due-now",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		Body:      []byte(`{}`),
+		NextRetry: now.Add(-1 * time.Minute),
+	}
+	futureRetry := &models.WebhookRetry{
+		ID:        "due-future",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		Body:      []byte(`{}`),
+		NextRetry: now.Add(5 * time.Minute),
+	}
+	db.PutWebhookRetry(dueRetry)
+	db.PutWebhookRetry(futureRetry)
+
+	due, err := db.GetDueWebhookRetries(now)
+	if err != nil {
+		t.Fatalf("GetDueWebhookRetries failed: %v", err)
+	}
+	if len(due) != 1 {
+		t.Fatalf("expected 1 due retry, got %d", len(due))
+	}
+	if due[0].ID != "due-now" {
+		t.Errorf("due retry ID = %q, want due-now", due[0].ID)
+	}
+}
+
+func TestWebhookRetry_NextRetryPrecision(t *testing.T) {
+	cleanup := setupRetryTest(t)
+	defer cleanup()
+
+	now := time.Now()
+	retry := &models.WebhookRetry{
+		ID:         "precision-retry",
+		DeliveryID: "del-precision",
+		RepoGroup:  "test-group",
+		Platform:   "github",
+		Body:       []byte(`{}`),
+		FailCount:  3,
+		LastError:  "error",
+		LastFailed: now,
+		NextRetry:  now.Add(4 * time.Second),
+	}
+	db.PutWebhookRetry(retry)
+
+	due, err := db.GetDueWebhookRetries(now.Add(3 * time.Second))
+	if err != nil {
+		t.Fatalf("GetDueWebhookRetries failed: %v", err)
+	}
+	for _, r := range due {
+		if r.ID == "precision-retry" {
+			t.Error("retry should NOT be due yet (NextRetry is 4s in future)")
+		}
+	}
+
+	due, err = db.GetDueWebhookRetries(now.Add(5 * time.Second))
+	if err != nil {
+		t.Fatalf("GetDueWebhookRetries failed: %v", err)
+	}
+	found := false
+	for _, r := range due {
+		if r.ID == "precision-retry" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("retry should be due after NextRetry time has passed")
+	}
+}

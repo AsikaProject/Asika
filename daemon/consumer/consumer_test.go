@@ -1545,3 +1545,289 @@ func TestConsumerConcurrentEventDispatch(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestSyncPRLinks_WriterActorTiming(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	w := newWriterActor(256)
+	defer w.Stop()
+
+	pr := &models.PRRecord{
+		ID:        "timing-pr-1",
+		RepoGroup: "timing-group",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "PR with Fixes: org/repo#42",
+		Body:     "This PR Fixes: other/repo#99 and Resolves: org/repo#42",
+	}
+
+	syncPRLinks(w, pr)
+
+	links, err := db.GetIssuePRLinksByPR("timing-pr-1")
+	if err != nil {
+		t.Fatalf("GetIssuePRLinksByPR failed: %v", err)
+	}
+	if len(links) != 2 {
+		t.Fatalf("expected 2 links, got %d", len(links))
+	}
+
+	seen := make(map[string]bool)
+	for _, l := range links {
+		seen[l.IssueID] = true
+	}
+	if !seen["org/repo#42"] {
+		t.Error("expected org/repo#42 in links")
+	}
+	if !seen["other/repo#99"] {
+		t.Error("expected other/repo#99 in links")
+	}
+}
+
+func TestSyncPRLinks_ConcurrentWithPRWrite(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "concurrent-link-group", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "concurrent-link-pr",
+		RepoGroup: "concurrent-link-group",
+		Platform:  "github",
+		PRNumber:  100,
+		Title:     "Fixes: org/repo#50",
+		Body:     "Resolves: org/repo#51\nFixes: org/repo#52",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "concurrent-link-group",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	time.Sleep(300 * time.Millisecond)
+
+	prData, err := db.Get(db.BucketPRs, "concurrent-link-group#github#100")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	if prData == nil {
+		t.Fatal("PR data is nil")
+	}
+
+	links, err := db.GetIssuePRLinksByPR("concurrent-link-pr")
+	if err != nil {
+		t.Fatalf("GetIssuePRLinksByPR failed: %v", err)
+	}
+	if len(links) != 3 {
+		t.Errorf("expected 3 links, got %d", len(links))
+	}
+
+	seen := make(map[string]bool)
+	for _, l := range links {
+		seen[l.IssueID] = true
+	}
+	for _, expected := range []string{"org/repo#50", "org/repo#51", "org/repo#52"} {
+		if !seen[expected] {
+			t.Errorf("expected %s in links", expected)
+		}
+	}
+}
+
+func TestSyncPRLinks_DuplicateIssueNotLinked(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	w := newWriterActor(256)
+	defer w.Stop()
+
+	pr := &models.PRRecord{
+		ID:        "dup-link-pr",
+		RepoGroup: "dup-group",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Fixes: org/repo#10",
+		Body:     "Also Fixes: org/repo#10 and Resolves: org/repo#10",
+	}
+
+	syncPRLinks(w, pr)
+
+	links, err := db.GetIssuePRLinksByPR("dup-link-pr")
+	if err != nil {
+		t.Fatalf("GetIssuePRLinksByPR failed: %v", err)
+	}
+	if len(links) != 1 {
+		t.Errorf("expected 1 link (deduped), got %d", len(links))
+	}
+}
+
+func TestConsumerStop_CancelsContext(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	if c.ctx == nil {
+		t.Fatal("ctx should be initialized")
+	}
+
+	err := c.ctx.Err()
+	if err != nil {
+		t.Fatalf("ctx should not be cancelled before Stop(), got: %v", err)
+	}
+
+	c.Stop()
+
+	select {
+	case <-c.ctx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("context should be cancelled after Stop()")
+	}
+}
+
+func TestConsumerStop_GoroutinesExit(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+	c.Start()
+
+	pr := &models.PRRecord{
+		ID:        "stop-goroutine-pr",
+		RepoGroup: "stop-group",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Stop goroutine test",
+		Author:    "tester",
+		State:     "open",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "stop-group",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+
+	c.Stop()
+
+	time.Sleep(200 * time.Millisecond)
+
+	data, err := db.Get(db.BucketPRs, "stop-group#github#1")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	if data == nil {
+		t.Fatal("PR data is nil")
+	}
+}
+
+func TestConsumerStop_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	c.Stop()
+	c.Stop()
+	c.Stop()
+}
+
+func TestConsumerStop_ThenRestart(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+	c.Start()
+
+	pr1 := &models.PRRecord{
+		ID:        "restart-pr-1",
+		RepoGroup: "restart-group",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Before restart",
+		Author:    "tester",
+		State:     "open",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "restart-group",
+		Platform:  "github",
+		PR:        pr1,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	c.Stop()
+	time.Sleep(100 * time.Millisecond)
+
+	c.Start()
+
+	pr2 := &models.PRRecord{
+		ID:        "restart-pr-2",
+		RepoGroup: "restart-group",
+		Platform:  "github",
+		PRNumber:  2,
+		Title:     "After restart",
+		Author:    "tester",
+		State:     "open",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "restart-group",
+		Platform:  "github",
+		PR:        pr2,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+	c.Stop()
+
+	data1, err := db.Get(db.BucketPRs, "restart-group#github#1")
+	if err != nil {
+		t.Fatalf("PR1 not found: %v", err)
+	}
+	if data1 == nil {
+		t.Fatal("PR1 data is nil")
+	}
+
+	data2, err := db.Get(db.BucketPRs, "restart-group#github#2")
+	if err != nil {
+		t.Fatalf("PR2 not found: %v", err)
+	}
+	if data2 == nil {
+		t.Fatal("PR2 data is nil")
+	}
+}

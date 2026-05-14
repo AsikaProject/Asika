@@ -1,7 +1,6 @@
 package consumer
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
@@ -70,12 +69,7 @@ func (w *writerActor) run() {
 
 // writeIssueLink stores an issue-PR link through the writer actor.
 func (w *writerActor) writeIssueLink(link *models.IssuePRLink) error {
-	data, err := json.Marshal(link)
-	if err != nil {
-		return fmt.Errorf("marshal issue-pr link: %w", err)
-	}
-	key := fmt.Sprintf("%s:%s:%s", link.RepoGroup, link.IssueID, link.PRID)
-	return db.Put(db.BucketIssuePRLinks, key, data)
+	return db.PutIssuePRLink(link)
 }
 
 // write submits a write request and waits for the result.

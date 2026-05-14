@@ -373,3 +373,238 @@ func TestPutAndGet_ConcurrentWrites(t *testing.T) {
 		<-done
 	}
 }
+
+func TestGetPRByIndex_FallbackScanRepairsIndex(t *testing.T) {
+	dir := t.TempDir()
+	Init(dir + "/test.db")
+	t.Cleanup(func() { Close() })
+
+	pr := &models.PRRecord{
+		ID:        "fallback-repair-pr",
+		RepoGroup: "repair-group",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Fallback repair test",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	Put(BucketPRs, "repair-group#github#1", data)
+
+	found, err := GetPRByIndex("fallback-repair-pr", "", 0)
+	if err != nil {
+		t.Fatalf("GetPRByIndex failed: %v", err)
+	}
+	if found == nil {
+		t.Fatal("expected to find PR via fallback scan")
+	}
+	var decoded models.PRRecord
+	json.Unmarshal(found, &decoded)
+	if decoded.Title != "Fallback repair test" {
+		t.Errorf("Title = %q, want Fallback repair test", decoded.Title)
+	}
+
+	indexed, err := GetPRByIndex("fallback-repair-pr", "", 0)
+	if err != nil {
+		t.Fatalf("GetPRByIndex failed: %v", err)
+	}
+	if indexed == nil {
+		t.Error("expected index to be repaired after fallback scan")
+	}
+}
+
+func TestGetPRByIndex_IndexRepairIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	Init(dir + "/test.db")
+	t.Cleanup(func() { Close() })
+
+	pr := &models.PRRecord{
+		ID:        "idempotent-repair-pr",
+		RepoGroup: "idempotent-group",
+		Platform:  "github",
+		PRNumber:  2,
+		Title:     "Idempotent repair test",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	Put(BucketPRs, "idempotent-group#github#2", data)
+
+	for i := 0; i < 3; i++ {
+		found, err := GetPRByIndex("idempotent-repair-pr", "", 0)
+		if err != nil {
+			t.Fatalf("GetPRByIndex attempt %d failed: %v", i, err)
+		}
+		if found == nil {
+			t.Fatalf("GetPRByIndex attempt %d returned nil", i)
+		}
+	}
+
+	indexed, err := GetPRByIndex("idempotent-repair-pr", "", 0)
+	if err != nil {
+		t.Fatalf("GetPRByIndex failed: %v", err)
+	}
+	if indexed == nil {
+		t.Error("expected index to exist after repair")
+	}
+}
+
+func TestGetPRByIndex_FallbackWithCorruptedAndValid(t *testing.T) {
+	dir := t.TempDir()
+	Init(dir + "/test.db")
+	t.Cleanup(func() { Close() })
+
+	Put(BucketPRs, "mixed-group#github#1", []byte(`{corrupted`))
+
+	validPR := &models.PRRecord{
+		ID:        "valid-in-mixed",
+		RepoGroup: "mixed-group",
+		Platform:  "github",
+		PRNumber:  2,
+		Title:     "Valid in mixed",
+		State:     "open",
+	}
+	data, _ := json.Marshal(validPR)
+	Put(BucketPRs, "mixed-group#github#2", data)
+
+	found, err := GetPRByIndex("valid-in-mixed", "", 0)
+	if err != nil {
+		t.Fatalf("GetPRByIndex failed: %v", err)
+	}
+	if found == nil {
+		t.Fatal("expected to find valid PR despite corrupted entry")
+	}
+	var decoded models.PRRecord
+	json.Unmarshal(found, &decoded)
+	if decoded.Title != "Valid in mixed" {
+		t.Errorf("Title = %q, want Valid in mixed", decoded.Title)
+	}
+
+	indexed, err := GetPRByIndex("valid-in-mixed", "", 0)
+	if err != nil {
+		t.Fatalf("GetPRByIndex failed: %v", err)
+	}
+	if indexed == nil {
+		t.Error("expected index to be repaired for valid PR")
+	}
+}
+
+func TestDatabaseRecovery_CorruptedEntrySkipped(t *testing.T) {
+	dir := t.TempDir()
+	Init(dir + "/test.db")
+	t.Cleanup(func() { Close() })
+
+	goodPR := &models.PRRecord{
+		ID:        "good-pr",
+		RepoGroup: "recovery-group",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Good PR",
+		State:     "open",
+	}
+	data, _ := json.Marshal(goodPR)
+	Put(BucketPRs, "recovery-group#github#1", data)
+
+	Put(BucketPRs, "recovery-group#github#2", []byte(`{invalid json data`))
+	Put(BucketPRs, "recovery-group#github#3", []byte(`{"truncated`))
+
+	var count int
+	ForEach(BucketPRs, func(k, v []byte) error {
+		var pr models.PRRecord
+		if err := json.Unmarshal(v, &pr); err != nil {
+			return nil
+		}
+		count++
+		return nil
+	})
+	if count != 1 {
+		t.Errorf("expected 1 valid PR, got %d", count)
+	}
+}
+
+func TestDatabaseRecovery_PartialWriteRecovery(t *testing.T) {
+	dir := t.TempDir()
+	Init(dir + "/test.db")
+	t.Cleanup(func() { Close() })
+
+	Put(BucketQueueItems, "partial-queue#pr-1", []byte(`{"pr_id": "pr-1", "status": "wait`))
+	Put(BucketQueueItems, "partial-queue#pr-2", []byte(`{"pr_id": "pr-2", "status": "waiting"}`))
+
+	var validCount int
+	ForEach(BucketQueueItems, func(k, v []byte) error {
+		var item models.QueueItem
+		if err := json.Unmarshal(v, &item); err != nil {
+			return nil
+		}
+		validCount++
+		return nil
+	})
+	if validCount != 1 {
+		t.Errorf("expected 1 valid queue item, got %d", validCount)
+	}
+}
+
+func TestDatabaseRecovery_WebhookRetryCorrupted(t *testing.T) {
+	dir := t.TempDir()
+	Init(dir + "/test.db")
+	t.Cleanup(func() { Close() })
+
+	goodRetry := &models.WebhookRetry{
+		ID:        "good-retry",
+		RepoGroup: "recovery-group",
+		Platform:  "github",
+		Body:      []byte(`{"action":"opened"}`),
+		FailCount: 1,
+	}
+	data, _ := json.Marshal(goodRetry)
+	Put("webhook_retries", "good-retry", data)
+
+	Put("webhook_retries", "corrupted-retry", []byte(`{bad data`))
+
+	var validCount int
+	ForEach("webhook_retries", func(k, v []byte) error {
+		var retry models.WebhookRetry
+		if err := json.Unmarshal(v, &retry); err != nil {
+			return nil
+		}
+		validCount++
+		return nil
+	})
+	if validCount != 1 {
+		t.Errorf("expected 1 valid retry, got %d", validCount)
+	}
+}
+
+func TestDatabaseRecovery_ReopenAfterCorruption(t *testing.T) {
+	dir := t.TempDir()
+	Init(dir + "/test.db")
+
+	Put(BucketPRs, "reopen-group#github#1", []byte(`{corrupted`))
+
+	Close()
+
+	Init(dir + "/test.db")
+	t.Cleanup(func() { Close() })
+
+	pr := &models.PRRecord{
+		ID:        "reopen-after-corrupt",
+		RepoGroup: "reopen-group",
+		Platform:  "github",
+		PRNumber:  2,
+		Title:     "Written after reopen",
+		State:     "open",
+	}
+	data, _ := json.Marshal(pr)
+	Put(BucketPRs, "reopen-group#github#2", data)
+
+	found, err := GetPRByIndex("reopen-after-corrupt", "", 0)
+	if err != nil {
+		t.Fatalf("GetPRByIndex failed: %v", err)
+	}
+	if found == nil {
+		t.Fatal("expected to find PR written after reopen")
+	}
+	var decoded models.PRRecord
+	json.Unmarshal(found, &decoded)
+	if decoded.Title != "Written after reopen" {
+		t.Errorf("Title = %q, want Written after reopen", decoded.Title)
+	}
+}

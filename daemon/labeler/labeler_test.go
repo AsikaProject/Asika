@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"sort"
+	"sync"
 	"testing"
 
 	"asika/common/config"
@@ -548,4 +549,81 @@ func TestMergeRules_Empty(t *testing.T) {
 	if len(merged) != 0 {
 		t.Fatalf("expected 0, got %d", len(merged))
 	}
+}
+
+func TestMatchSinglePattern_ConcurrentNoRace(t *testing.T) {
+	var wg sync.WaitGroup
+	pattern := ".*_test\\.go$"
+	files := []string{"main_test.go", "handler_test.go", "utils.go"}
+
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				for _, f := range files {
+					matchSinglePattern(pattern, f)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestMatchSinglePattern_ConcurrentDifferentPatterns(t *testing.T) {
+	var wg sync.WaitGroup
+	patterns := []string{
+		".*_test\\.go$",
+		"^src/.*",
+		"\\.md$",
+		"^docs/",
+		".*\\.go$",
+	}
+
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			pat := patterns[idx%len(patterns)]
+			for j := 0; j < 50; j++ {
+				matchSinglePattern(pat, "src/main_test.go")
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
+func TestMatchSinglePattern_FirstCompileWins(t *testing.T) {
+	var wg sync.WaitGroup
+	pattern := "^[a-z]+\\.go$"
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			matchSinglePattern(pattern, "main.go")
+		}()
+	}
+	wg.Wait()
+}
+
+func TestMatchRule_ConcurrentWithGlobAndRegex(t *testing.T) {
+	var wg sync.WaitGroup
+	patterns := []string{
+		"*test*",
+		"^src/.*\\.go$",
+		"*.md",
+		"^docs/.*\\.md$",
+	}
+
+	for i := 0; i < 30; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			pat := patterns[idx%len(patterns)]
+			files := []string{"src/main.go", "test/main_test.go", "README.md", "docs/index.md"}
+			MatchRule(pat, files, "", "")
+		}(i)
+	}
+	wg.Wait()
 }
