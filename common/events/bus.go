@@ -55,6 +55,11 @@ func Init() {
 	}
 }
 
+// InitWithBus injects a custom Bus (useful for testing)
+func InitWithBus(bus *Bus) {
+	globalBus = bus
+}
+
 // Subscribe subscribes to events, returns a channel to receive events and a subscription ID.
 func Subscribe() <-chan Event {
 	ch := make(chan Event, 100)

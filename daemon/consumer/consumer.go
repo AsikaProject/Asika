@@ -34,6 +34,8 @@ type Consumer struct {
 	queue        *queue.Manager
 	staleMgr     *stale.Manager
 	stop         chan struct{}
+	ctx          context.Context
+	cancel       context.CancelFunc
 
 	// Actor subsystems
 	writer  *writerActor
@@ -42,11 +44,13 @@ type Consumer struct {
 
 // NewConsumer creates a new event consumer (basic, no wiring)
 func NewConsumer() *Consumer {
-	return &Consumer{
+	c := &Consumer{
 		stop:    make(chan struct{}),
 		writer:  newWriterActor(256),
 		workers: newWorkerPool(models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}),
 	}
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	return c
 }
 
 // NewConsumerWithClients creates a fully wired event consumer
@@ -61,7 +65,7 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 	if poolCfg.MinWorkers <= 0 {
 		poolCfg = models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}
 	}
-	return &Consumer{
+	c := &Consumer{
 		cfg:          cfg,
 		clients:      clients,
 		labeler:      l,
@@ -73,6 +77,8 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 		writer:       newWriterActor(256),
 		workers:      newWorkerPool(poolCfg),
 	}
+	c.ctx, c.cancel = context.WithCancel(context.Background())
+	return c
 }
 
 // Start starts consuming events and dispatching to subsystem goroutine pools.
@@ -80,6 +86,7 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 func (c *Consumer) Start() {
 	c.Stop()
 	c.stop = make(chan struct{})
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	c.writer = newWriterActor(256)
 	poolCfg := models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}
 	if c.cfg != nil && c.cfg.WorkerPool.MinWorkers > 0 {
@@ -112,6 +119,10 @@ func (c *Consumer) Start() {
 // Stop stops the consumer and all subsystem goroutines.
 // It waits for the dispatch goroutine to exit before returning.
 func (c *Consumer) Stop() {
+	if c.cancel != nil {
+		c.cancel()
+		c.cancel = nil
+	}
 	if c.stop != nil {
 		close(c.stop)
 		c.stop = nil
@@ -134,6 +145,19 @@ func (c *Consumer) UpdateWorkerPoolConfig(cfg models.WorkerPoolConfig) {
 // SetStaleManager sets the stale manager for activity detection
 func (c *Consumer) SetStaleManager(mgr *stale.Manager) {
 	c.staleMgr = mgr
+}
+
+// updatePR serializes the PR and writes it through the writer actor.
+func (c *Consumer) updatePR(event events.Event, pr *models.PRRecord) {
+	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
+	data, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal PR", "error", err)
+		return
+	}
+	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
+		slog.Error("failed to update PR", "error", err)
+	}
 }
 
 // dispatch routes events to subsystem goroutine pools
@@ -186,20 +210,8 @@ func (c *Consumer) handlePROpened(event events.Event) {
 		Action:    "opened",
 		Actor:     pr.Author,
 	})
-	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, err := json.Marshal(pr)
-	if err != nil {
-		slog.Error("failed to marshal PR", "error", err)
-		return
-	}
+	c.updatePR(event, pr)
 
-	// Use writer actor for bbolt writes
-	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
-		slog.Error("failed to store PR", "error", err)
-		return
-	}
-
-	// These can run in parallel via separate goroutines
 	if c.labeler != nil {
 		go func() {
 			defer func() {
@@ -257,15 +269,7 @@ func (c *Consumer) handlePRClosed(event events.Event) {
 		Action:    "closed",
 		Actor:     "system",
 	})
-	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, err := json.Marshal(pr)
-	if err != nil {
-		slog.Error("failed to marshal PR", "error", err)
-		return
-	}
-	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
-		slog.Error("failed to update PR", "error", err)
-	}
+	c.updatePR(event, pr)
 }
 
 func (c *Consumer) handlePRMerged(event events.Event) {
@@ -283,20 +287,11 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 		Action:    "merged",
 		Actor:     "system",
 	})
-	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, err := json.Marshal(pr)
-	if err != nil {
-		slog.Error("failed to marshal PR", "error", err)
-		return
-	}
-	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
-		slog.Error("failed to update PR", "error", err)
-	}
+	c.updatePR(event, pr)
 
-	// Trigger code sync in background
 	if c.syncer != nil {
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			ctx, cancel := context.WithTimeout(c.ctx, 10*time.Minute)
 			defer cancel()
 			if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
 				slog.Error("sync failed", "error", err, "repo_group", event.RepoGroup)
@@ -304,7 +299,6 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 		}()
 	}
 
-	// Check cross-space dependencies
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -314,7 +308,6 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 		handlers.NotifyCrossSpaceDeps(pr)
 	}()
 
-	// Update PR stack member state
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -357,19 +350,11 @@ func (c *Consumer) handleSpamDetected(event events.Event) {
 		Action:    "marked_spam",
 		Actor:     "system",
 	})
-	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, err := json.Marshal(pr)
-	if err != nil {
-		slog.Error("failed to marshal PR", "error", err)
-		return
-	}
-	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
-		slog.Error("failed to update PR", "error", err)
-	}
+	c.updatePR(event, pr)
 
 	if c.spamDetector != nil {
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
 			defer cancel()
 			c.spamDetector.HandleSpamWithContext(ctx, pr, event.RepoGroup)
 		}()
@@ -403,15 +388,7 @@ func (c *Consumer) handlePRLabeled(event events.Event) {
 		Action:    "labeled",
 		Actor:     "system",
 	})
-	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, err := json.Marshal(pr)
-	if err != nil {
-		slog.Error("failed to marshal PR", "error", err)
-		return
-	}
-	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
-		slog.Error("failed to update PR", "error", err)
-	}
+	c.updatePR(event, pr)
 }
 
 func (c *Consumer) handlePRReopened(event events.Event) {
@@ -430,15 +407,7 @@ func (c *Consumer) handlePRReopened(event events.Event) {
 		Action:    "reopened",
 		Actor:     "system",
 	})
-	key := fmt.Sprintf("%s#%s#%d", event.RepoGroup, event.Platform, pr.PRNumber)
-	data, err := json.Marshal(pr)
-	if err != nil {
-		slog.Error("failed to marshal PR", "error", err)
-		return
-	}
-	if err := c.writer.write(key, data, pr.ID, event.RepoGroup, pr.PRNumber); err != nil {
-		slog.Error("failed to update PR", "error", err)
-	}
+	c.updatePR(event, pr)
 
 	if c.staleMgr != nil {
 		c.staleMgr.HandleActivity(pr, event.RepoGroup)
@@ -446,8 +415,7 @@ func (c *Consumer) handlePRReopened(event events.Event) {
 
 	if c.syncer != nil {
 		go func() {
-			ctx := context.Background()
-			if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
+			if err := c.syncer.SyncOnMerge(c.ctx, pr); err != nil {
 				slog.Error("failed to sync spam-reopened PR", "error", err, "pr_id", pr.ID)
 			}
 		}()
