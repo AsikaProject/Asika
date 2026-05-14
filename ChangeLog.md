@@ -2,6 +2,10 @@
 
 ## v20260510DEV > Unreleased
 
+- **Bug fix**: `handlePRReopened` called `SyncOnMerge` with bare `c.ctx` (no timeout), inconsistent with `handlePRMerged`. Added 10-minute timeout.
+
+- **Bug fix**: `recordSync` called `db.Put` directly, bypassing the writer actor. Added `SyncRecordWriter` interface to Syncer and wired it through the consumer's writer actor for serialized bbolt writes.
+
 - **Bug fix**: `AppendAuditLogEx` (bbolt) set Timestamp after Marshal, causing zero-time in stored JSON. Moved zero-check before Marshal.
 
 - **Bug fix**: `AppendAuditLogEx` (MongoDB) set Timestamp after bson.Marshal and cast ObjectID to string via `.(string)` which panics. Fixed zero-check and used `.(bson.ObjectID).Hex()`.

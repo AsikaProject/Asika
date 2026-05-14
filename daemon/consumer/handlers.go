@@ -226,7 +226,9 @@ func (c *Consumer) handlePRReopened(event events.Event) {
 
 	if c.syncer != nil {
 		go func() {
-			if err := c.syncer.SyncOnMerge(c.ctx, pr); err != nil {
+			ctx, cancel := context.WithTimeout(c.ctx, 10*time.Minute)
+			defer cancel()
+			if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
 				slog.Error("failed to sync spam-reopened PR", "error", err, "pr_id", pr.ID)
 			}
 		}()

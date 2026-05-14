@@ -1560,7 +1560,7 @@ func TestSyncPRLinks_WriterActorTiming(t *testing.T) {
 		Platform:  "github",
 		PRNumber:  1,
 		Title:     "PR with Fixes: org/repo#42",
-		Body:     "This PR Fixes: other/repo#99 and Resolves: org/repo#42",
+		Body:      "This PR Fixes: other/repo#99 and Resolves: org/repo#42",
 	}
 
 	syncPRLinks(w, pr)
@@ -1606,7 +1606,7 @@ func TestSyncPRLinks_ConcurrentWithPRWrite(t *testing.T) {
 		Platform:  "github",
 		PRNumber:  100,
 		Title:     "Fixes: org/repo#50",
-		Body:     "Resolves: org/repo#51\nFixes: org/repo#52",
+		Body:      "Resolves: org/repo#51\nFixes: org/repo#52",
 	}
 
 	c.handlePROpened(events.Event{
@@ -1659,7 +1659,7 @@ func TestSyncPRLinks_DuplicateIssueNotLinked(t *testing.T) {
 		Platform:  "github",
 		PRNumber:  1,
 		Title:     "Fixes: org/repo#10",
-		Body:     "Also Fixes: org/repo#10 and Resolves: org/repo#10",
+		Body:      "Also Fixes: org/repo#10 and Resolves: org/repo#10",
 	}
 
 	syncPRLinks(w, pr)

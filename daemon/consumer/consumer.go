@@ -71,8 +71,18 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 		writer:       newWriterActor(256),
 		workers:      newWorkerPool(poolCfg),
 	}
+	s.SetRecordWriter(&syncRecordWriter{writer: c.writer})
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	return c
+}
+
+// syncRecordWriter implements syncer.SyncRecordWriter through the writer actor.
+type syncRecordWriter struct {
+	writer *writerActor
+}
+
+func (w *syncRecordWriter) WriteSyncRecord(recordID string, data []byte) error {
+	return w.writer.write(recordID, data, "", "", 0)
 }
 
 // Start starts consuming events and dispatching to subsystem goroutine pools.
@@ -82,6 +92,9 @@ func (c *Consumer) Start() {
 	c.stop = make(chan struct{})
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	c.writer = newWriterActor(256)
+	if c.syncer != nil {
+		c.syncer.SetRecordWriter(&syncRecordWriter{writer: c.writer})
+	}
 	poolCfg := models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}
 	if c.cfg != nil && c.cfg.WorkerPool.MinWorkers > 0 {
 		poolCfg = c.cfg.WorkerPool

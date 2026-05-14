@@ -15,12 +15,18 @@ const (
 	syncRetryBaseDelay = 2 * time.Second
 )
 
+// SyncRecordWriter writes sync records, optionally through a serialized writer.
+type SyncRecordWriter interface {
+	WriteSyncRecord(recordID string, data []byte) error
+}
+
 // Syncer handles cross-platform synchronization
 type Syncer struct {
-	cfg       *models.Config
-	clients   map[platforms.PlatformType]platforms.PlatformClient
-	syncLocks sync.Map
-	notifyFn  func(title, body string)
+	cfg          *models.Config
+	clients      map[platforms.PlatformType]platforms.PlatformClient
+	syncLocks    sync.Map
+	notifyFn     func(title, body string)
+	recordWriter SyncRecordWriter
 }
 
 // NewSyncer creates a new syncer
@@ -34,6 +40,12 @@ func NewSyncer(cfg *models.Config, clients map[platforms.PlatformType]platforms.
 // SetNotifyFunc sets the notification function for sync conflict alerts.
 func (s *Syncer) SetNotifyFunc(fn func(title, body string)) {
 	s.notifyFn = fn
+}
+
+// SetRecordWriter sets the writer for sync records.
+// If nil, recordSync falls back to direct db.Put.
+func (s *Syncer) SetRecordWriter(w SyncRecordWriter) {
+	s.recordWriter = w
 }
 
 // getTargetPlatforms returns all configured target platforms for sync.

@@ -90,8 +90,14 @@ func (s *Syncer) recordSync(pr *models.PRRecord, branch, targetPlatform, status,
 	if err != nil {
 		return fmt.Errorf("marshal sync record: %w", err)
 	}
-	if err := db.Put(db.BucketSyncHistory, record.ID, data); err != nil {
-		return fmt.Errorf("store sync record: %w", err)
+	if s.recordWriter != nil {
+		if err := s.recordWriter.WriteSyncRecord(record.ID, data); err != nil {
+			return fmt.Errorf("store sync record: %w", err)
+		}
+	} else {
+		if err := db.Put(db.BucketSyncHistory, record.ID, data); err != nil {
+			return fmt.Errorf("store sync record: %w", err)
+		}
 	}
 	return nil
 }
