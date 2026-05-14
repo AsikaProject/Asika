@@ -58,7 +58,7 @@ func (c *Consumer) handlePRComment(event events.Event) {
 	command := strings.ToLower(parts[0])
 	args := parts[1:]
 
-	ctx := context.Background()
+	ctx := c.ctx
 	var result string
 
 	switch command {

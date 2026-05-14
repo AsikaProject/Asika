@@ -144,6 +144,7 @@ func TestIsNotifierEnabledForAnyUser_NoPrefs(t *testing.T) {
 func TestIsNotifierEnabledForAnyUser_AllDisabled(t *testing.T) {
 	testutil.NewTestDB(t)
 	defer db.Close()
+	ResetNotifierPrefsCache()
 
 	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
 		Username: "alice",
