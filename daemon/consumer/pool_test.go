@@ -201,3 +201,113 @@ func TestWorkerPool_CooldownPreventsFlapping(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestWorkerPool_ExhaustionAndScaleUp(t *testing.T) {
+	p := testPool(models.WorkerPoolConfig{
+		MinWorkers:    1,
+		MaxWorkers:    4,
+		ScaleUpPct:    25,
+		ScaleDownPct:  10,
+		CooldownSecs:  0,
+		StatsInterval: "50ms",
+	})
+	defer p.Stop()
+
+	blockCh := make(chan struct{})
+	var wg sync.WaitGroup
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		p.Submit(func() {
+			defer wg.Done()
+			<-blockCh
+		})
+	}
+
+	time.Sleep(200 * time.Millisecond)
+
+	m := p.Metrics()
+	workers := m["workers"].(int32)
+	if workers <= 1 {
+		t.Errorf("expected workers > 1 after exhaustion, got %d", workers)
+	}
+
+	close(blockCh)
+	wg.Wait()
+}
+
+func TestWorkerPool_SubmitAfterStop(t *testing.T) {
+	p := testPool(models.WorkerPoolConfig{MinWorkers: 1, MaxWorkers: 2, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"})
+	p.Stop()
+
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Submit after Stop panicked: %v", r)
+			}
+			close(done)
+		}()
+		p.Submit(func() {})
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Error("Submit after Stop blocked indefinitely")
+	}
+}
+
+func TestWorkerPool_RapidSubmitAndStop(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		p := testPool(models.WorkerPoolConfig{
+			MinWorkers:    2,
+			MaxWorkers:    4,
+			ScaleUpPct:    50,
+			ScaleDownPct:  10,
+			CooldownSecs:  0,
+			StatsInterval: "10ms",
+		})
+
+		var wg sync.WaitGroup
+		for j := 0; j < 5; j++ {
+			wg.Add(1)
+			p.Submit(func() {
+				defer wg.Done()
+				time.Sleep(5 * time.Millisecond)
+			})
+		}
+
+		p.Stop()
+		wg.Wait()
+	}
+}
+
+func TestWorkerPool_MetricsUnderLoad(t *testing.T) {
+	p := testPool(models.WorkerPoolConfig{
+		MinWorkers:    2,
+		MaxWorkers:    8,
+		ScaleUpPct:    50,
+		ScaleDownPct:  25,
+		CooldownSecs:  0,
+		StatsInterval: "50ms",
+	})
+	defer p.Stop()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		p.Submit(func() {
+			defer wg.Done()
+			time.Sleep(1 * time.Millisecond)
+		})
+	}
+
+	wg.Wait()
+
+	m := p.Metrics()
+	totalTasks := m["total_tasks"].(uint64)
+	if totalTasks != 100 {
+		t.Errorf("total_tasks = %d, want 100", totalTasks)
+	}
+}

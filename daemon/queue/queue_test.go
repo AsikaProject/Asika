@@ -767,3 +767,313 @@ func mustMarshalPR(v interface{}) []byte {
 	}
 	return data
 }
+
+func TestQueueRecovery_MergingStateWithMergedPR(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "recover-boundary", GitHub: "owner/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "boundary-merged-pr",
+		RepoGroup: "recover-boundary",
+		Platform:  "github",
+		PRNumber:  10,
+		State:     "merged",
+	}
+	db.Put(db.BucketPRs, "recover-boundary#github#10", mustMarshalPR(pr))
+
+	mergingItem := models.QueueItem{
+		PRID:      "boundary-merged-pr",
+		RepoGroup: "recover-boundary",
+		Status:    "merging",
+		AddedAt:   time.Now(),
+	}
+	key := "recover-boundary#boundary-merged-pr"
+	db.Put(db.BucketQueueItems, key, mustMarshalPR(mergingItem))
+
+	m.Recover()
+
+	var count int
+	db.ForEach(db.BucketQueueItems, func(k, v []byte) error {
+		count++
+		return nil
+	})
+	if count != 0 {
+		t.Errorf("expected 0 items (merged PR should be removed), got %d", count)
+	}
+}
+
+func TestQueueRecovery_CheckingStateWithMergedPR(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "recover-checking", GitHub: "owner/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "checking-merged-pr",
+		RepoGroup: "recover-checking",
+		Platform:  "github",
+		PRNumber:  11,
+		State:     "merged",
+	}
+	db.Put(db.BucketPRs, "recover-checking#github#11", mustMarshalPR(pr))
+
+	checkingItem := models.QueueItem{
+		PRID:      "checking-merged-pr",
+		RepoGroup: "recover-checking",
+		Status:    "checking",
+		AddedAt:   time.Now(),
+	}
+	key := "recover-checking#checking-merged-pr"
+	db.Put(db.BucketQueueItems, key, mustMarshalPR(checkingItem))
+
+	m.Recover()
+
+	var count int
+	db.ForEach(db.BucketQueueItems, func(k, v []byte) error {
+		count++
+		return nil
+	})
+	if count != 0 {
+		t.Errorf("expected 0 items (merged PR should be removed), got %d", count)
+	}
+}
+
+func TestQueueRecovery_MultipleStaleItems(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "multi-stale", GitHub: "owner/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	for i := 0; i < 5; i++ {
+		pr := &models.PRRecord{
+			ID:        "multi-stale-pr-" + string(rune('A'+i)),
+			RepoGroup: "multi-stale",
+			Platform:  "github",
+			PRNumber:  i + 20,
+			State:     "open",
+		}
+		db.Put(db.BucketPRs, "multi-stale#github#"+string(rune('1'+i+20)), mustMarshalPR(pr))
+
+		status := "merging"
+		if i%2 == 0 {
+			status = "checking"
+		}
+		item := models.QueueItem{
+			PRID:      "multi-stale-pr-" + string(rune('A'+i)),
+			RepoGroup: "multi-stale",
+			Status:    status,
+			AddedAt:   time.Now(),
+		}
+		key := "multi-stale#multi-stale-pr-" + string(rune('A'+i))
+		db.Put(db.BucketQueueItems, key, mustMarshalPR(item))
+	}
+
+	m.Recover()
+
+	var waitingCount int
+	db.ForEach(db.BucketQueueItems, func(k, v []byte) error {
+		var item models.QueueItem
+		json.Unmarshal(v, &item)
+		if item.Status == "waiting" {
+			waitingCount++
+		}
+		return nil
+	})
+	if waitingCount != 5 {
+		t.Errorf("expected 5 waiting items after recovery, got %d", waitingCount)
+	}
+}
+
+func TestQueueRecovery_MixedStates(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "mixed-state", GitHub: "owner/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	openPR := &models.PRRecord{
+		ID:        "mixed-open-pr",
+		RepoGroup: "mixed-state",
+		Platform:  "github",
+		PRNumber:  30,
+		State:     "open",
+	}
+	mergedPR := &models.PRRecord{
+		ID:        "mixed-merged-pr",
+		RepoGroup: "mixed-state",
+		Platform:  "github",
+		PRNumber:  31,
+		State:     "merged",
+	}
+	db.Put(db.BucketPRs, "mixed-state#github#30", mustMarshalPR(openPR))
+	db.Put(db.BucketPRs, "mixed-state#github#31", mustMarshalPR(mergedPR))
+
+	openItem := models.QueueItem{
+		PRID:      "mixed-open-pr",
+		RepoGroup: "mixed-state",
+		Status:    "merging",
+		AddedAt:   time.Now(),
+	}
+	mergedItem := models.QueueItem{
+		PRID:      "mixed-merged-pr",
+		RepoGroup: "mixed-state",
+		Status:    "checking",
+		AddedAt:   time.Now(),
+	}
+	db.Put(db.BucketQueueItems, "mixed-state#mixed-open-pr", mustMarshalPR(openItem))
+	db.Put(db.BucketQueueItems, "mixed-state#mixed-merged-pr", mustMarshalPR(mergedItem))
+
+	m.Recover()
+
+	var waitingCount, totalCount int
+	db.ForEach(db.BucketQueueItems, func(k, v []byte) error {
+		totalCount++
+		var item models.QueueItem
+		json.Unmarshal(v, &item)
+		if item.Status == "waiting" {
+			waitingCount++
+		}
+		return nil
+	})
+
+	if totalCount != 1 {
+		t.Errorf("expected 1 total item (merged removed), got %d", totalCount)
+	}
+	if waitingCount != 1 {
+		t.Errorf("expected 1 waiting item, got %d", waitingCount)
+	}
+}
+
+func TestQueueRecovery_EmptyQueue(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	m.Recover()
+}
+
+func TestQueueRecovery_DoneItemsNotAffected(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	doneItem := models.QueueItem{
+		PRID:      "done-pr",
+		RepoGroup: "test",
+		Status:    "done",
+		AddedAt:   time.Now(),
+	}
+	failedItem := models.QueueItem{
+		PRID:      "failed-pr",
+		RepoGroup: "test",
+		Status:    "failed",
+		AddedAt:   time.Now(),
+	}
+	waitingItem := models.QueueItem{
+		PRID:      "waiting-pr",
+		RepoGroup: "test",
+		Status:    "waiting",
+		AddedAt:   time.Now(),
+	}
+
+	db.Put(db.BucketQueueItems, "test#done-pr", mustMarshalPR(doneItem))
+	db.Put(db.BucketQueueItems, "test#failed-pr", mustMarshalPR(failedItem))
+	db.Put(db.BucketQueueItems, "test#waiting-pr", mustMarshalPR(waitingItem))
+
+	m.Recover()
+
+	var doneCount, failedCount, waitingCount int
+	db.ForEach(db.BucketQueueItems, func(k, v []byte) error {
+		var item models.QueueItem
+		json.Unmarshal(v, &item)
+		switch item.Status {
+		case "done":
+			doneCount++
+		case "failed":
+			failedCount++
+		case "waiting":
+			waitingCount++
+		}
+		return nil
+	})
+
+	if doneCount != 1 {
+		t.Errorf("expected 1 done item, got %d", doneCount)
+	}
+	if failedCount != 1 {
+		t.Errorf("expected 1 failed item, got %d", failedCount)
+	}
+	if waitingCount != 1 {
+		t.Errorf("expected 1 waiting item, got %d", waitingCount)
+	}
+}
+
+func TestQueueRecovery_PRNotFoundInDB(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "no-pr-group", GitHub: "owner/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	m := NewManager(cfg, clients)
+
+	orphanItem := models.QueueItem{
+		PRID:      "orphan-pr",
+		RepoGroup: "no-pr-group",
+		Status:    "merging",
+		AddedAt:   time.Now(),
+	}
+	db.Put(db.BucketQueueItems, "no-pr-group#orphan-pr", mustMarshalPR(orphanItem))
+
+	m.Recover()
+
+	var count int
+	db.ForEach(db.BucketQueueItems, func(k, v []byte) error {
+		count++
+		return nil
+	})
+	if count != 1 {
+		t.Errorf("expected 1 item (orphan should be reset to waiting), got %d", count)
+	}
+}

@@ -75,17 +75,7 @@ func (w *writerActor) writeIssueLink(link *models.IssuePRLink) error {
 		return fmt.Errorf("marshal issue-pr link: %w", err)
 	}
 	key := fmt.Sprintf("%s:%s:%s", link.RepoGroup, link.IssueID, link.PRID)
-	req := writeRequest{
-		key:    key,
-		value:  data,
-		result: make(chan error, 1),
-	}
-	select {
-	case w.requests <- req:
-		return <-req.result
-	case <-w.stop:
-		return fmt.Errorf("writer actor stopped")
-	}
+	return db.Put(db.BucketIssuePRLinks, key, data)
 }
 
 // write submits a write request and waits for the result.
@@ -101,7 +91,12 @@ func (w *writerActor) write(key string, value []byte, prID, repoGroup string, pr
 	}
 	select {
 	case w.requests <- req:
-		return <-req.result
+		select {
+		case err := <-req.result:
+			return err
+		case <-w.stop:
+			return fmt.Errorf("writer actor stopped")
+		}
 	case <-w.stop:
 		return fmt.Errorf("writer actor stopped")
 	}

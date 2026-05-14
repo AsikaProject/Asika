@@ -2,7 +2,9 @@ package consumer
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
+	"time"
 
 	"asika/common/config"
 	"asika/common/db"
@@ -1083,4 +1085,463 @@ func TestHandlePRLabeled_NilPayload(t *testing.T) {
 	if len(result.Labels) != 1 {
 		t.Errorf("expected 1 label (unchanged), got %d: %v", len(result.Labels), result.Labels)
 	}
+}
+
+func TestConsumerEventFlow_OpenedThenMerged(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "flow-merge", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "flow-merge-pr-1",
+		RepoGroup: "flow-merge",
+		Platform:  "github",
+		PRNumber:  400,
+		Title:     "Flow merge test PR",
+		Author:    "tester",
+		State:     "open",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "flow-merge",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	data, err := db.Get(db.BucketPRs, "flow-merge#github#400")
+	if err != nil {
+		t.Fatalf("PR not stored after open: %v", err)
+	}
+	var stored models.PRRecord
+	json.Unmarshal(data, &stored)
+	if stored.State != "open" {
+		t.Errorf("state after open = %q, want open", stored.State)
+	}
+
+	c.handlePRMerged(events.Event{
+		Type:      events.EventPRMerged,
+		RepoGroup: "flow-merge",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	data, err = db.Get(db.BucketPRs, "flow-merge#github#400")
+	if err != nil {
+		t.Fatalf("PR not found after merge: %v", err)
+	}
+	json.Unmarshal(data, &stored)
+	if stored.State != "merged" {
+		t.Errorf("state after merge = %q, want merged", stored.State)
+	}
+}
+
+func TestConsumerEventFlow_OpenedThenApprovedThenClosed(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "flow-full", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "flow-full-pr-1",
+		RepoGroup: "flow-full",
+		Platform:  "github",
+		PRNumber:  500,
+		Title:     "Full flow test PR",
+		Author:    "tester",
+		State:     "open",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "flow-full",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	c.handlePRApproved(events.Event{
+		Type:      events.EventPRApproved,
+		RepoGroup: "flow-full",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	items, err := c.queue.GetQueueItems("flow-full")
+	if err != nil {
+		t.Fatalf("GetQueueItems failed: %v", err)
+	}
+	if len(items) != 1 {
+		t.Errorf("expected 1 queue item after approve, got %d", len(items))
+	}
+
+	c.handlePRClosed(events.Event{
+		Type:      events.EventPRClosed,
+		RepoGroup: "flow-full",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	data, err := db.Get(db.BucketPRs, "flow-full#github#500")
+	if err != nil {
+		t.Fatalf("PR not found after close: %v", err)
+	}
+	var stored models.PRRecord
+	json.Unmarshal(data, &stored)
+	if stored.State != "closed" {
+		t.Errorf("state after close = %q, want closed", stored.State)
+	}
+}
+
+func TestConsumerEventFlow_SpamDetection(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{
+		Spam: models.SpamConfig{
+			Enabled:           true,
+			Threshold:         3,
+			TimeWindow:        "10m",
+			TriggerOnAuthor:   true,
+			TriggerOnTitleKw:  []string{},
+			AutoCleanEnabled:  false,
+			AutoCleanInterval: "24h",
+		},
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "spam-flow", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	sd := syncer.NewSpamDetectorWithClients(cfg, clients)
+
+	c := NewConsumer()
+	c.spamDetector = sd
+
+	pr := &models.PRRecord{
+		ID:        "spam-flow-pr-1",
+		RepoGroup: "spam-flow",
+		Platform:  "github",
+		PRNumber:  600,
+		Title:     "Spam flow test",
+		Author:    "spammer",
+		State:     "open",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "spam-flow",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	c.handleSpamDetected(events.Event{
+		Type:      events.EventSpamDetected,
+		RepoGroup: "spam-flow",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+
+	data, err := db.Get(db.BucketPRs, "spam-flow#github#600")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	var stored models.PRRecord
+	json.Unmarshal(data, &stored)
+	if !stored.SpamFlag {
+		t.Error("SpamFlag should be true after spam detection")
+	}
+}
+
+func TestConsumerEventFlow_ReopenAfterSpam(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "reopen-flow", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "reopen-flow-pr-1",
+		RepoGroup: "reopen-flow",
+		Platform:  "github",
+		PRNumber:  700,
+		Title:     "Reopen flow test",
+		Author:    "tester",
+		State:     "spam",
+		SpamFlag:  true,
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "reopen-flow",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	c.handleSpamDetected(events.Event{
+		Type:      events.EventSpamDetected,
+		RepoGroup: "reopen-flow",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	time.Sleep(100 * time.Millisecond)
+
+	c.handlePRReopened(events.Event{
+		Type:      events.EventPRReopened,
+		RepoGroup: "reopen-flow",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	data, err := db.Get(db.BucketPRs, "reopen-flow#github#700")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	var stored models.PRRecord
+	json.Unmarshal(data, &stored)
+	if stored.State != "open" {
+		t.Errorf("state after reopen = %q, want open", stored.State)
+	}
+	if stored.SpamFlag {
+		t.Error("SpamFlag should be false after reopen")
+	}
+}
+
+func TestConsumerEventFlow_LabeledEvent(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "label-flow-pr-1",
+		RepoGroup: "label-flow",
+		Platform:  "github",
+		PRNumber:  800,
+		Title:     "Label flow test",
+		Author:    "tester",
+		State:     "open",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "label-flow",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	c.handlePRLabeled(events.Event{
+		Type:      events.EventPRLabeled,
+		RepoGroup: "label-flow",
+		Platform:  "github",
+		PR:        pr,
+		Payload:   "needs-review",
+	})
+
+	data, err := db.Get(db.BucketPRs, "label-flow#github#800")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	var stored models.PRRecord
+	json.Unmarshal(data, &stored)
+
+	found := false
+	for _, l := range stored.Labels {
+		if l == "needs-review" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'needs-review' in labels, got %v", stored.Labels)
+	}
+}
+
+func TestConsumerEventFlow_FullLifecycle(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "lifecycle", Mode: "multi", GitHub: "org/repo"},
+		},
+	}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "lifecycle-pr-1",
+		RepoGroup: "lifecycle",
+		Platform:  "github",
+		PRNumber:  900,
+		Title:     "Full lifecycle test",
+		Author:    "tester",
+		State:     "open",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "lifecycle",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	c.handlePRLabeled(events.Event{
+		Type:      events.EventPRLabeled,
+		RepoGroup: "lifecycle",
+		Platform:  "github",
+		PR:        pr,
+		Payload:   "approved",
+	})
+
+	c.handlePRApproved(events.Event{
+		Type:      events.EventPRApproved,
+		RepoGroup: "lifecycle",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	c.handlePRMerged(events.Event{
+		Type:      events.EventPRMerged,
+		RepoGroup: "lifecycle",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	data, err := db.Get(db.BucketPRs, "lifecycle#github#900")
+	if err != nil {
+		t.Fatalf("PR not found: %v", err)
+	}
+	var stored models.PRRecord
+	json.Unmarshal(data, &stored)
+	if stored.State != "merged" {
+		t.Errorf("final state = %q, want merged", stored.State)
+	}
+
+	found := false
+	for _, l := range stored.Labels {
+		if l == "approved" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'approved' in labels, got %v", stored.Labels)
+	}
+}
+
+func TestConsumerGoroutinePanicRecovery_NoSilentCrash(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "goroutine-panic-pr",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  1,
+		Title:     "Goroutine panic test",
+		Author:    "tester",
+		State:     "open",
+	}
+
+	c.handlePROpened(events.Event{
+		Type:      events.EventPROpened,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	time.Sleep(200 * time.Millisecond)
+
+	data, err := db.Get(db.BucketPRs, "test-group#github#1")
+	if err != nil {
+		t.Fatalf("PR not stored: %v", err)
+	}
+	var stored models.PRRecord
+	json.Unmarshal(data, &stored)
+	if stored.Title != "Goroutine panic test" {
+		t.Errorf("title = %q, want %q", stored.Title, "Goroutine panic test")
+	}
+}
+
+func TestConsumerConcurrentEventDispatch(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			pr := &models.PRRecord{
+				ID:        "concurrent-pr-" + string(rune('A'+n)),
+				RepoGroup: "concurrent-group",
+				Platform:  "github",
+				PRNumber:  n + 1,
+				Title:     "Concurrent PR " + string(rune('A'+n)),
+				Author:    "tester",
+				State:     "open",
+			}
+			c.handlePROpened(events.Event{
+				Type:      events.EventPROpened,
+				RepoGroup: "concurrent-group",
+				Platform:  "github",
+				PR:        pr,
+			})
+		}(i)
+	}
+	wg.Wait()
 }
