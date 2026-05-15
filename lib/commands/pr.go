@@ -25,8 +25,10 @@ var prListCmd = &cobra.Command{
 		state, _ := cmd.Flags().GetString("state")
 		platform, _ := cmd.Flags().GetString("platform")
 
-		url := fmt.Sprintf("%s/api/v1/repos/%s/prs?state=%s&platform=%s",
-			GetServer(cmd), repoGroup, state, platform,
+		page, _ := cmd.Flags().GetInt("page")
+		perPage, _ := cmd.Flags().GetInt("per-page")
+		url := fmt.Sprintf("%s/api/v1/repos/%s/prs?state=%s&platform=%s&page=%d&per_page=%d",
+			GetServer(cmd), repoGroup, state, platform, page, perPage,
 		)
 		resp := doRequest("GET", url, cmd)
 		if resp == nil {
@@ -228,6 +230,8 @@ func init() {
 
 	prListCmd.Flags().String("state", "", "Filter by state")
 	prListCmd.Flags().String("platform", "", "Filter by platform")
+	prListCmd.Flags().Int("page", 1, "Page number (default: 1)")
+	prListCmd.Flags().Int("per-page", 100, "Items per page (max: 100)")
 	prCloseCmd.Flags().String("reason", "", "Close reason (will be applied as a label)")
 	prSpamCmd.Flags().Bool("undo", false, "Remove spam mark")
 	prBatchLabelCmd.Flags().String("label", "", "Label to add (required)")

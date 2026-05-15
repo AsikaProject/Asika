@@ -2,6 +2,8 @@
 
 ## v20260510DEV > Unreleased
 
+- **Feature**: CLI `pr list` supports `--page` and `--per-page` flags; `handleResponse` now prints pagination summary (page/total) for paginated API responses.
+
 - **Feature**: Added HMAC-based fingerprint authentication. Configurable via `[auth] fingerprint_enabled/secret/expiry`. Endpoints: register, verify, list, revoke. Middleware reads `X-Fingerprint-Token` header or `Authorization: Fingerprint <token>`.
 
 - **Bug fix**: `extractToken` (server) did not validate `Bearer` prefix on Authorization header, accepting any scheme (e.g. `Basic`). Now requires `Bearer` prefix, consistent with common middleware.

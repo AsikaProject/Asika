@@ -119,6 +119,14 @@ func handleResponse(resp *http.Response, emptyMsg string) []interface{} {
 					fmt.Println(emptyMsg)
 					return nil
 				}
+				if total, ok := obj["total"].(float64); ok {
+					if page, ok := obj["page"].(float64); ok {
+						if perPage, ok := obj["per_page"].(float64); ok {
+							totalPages := (int(total) + int(perPage) - 1) / int(perPage)
+							fmt.Fprintf(os.Stderr, "--- Page %d of %d (%d items total) ---\n", int(page), totalPages, int(total))
+						}
+					}
+				}
 			} else {
 				b, _ := json.MarshalIndent(obj, "", "  ")
 				fmt.Println(string(b))

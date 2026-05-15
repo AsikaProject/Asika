@@ -138,6 +138,25 @@ func TestHandleResponse_DataArray(t *testing.T) {
 	}
 }
 
+func TestHandleResponse_PaginatedEnvelope(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"data": [{"id": 1}, {"id": 2}], "total": 50, "page": 1, "per_page": 2}`))
+	}))
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("http.Get failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	result := handleResponse(resp, "no data")
+	if len(result) != 2 {
+		t.Errorf("handleResponse len = %d, want 2", len(result))
+	}
+}
+
 func TestHandleWriteResponse_Success(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"message": "created"}`))
