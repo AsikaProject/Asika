@@ -2,6 +2,16 @@
 
 ## v20260510DEV > Unreleased
 
+- **Feature**: Added HMAC-based fingerprint authentication. Configurable via `[auth] fingerprint_enabled/secret/expiry`. Endpoints: register, verify, list, revoke. Middleware reads `X-Fingerprint-Token` header or `Authorization: Fingerprint <token>`.
+
+- **Bug fix**: `extractToken` (server) did not validate `Bearer` prefix on Authorization header, accepting any scheme (e.g. `Basic`). Now requires `Bearer` prefix, consistent with common middleware.
+
+- **Bug fix**: `UpdateUser` missing `CanRevert` permission field in request struct and update logic. Added `can_revert` to the permissions JSON binding and DB save path.
+
+- **Performance**: `ValidateAPIKey` now uses HMAC-SHA256 pre-check to avoid O(n) bcrypt comparisons. Only keys with matching HMAC proceed to bcrypt verification. API keys now store `key_hmac` field.
+
+- **Bug fix**: `CleanupBlacklist` was never called periodically, causing unbounded memory growth. Added hourly cleanup worker in `StartWorkers` that also cleans expired fingerprints.
+
 - **Bug fix**: `handlePRReopened` called `SyncOnMerge` with bare `c.ctx` (no timeout), inconsistent with `handlePRMerged`. Added 10-minute timeout.
 
 - **Bug fix**: `recordSync` called `db.Put` directly, bypassing the writer actor. Added `SyncRecordWriter` interface to Syncer and wired it through the consumer's writer actor for serialized bbolt writes.

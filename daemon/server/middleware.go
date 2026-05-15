@@ -557,8 +557,8 @@ func RequirePermission(permField string) gin.HandlerFunc {
 func extractToken(c *gin.Context) string {
 	authHeader := c.GetHeader("Authorization")
 	if authHeader != "" {
-		parts := splitToken(authHeader)
-		if len(parts) == 2 {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
 			return parts[1]
 		}
 	}
@@ -568,17 +568,52 @@ func extractToken(c *gin.Context) string {
 	return ""
 }
 
-// splitToken splits the Authorization header into parts
-func splitToken(header string) []string {
-	for i, c := range header {
-		if c == ' ' {
-			return []string{header[:i], header[i+1:]}
-		}
-	}
-	return nil
-}
-
 // extractAPIKey extracts the API key from X-API-Key header
 func extractAPIKey(c *gin.Context) string {
 	return c.GetHeader("X-API-Key")
+}
+
+// FingerprintMiddleware creates a middleware that validates fingerprint tokens.
+// It looks for the token in X-Fingerprint-Token header or Authorization: Fingerprint <token>.
+// If fingerprint auth is not configured, the middleware is a no-op.
+func FingerprintMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !c.GetBool("fingerprint_enabled") {
+			c.Next()
+			return
+		}
+
+		token := extractFingerprintToken(c)
+		if token == "" {
+			c.Next()
+			return
+		}
+
+		username, err := auth.VerifyFingerprintToken(token)
+		if err != nil {
+			slog.Warn("fingerprint verification failed", "error", err, "ip", c.ClientIP())
+			c.Next()
+			return
+		}
+
+		c.Set("fingerprint_user", username)
+		c.Set("fingerprint_verified", true)
+		c.Next()
+	}
+}
+
+func extractFingerprintToken(c *gin.Context) string {
+	if token := c.GetHeader("X-Fingerprint-Token"); token != "" {
+		return token
+	}
+
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "fingerprint") {
+			return parts[1]
+		}
+	}
+
+	return ""
 }

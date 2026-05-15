@@ -190,6 +190,7 @@ func UpdateUser(c *gin.Context) {
 			CanReopen      *bool `json:"can_reopen"`
 			CanSpam        *bool `json:"can_spam"`
 			CanManageQueue *bool `json:"can_manage_queue"`
+			CanRevert      *bool `json:"can_revert"`
 		} `json:"permissions"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -252,6 +253,9 @@ func UpdateUser(c *gin.Context) {
 		}
 		if p.CanManageQueue != nil {
 			user.Permissions.CanManageQueue = *p.CanManageQueue
+		}
+		if p.CanRevert != nil {
+			user.Permissions.CanRevert = *p.CanRevert
 		}
 	}
 

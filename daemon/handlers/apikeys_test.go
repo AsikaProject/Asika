@@ -284,6 +284,8 @@ func TestValidateAPIKey(t *testing.T) {
 	testutil.NewTestDB(t)
 	t.Cleanup(func() { db.Close() })
 
+	SetHMACSecret("test-hmac-secret")
+
 	// Store a known key
 	rawKey := "ak_testkey1234567890abcdef"
 	hash, _ := bcrypt.GenerateFromPassword([]byte(rawKey), bcrypt.DefaultCost)
@@ -291,6 +293,7 @@ func TestValidateAPIKey(t *testing.T) {
 		ID:      "test-id",
 		Name:    "test-key",
 		KeyHash: string(hash),
+		KeyHMAC: computeAPIKeyHMAC(rawKey),
 		Role:    "operator",
 	}
 	db.PutAPIKey(apiKey)
@@ -328,6 +331,7 @@ func TestAPIKeyAuth_Middleware(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	auth.Init("apikey-middleware-test", 72*time.Hour)
+	SetHMACSecret("test-hmac-secret-mw")
 
 	// Store a known key
 	rawKey := "ak_middleware_test_key"
@@ -336,6 +340,7 @@ func TestAPIKeyAuth_Middleware(t *testing.T) {
 		ID:      "mw-test-id",
 		Name:    "mw-test-key",
 		KeyHash: string(hash),
+		KeyHMAC: computeAPIKeyHMAC(rawKey),
 		Role:    "viewer",
 	}
 	db.PutAPIKey(apiKey)

@@ -26,8 +26,11 @@ path = "/var/lib/asika/asika.db"
 
 # Authentication
 [auth]
-jwt_secret    = "change-me-in-production"
-token_expiry  = "72h"
+jwt_secret           = "change-me-in-production"
+token_expiry         = "72h"
+fingerprint_enabled  = false
+fingerprint_secret   = "change-me-fingerprint-secret"
+fingerprint_expiry   = "168h"
 
 # Event source: "webhook" or "polling"
 [events]

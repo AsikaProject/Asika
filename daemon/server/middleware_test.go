@@ -13,34 +13,34 @@ import (
 	"asika/testutil"
 )
 
-func TestSplitToken(t *testing.T) {
+func TestExtractToken_BearerPrefixRequired(t *testing.T) {
 	tests := []struct {
-		input string
-		want  []string
+		name   string
+		header string
+		want   string
 	}{
-		{"Bearer token123", []string{"Bearer", "token123"}},
-		{"token456", nil},
-		{"", nil},
-		{"Bearer ", []string{"Bearer", ""}},
+		{"valid bearer", "Bearer token123", "token123"},
+		{"lowercase bearer", "bearer token456", "token456"},
+		{"no prefix", "token789", ""},
+		{"basic auth", "Basic dXNlcjpwYXNz", ""},
+		{"empty header", "", ""},
+		{"bearer with empty token", "Bearer ", ""},
+		{"single word", "Bearer", ""},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			got := splitToken(tt.input)
-			if tt.want == nil {
-				if got != nil {
-					t.Errorf("splitToken(%q) = %v, want nil", tt.input, got)
-				}
-				return
+		t.Run(tt.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = &http.Request{Header: make(http.Header)}
+			if tt.header != "" {
+				c.Request.Header.Set("Authorization", tt.header)
 			}
-			if len(got) != len(tt.want) {
-				t.Errorf("splitToken(%q) length = %d, want %d", tt.input, len(got), len(tt.want))
-				return
-			}
-			for i := range got {
-				if got[i] != tt.want[i] {
-					t.Errorf("splitToken(%q)[%d] = %q, want %q", tt.input, i, got[i], tt.want[i])
-				}
+
+			got := extractToken(c)
+			if got != tt.want {
+				t.Errorf("extractToken() = %q, want %q", got, tt.want)
 			}
 		})
 	}

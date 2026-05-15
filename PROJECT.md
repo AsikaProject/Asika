@@ -141,6 +141,7 @@ Request processing order:
 6. **CORS** — Cross-origin resource sharing
 7. **RateLimit** — Per-IP token bucket (optional)
 8. **AuthMiddleware** — JWT/cookie authentication
+9. **FingerprintMiddleware** — Optional HMAC fingerprint verification (when `auth.fingerprint_enabled`)
 
 Route-specific middleware:
 
@@ -175,6 +176,23 @@ Non-admin users can be assigned to specific repo groups and repos:
 Both fields are supported on `User` (JWT auth) and `APIKey` (API key auth).
 
 Temporary tokens: Users can generate short-lived JWT tokens (1m–24h) with a `temp: true` claim and a `permissions` map. `RequirePermission` middleware checks temp token permissions before falling through to DB permissions. Generated via `POST /api/v1/auth/temp-token`.
+
+### Fingerprint Authentication
+
+Fingerprint tokens provide a lightweight HMAC-based device identity mechanism, supplementing JWT auth:
+
+- **Config**: `[auth]` section: `fingerprint_enabled`, `fingerprint_secret`, `fingerprint_expiry` (default 168h/7d)
+- **Token format**: `id:HMAC-SHA256(secret, username:id:expiry)` — stateless verification
+- **Storage**: In-memory map with `sync.RWMutex`; cleaned up hourly by background worker
+- **Middleware**: `FingerprintMiddleware` extracts token from `X-Fingerprint-Token` header or `Authorization: Fingerprint <token>`. Optional — skips if no token present.
+- **Endpoints** (all require JWT auth):
+  - `POST /api/v1/auth/fingerprints` — Register a new fingerprint token
+  - `POST /api/v1/auth/fingerprints/verify` — Verify a fingerprint token
+  - `GET /api/v1/auth/fingerprints` — List active fingerprint IDs for current user
+  - `DELETE /api/v1/auth/fingerprints/:id` — Revoke a specific fingerprint
+  - `DELETE /api/v1/auth/fingerprints` — Revoke all fingerprints for current user
+- **Context**: On successful verification, sets `fingerprint_user` and `fingerprint_verified` in gin context
+- **Init**: `auth.InitFingerprint(secret, expiry)` called during bootstrap when enabled
 
 ### Background Workers
 

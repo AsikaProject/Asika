@@ -77,6 +77,11 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 
 	auth.Init(cfg.Auth.JWTSecret, config.GenerateTokenExpiry(cfg.Auth.TokenExpiry))
 
+	if cfg.Auth.FingerprintEnabled {
+		fpExpiry := config.GenerateTokenExpiry(cfg.Auth.FingerprintExpiry)
+		auth.InitFingerprint(cfg.Auth.FingerprintSecret, fpExpiry)
+	}
+
 	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
 	if cfg.Tokens.GitHub != "" {
 		clients[platforms.PlatformGitHub] = platforms.NewGitHubClient(cfg.Tokens.GitHub, cfg.Events.WebhookSecret, cfg.GitHubBaseURL)

@@ -111,6 +111,17 @@ func (s *Server) setupMiddleware() {
 		}
 	}
 	s.engine.Use(AuthMiddleware())
+	if s.cfg != nil && s.cfg.Auth.FingerprintEnabled {
+		s.engine.Use(FingerprintMiddleware())
+		s.engine.Use(fingerprintContextMiddleware())
+	}
+}
+
+func fingerprintContextMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set("fingerprint_enabled", true)
+		c.Next()
+	}
 }
 
 // Start starts the server

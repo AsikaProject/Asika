@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -26,6 +28,7 @@ type apiKeyResponse struct {
 	AllowedRepoGroups []string               `json:"allowed_repo_groups"`
 	AllowedRepos      []string               `json:"allowed_repos"`
 	Permissions       models.UserPermissions `json:"permissions"`
+	KeyHMAC           string                 `json:"key_hmac"`
 	RawKey            string                 `json:"key,omitempty"` // only on creation
 }
 
@@ -40,6 +43,7 @@ func toAPIKeyResponse(key *models.APIKey, rawKey string) apiKeyResponse {
 		AllowedRepoGroups: key.AllowedRepoGroups,
 		AllowedRepos:      key.AllowedRepos,
 		Permissions:       key.Permissions,
+		KeyHMAC:           key.KeyHMAC,
 		RawKey:            rawKey,
 	}
 }
@@ -91,6 +95,8 @@ func CreateAPIKey(c *gin.Context) {
 		return
 	}
 
+	keyHMAC := computeAPIKeyHMAC(rawKey)
+
 	perms := models.UserPermissions{}
 	if req.Role == "operator" && req.Permissions != nil {
 		p := req.Permissions
@@ -118,6 +124,7 @@ func CreateAPIKey(c *gin.Context) {
 		ID:                generateAPIKeyID(),
 		Name:              req.Name,
 		KeyHash:           string(hash),
+		KeyHMAC:           keyHMAC,
 		Role:              req.Role,
 		CreatedAt:         time.Now(),
 		CreatedBy:         username,
@@ -163,13 +170,31 @@ func RevokeAPIKey(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "API key revoked"})
 }
 
+var hmacSecret []byte
+
+// SetHMACSecret sets the secret used for API key HMAC pre-check.
+func SetHMACSecret(secret string) {
+	hmacSecret = []byte(secret)
+}
+
+func computeAPIKeyHMAC(rawKey string) string {
+	mac := hmac.New(sha256.New, hmacSecret)
+	mac.Write([]byte(rawKey))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 // ValidateAPIKey checks a raw API key against stored hashes.
+// Uses HMAC pre-check to avoid O(n) bcrypt comparisons.
 func ValidateAPIKey(rawKey string) *models.APIKey {
 	keys, err := db.ListAPIKeys()
 	if err != nil {
 		return nil
 	}
+	rawHMAC := computeAPIKeyHMAC(rawKey)
 	for _, k := range keys {
+		if !hmac.Equal([]byte(k.KeyHMAC), []byte(rawHMAC)) {
+			continue
+		}
 		if err := bcrypt.CompareHashAndPassword([]byte(k.KeyHash), []byte(rawKey)); err == nil {
 			return k
 		}
@@ -224,4 +249,5 @@ func generateAPIKeyID() string {
 
 func init() {
 	_ = auth.HasPermission
+	SetHMACSecret("asika-apikey-hmac-v1")
 }

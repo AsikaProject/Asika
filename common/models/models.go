@@ -24,6 +24,7 @@ type APIKey struct {
 	ID                string          `json:"id"`
 	Name              string          `json:"name"`
 	KeyHash           string          `json:"key_hash"`
+	KeyHMAC           string          `json:"key_hmac"`
 	Role              string          `json:"role"`
 	CreatedAt         time.Time       `json:"created_at"`
 	CreatedBy         string          `json:"created_by"`

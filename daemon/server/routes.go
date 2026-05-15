@@ -257,6 +257,15 @@ func (s *Server) setupRoutes() {
 		}
 		protected.POST("/auth/temp-token", handlers.CreateTempToken)
 
+		fp := protected.Group("/auth/fingerprints")
+		{
+			fp.POST("", handlers.RegisterFingerprint)
+			fp.POST("/verify", handlers.VerifyFingerprintHandler)
+			fp.GET("", handlers.ListFingerprints)
+			fp.DELETE("/:id", handlers.RevokeFingerprint)
+			fp.DELETE("", handlers.RevokeAllFingerprints)
+		}
+
 		spaces := protected.Group("/spaces")
 		spaces.Use(RequireAnyRole("viewer", "operator", "admin"))
 		{

@@ -8,6 +8,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"asika/common/auth"
 	"asika/common/db"
 	"asika/common/models"
 	"asika/common/platforms"
@@ -138,6 +139,17 @@ func StartWorkers(
 	feed.InitGlobalFeed(cfg.Feed)
 	feed.StartFeedSubscriber()
 	slog.Info("RSS feed subscriber started", "enabled", cfg.Feed.Enabled)
+
+	// Token blacklist & fingerprint cleanup worker
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			auth.CleanupBlacklist()
+			auth.CleanupExpiredFingerprints()
+		}
+	}()
+	slog.Info("token blacklist & fingerprint cleanup worker started")
 
 	return
 }

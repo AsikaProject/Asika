@@ -30,8 +30,11 @@ type DatabaseConfig struct {
 
 // AuthConfig represents authentication configuration
 type AuthConfig struct {
-	JWTSecret   string `toml:"jwt_secret"`
-	TokenExpiry string `toml:"token_expiry"`
+	JWTSecret          string `toml:"jwt_secret"`
+	TokenExpiry        string `toml:"token_expiry"`
+	FingerprintSecret  string `toml:"fingerprint_secret"`
+	FingerprintEnabled bool   `toml:"fingerprint_enabled"`
+	FingerprintExpiry  string `toml:"fingerprint_expiry"`
 }
 
 // EventsConfig represents events configuration

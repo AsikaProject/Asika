@@ -155,6 +155,11 @@ func CompleteWizard(c *gin.Context) {
 	// Init auth
 	auth.Init(cfg.Auth.JWTSecret, config.GenerateTokenExpiry(cfg.Auth.TokenExpiry))
 
+	if cfg.Auth.FingerprintEnabled {
+		fpExpiry := config.GenerateTokenExpiry(cfg.Auth.FingerprintExpiry)
+		auth.InitFingerprint(cfg.Auth.FingerprintSecret, fpExpiry)
+	}
+
 	// Create admin users
 	for _, u := range payload.Users {
 		hash, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)

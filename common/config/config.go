@@ -231,6 +231,18 @@ func validate(cfg *models.Config) error {
 		return fmt.Errorf("auth.jwt_secret is required")
 	}
 
+	if cfg.Auth.FingerprintEnabled {
+		if cfg.Auth.FingerprintSecret == "" {
+			return fmt.Errorf("auth.fingerprint_secret is required when fingerprint is enabled")
+		}
+		if cfg.Auth.FingerprintExpiry == "" {
+			cfg.Auth.FingerprintExpiry = "168h"
+		}
+		if _, err := time.ParseDuration(cfg.Auth.FingerprintExpiry); err != nil {
+			return fmt.Errorf("invalid auth.fingerprint_expiry: %w", err)
+		}
+	}
+
 	if len(cfg.CloseReasons.Reasons) == 0 {
 		cfg.CloseReasons.Reasons = []string{"no longer needed", "duplicate", "invalid", "won't fix"}
 	}
