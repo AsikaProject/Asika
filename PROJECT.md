@@ -270,13 +270,14 @@ Feed items are stored in an in-memory ring buffer (default 50 items max). The fe
 - **Bare repo cache**: When `[git] repo_clone_path` is set, uses persistent bare repositories (`git clone --bare`) instead of temp dirs. Bare repos are cloned once and updated with `git fetch` per sync, dramatically reducing sync time.
 - **Force push**: All push operations use `Force: true` — cross-platform sync is a deterministic overwrite, the goal is to make all platforms match the source
 - **Target platforms**: All 7 platforms (GitHub, GitLab, Gitea, Forgejo, Codeberg, Bitbucket, Gerrit) — excludes source platform, skips empty repo configs
-- **Cherry-pick retry**: `cherryPickWithRetry` retries up to 3 times with exponential backoff on conflict errors. Re-fetches source before each retry.
+- **Cherry-pick retry**: `cherryPickWithRetry` retries up to 3 times with exponential backoff on conflict errors. Re-fetches source before each retry. Falls back to `CherryPickMergeDiff` (applies only parent1→merge diff) if standard hard-reset cherry-pick fails.
 - **Push retry**: `pushWithRetry` retries up to 3 times with exponential backoff on transient errors only (network issues, rate limits)
 - **Event publishing**: Publishes `EventSyncFailed` on partial/complete failure, `EventSyncCompleted` on full success
 - **Failure notification**: Wired to notifier system via `SetNotifyFunc`. Sends alert with PR title, source/target platforms, and failure reason
 - **Branch deletion sync**: `SyncBranchDeletion` syncs branch deletes to all targets with retry on transient errors
 - **Concurrency**: Per-repo-group mutex prevents concurrent syncs for the same group
 - **Sync history**: All sync attempts recorded in `sync_history` bucket with status (success/failed) and error messages
+- **PR state sync**: When `sync_pr_state = true` is configured in `[[repo_groups]]`, `syncPRState` automatically merges/closes the corresponding PR on target platforms after successful git sync (matched by head+base branch). Pre-sync `preSyncConflictCheck` warns if target has open PRs with the same head branch (dabao1955 scenario: PR changes may be silently lost).
 - **Bug fix**: `GetRepoGroupByName` and `GetRepoGroups` now correctly map the `Gerrit` field (previously silently dropped)
 
 ### Actor System (Goroutine Pools)

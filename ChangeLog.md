@@ -249,3 +249,13 @@
 - **Bug fix**: `writerActor` main-loop panic killed the writer goroutine permanently — subsequent writes blocked forever. Now auto-restarts up to 3 times on panic.
 
 - **Performance**: `dedupMu` lock in `WebhookHandler` now covers both dedup check and mark-as-processed atomically, preventing concurrent duplicate processing of the same delivery.
+
+## v20260516DEV > Unreleased
+
+- **Feature: PR state sync**: New `sync_pr_state = true` config option in `[[repo_groups]]`. After a successful cross-platform sync, `syncPRState` automatically merges or closes the corresponding PR on target platforms (matched by head+base branch). Prevents PRs from remaining open on platforms where the code has already been merged. Configurable per repo group.
+
+- **Feature: Pre-sync conflict detection**: New `preSyncConflictCheck` runs before sync. Checks target platforms for open PRs with the same head branch as the source PR. If found, sends a warning notification — this is the dabao1955 scenario where PR B's changes may be silently lost because PR A's sync already included B's code context.
+
+- **Feature: Cherry-pick merge-diff fallback**: `cherryPickWithRetry` now falls back to `CherryPickMergeDiff` when the standard hard-reset cherry-pick fails after all retries. The fallback applies only the merge-introduced changes (parent1→merge diff) instead of resetting the full tree, reducing conflict probability. Files modified independently on both target and merge are flagged as conflicts to avoid silent data loss.
+
+- **Bug fix**: `GetRepoGroupByName` now correctly maps the `SyncPRState` field from `RepoGroupConfig` to `RepoGroup`.

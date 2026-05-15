@@ -54,6 +54,8 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 		slog.Warn("fetch failed, continuing", "error", err)
 	}
 
+	s.preSyncConflictCheck(ctx, pr, group)
+
 	if err := s.syncDefaultBranch(gitRepo, pr, group); err != nil {
 		return err
 	}
@@ -71,6 +73,8 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 			s.notifySyncFailure(pr, "all-targets", fmt.Sprintf("tag sync failed: %v", err))
 		}
 	}
+
+	s.syncPRState(ctx, pr, group)
 
 	slog.Info("sync completed for all targets", "repo_group", pr.RepoGroup)
 	events.PublishPR(events.EventSyncCompleted, pr.RepoGroup, pr.Platform, pr, nil)

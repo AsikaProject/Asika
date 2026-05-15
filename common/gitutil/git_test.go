@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -157,6 +158,65 @@ func TestCherryPick_Success(t *testing.T) {
 	newHead, _ := repo.Head()
 	if newHead.Hash().String() == commitSHA {
 		t.Error("cherry-pick should create a new commit, not reuse the original")
+	}
+}
+
+func TestCherryPickMergeDiff_Success(t *testing.T) {
+	dir := t.TempDir()
+	repo := createTestRepo(t, dir)
+	w, _ := repo.Worktree()
+	defaultBranch := getDefaultBranch(t, repo)
+
+	// Create feature branch with a new file
+	if err := CreateBranch(repo, "feature"); err != nil {
+		t.Fatalf("CreateBranch failed: %v", err)
+	}
+	if err := createFileAndCommit(t, w, "feature.txt", "feature content", "Add feature"); err != nil {
+		t.Fatalf("failed to commit on feature: %v", err)
+	}
+	featureHead, _ := repo.Head()
+
+	// Go back to default and create a merge commit
+	if err := CheckoutBranch(repo, defaultBranch); err != nil {
+		t.Fatalf("CheckoutBranch failed: %v", err)
+	}
+
+	// Merge feature into default to create a merge commit
+	mergeCommit, err := w.Commit("Merge feature", &git.CommitOptions{
+		Parents: []plumbing.Hash{featureHead.Hash(), featureHead.Hash()},
+		Author: &object.Signature{
+			Name:  "Test Author",
+			Email: "test@example.com",
+			When:  time.Now(),
+		},
+		AllowEmptyCommits: true,
+	})
+	if err != nil {
+		t.Fatalf("merge commit failed: %v", err)
+	}
+
+	// Reset to initial state (before merge)
+	initialRef, err := repo.Reference(plumbing.NewBranchReferenceName(defaultBranch), true)
+	if err != nil {
+		t.Fatalf("failed to get initial ref: %v", err)
+	}
+	w.Reset(&git.ResetOptions{Commit: initialRef.Hash(), Mode: git.HardReset})
+
+	// Now cherry-pick the merge commit using merge-diff strategy
+	err = CherryPickMergeDiff(repo, mergeCommit.String())
+	if err != nil {
+		t.Fatalf("CherryPickMergeDiff failed: %v", err)
+	}
+}
+
+func TestCherryPickMergeDiff_NotMergeCommit(t *testing.T) {
+	dir := t.TempDir()
+	repo := createTestRepo(t, dir)
+
+	head, _ := repo.Head()
+	err := CherryPickMergeDiff(repo, head.Hash().String())
+	if err == nil {
+		t.Error("expected error for non-merge commit")
 	}
 }
 

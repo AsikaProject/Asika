@@ -42,6 +42,9 @@ func (s *Syncer) pushRef(gitRepo *git.Repository, remoteName, refSpec, token, ta
 }
 
 // cherryPickWithRetry attempts cherry-pick with exponential backoff on conflict.
+// Strategy: first try standard CherryPick (full tree reset). If that fails after
+// all retries, fall back to CherryPickMergeDiff which applies only the merge-introduced
+// changes (parent1 -> merge diff), avoiding conflicts from commits already on the target.
 func (s *Syncer) cherryPickWithRetry(gitRepo *git.Repository, commitSHA string, pr *models.PRRecord, branch, sourceToken string) error {
 	var lastErr error
 	for attempt := 0; attempt < syncMaxRetries; attempt++ {
@@ -63,8 +66,29 @@ func (s *Syncer) cherryPickWithRetry(gitRepo *git.Repository, commitSHA string, 
 		}
 		return nil
 	}
-	slog.Error("cherry-pick failed after all retries", "commit", commitSHA, "attempts", syncMaxRetries)
-	return fmt.Errorf("cherry-pick failed after %d retries: %w", syncMaxRetries, lastErr)
+
+	slog.Warn("standard cherry-pick failed after all retries, trying merge-diff fallback",
+		"commit", commitSHA, "attempts", syncMaxRetries, "last_error", lastErr)
+
+	if err := s.checkoutBranchForRetry(gitRepo, branch, sourceToken); err != nil {
+		return fmt.Errorf("cherry-pick failed after %d retries (merge-diff reset failed: %v): %w", syncMaxRetries, err, lastErr)
+	}
+
+	if err := gitutil.CherryPickMergeDiff(gitRepo, commitSHA); err != nil {
+		return fmt.Errorf("cherry-pick failed after %d retries (merge-diff also failed: %v): %w", syncMaxRetries, err, lastErr)
+	}
+
+	slog.Info("cherry-pick succeeded with merge-diff fallback", "commit", commitSHA)
+	return nil
+}
+
+// checkoutBranchForRetry resets the worktree to the latest origin state for the
+// given branch, preparing it for a different cherry-pick strategy attempt.
+func (s *Syncer) checkoutBranchForRetry(gitRepo *git.Repository, branch, sourceToken string) error {
+	if err := gitutil.FetchRemote(gitRepo, "origin", sourceToken); err != nil {
+		return fmt.Errorf("fetch before merge-diff fallback: %w", err)
+	}
+	return gitutil.CheckoutBranch(gitRepo, branch)
 }
 
 // pushWithRetry attempts push with exponential backoff on transient errors.

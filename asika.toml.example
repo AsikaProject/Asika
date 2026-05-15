@@ -224,18 +224,19 @@ color   = "#008672"
 #
 # Repo groups (multi mode)
 [[repo_groups]]
-name           = "my-project"
-mode           = "multi"         # overrides global mode per group
-github         = "my-org/my-repo"
-gitlab         = "my-org/my-repo"
-gitea          = "my-org/my-repo"
-forgejo        = "my-org/my-repo"   # optional: Forgejo instance
-codeberg       = "my-org/my-repo"   # optional: Codeberg (https://codeberg.org)
-bitbucket      = "my-org/my-repo"   # optional: Bitbucket Cloud (https://bitbucket.org)
-gerrit         = "my-project"         # optional: Gerrit project name
-default_branch = "main"
-hookpath       = ""
-ci_provider    = "github_actions"  # "github_actions" | "gitlab_ci" | "gitea_actions" | "none"
+ name           = "my-project"
+ mode           = "multi"         # overrides global mode per group
+ github         = "my-org/my-repo"
+ gitlab         = "my-org/my-repo"
+ gitea          = "my-org/my-repo"
+ forgejo        = "my-org/my-repo"   # optional: Forgejo instance
+ codeberg       = "my-org/my-repo"   # optional: Codeberg (https://codeberg.org)
+ bitbucket      = "my-org/my-repo"   # optional: Bitbucket Cloud (https://bitbucket.org)
+ gerrit         = "my-project"         # optional: Gerrit project name
+ default_branch = "main"
+ sync_pr_state  = true             # auto merge/close corresponding PRs on target platforms after sync
+ hookpath       = ""
+ ci_provider    = "github_actions"  # "github_actions" | "gitlab_ci" | "gitea_actions" | "none"
 
 # Per-repo-group label rules (merged with global rules, group rules take precedence):
 # [[repo_groups.label_rules]]
