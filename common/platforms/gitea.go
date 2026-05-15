@@ -98,7 +98,7 @@ func giteaPRToRecord(pr *gitea.PullRequest) *models.PRRecord {
 		mergedAt = *pr.Merged
 	}
 
-	return &models.PRRecord{
+	record := &models.PRRecord{
 		ID:             fmt.Sprintf("%d", pr.ID),
 		Platform:       "gitea",
 		PRNumber:       int(pr.Index),
@@ -115,6 +115,14 @@ func giteaPRToRecord(pr *gitea.PullRequest) *models.PRRecord {
 		HTMLURL:        pr.HTMLURL,
 		MergedAt:       mergedAt,
 	}
+	if pr.Head != nil {
+		record.BranchInfo = &models.PRBranchInfo{
+			HeadBranch: pr.Head.Name,
+			HeadSHA:    pr.Head.Sha,
+			BaseBranch: pr.Base.Name,
+		}
+	}
+	return record
 }
 
 func extractGiteaLabels(labels []*gitea.Label) []string {

@@ -136,6 +136,10 @@ func gitLabMRToRecord(mr *gitlab.MergeRequest) *models.PRRecord {
 		HasConflict:    gitLabHasConflict(mr),
 		HTMLURL:        mr.WebURL,
 		MergedAt:       mergedAt,
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: mr.SourceBranch,
+			BaseBranch: mr.TargetBranch,
+		},
 	}
 }
 
@@ -172,6 +176,10 @@ func gitLabBasicMRToRecord(mr *gitlab.BasicMergeRequest) *models.PRRecord {
 		UpdatedAt:      updatedAt,
 		Events:         []models.PREvent{},
 		HTMLURL:        mr.WebURL,
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: mr.SourceBranch,
+			BaseBranch: mr.TargetBranch,
+		},
 	}
 }
 

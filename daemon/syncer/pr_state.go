@@ -11,6 +11,27 @@ import (
 	"asika/common/platforms"
 )
 
+// fetchBranchInfo fetches BranchInfo for the PR from the source platform if not already set.
+func (s *Syncer) fetchBranchInfo(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) {
+	if pr.BranchInfo != nil {
+		return
+	}
+	client, ok := s.clients[platforms.PlatformType(pr.Platform)]
+	if !ok {
+		return
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+	if owner == "" || repo == "" {
+		return
+	}
+	info, err := client.GetPRBranchInfo(ctx, owner, repo, pr.PRNumber)
+	if err != nil {
+		slog.Warn("fetchBranchInfo failed", "platform", pr.Platform, "pr", pr.PRNumber, "error", err)
+		return
+	}
+	pr.BranchInfo = info
+}
+
 // findTargetPR searches for the corresponding PR on the target platform by matching
 // head branch + base branch. Returns nil if no matching open PR is found.
 func (s *Syncer) findTargetPR(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup, targetPlatform string) (*models.PRRecord, error) {
@@ -30,8 +51,10 @@ func (s *Syncer) findTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 		return nil, fmt.Errorf("list PRs on %s: %w", targetPlatform, err)
 	}
 	for _, tpr := range targetPRs {
-		if tpr.BranchInfo != nil &&
-			tpr.BranchInfo.HeadBranch == pr.BranchInfo.HeadBranch &&
+		if tpr.BranchInfo == nil {
+			continue
+		}
+		if tpr.BranchInfo.HeadBranch == pr.BranchInfo.HeadBranch &&
 			tpr.BranchInfo.BaseBranch == pr.BranchInfo.BaseBranch {
 			return tpr, nil
 		}
@@ -45,6 +68,7 @@ func (s *Syncer) syncPRState(ctx context.Context, pr *models.PRRecord, group *mo
 	if !group.SyncPRState {
 		return
 	}
+	s.fetchBranchInfo(ctx, pr, group)
 	if pr.BranchInfo == nil {
 		slog.Info("syncPRState: no branch info, skipping", "pr", pr.PRNumber)
 		return
@@ -101,6 +125,7 @@ func (s *Syncer) syncTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 // (dabao1955's concern: PR B's changes get included in PR A's merge commit
 // through the sync, making PR B appear already-merged on the target platform).
 func (s *Syncer) preSyncConflictCheck(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) {
+	s.fetchBranchInfo(ctx, pr, group)
 	if pr.BranchInfo == nil {
 		return
 	}

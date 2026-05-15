@@ -63,6 +63,11 @@ func (c *GitHubClient) GetPR(ctx context.Context, owner, repo string, number int
 		Events:         []models.PREvent{},
 		HasConflict:    !pr.GetMergeable(),
 		HTMLURL:        pr.GetHTMLURL(),
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: pr.GetHead().GetRef(),
+			HeadSHA:    pr.GetHead().GetSHA(),
+			BaseBranch: pr.GetBase().GetRef(),
+		},
 	}
 	return record, nil
 }
@@ -98,6 +103,11 @@ func (c *GitHubClient) ListPRs(ctx context.Context, owner, repo string, state st
 				IsDraft:        pr.GetDraft(),
 				HTMLURL:        pr.GetHTMLURL(),
 				MergedAt:       pr.GetMergedAt().Time,
+				BranchInfo: &models.PRBranchInfo{
+					HeadBranch: pr.GetHead().GetRef(),
+					HeadSHA:    pr.GetHead().GetSHA(),
+					BaseBranch: pr.GetBase().GetRef(),
+				},
 			}
 			result = append(result, record)
 		}
