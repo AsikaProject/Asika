@@ -88,6 +88,12 @@
 
 - **Performance**: Rate limiter cleanup goroutine was started on every `RateLimit()` middleware construction. Changed to `sync.Once` singleton.
 
+### Refactoring
+
+- **Refactor**: Split `daemon/server/middleware.go` (705 lines) into `middleware.go` (543 lines, auth/permission middleware), `middleware_helper.go` (128 lines, extractToken/resolveRepoFromRequest helpers), `middleware_csrf.go` (88 lines, CSRF protection).
+
+- **Refactor**: Split `common/config/config.go` (682 lines) into `config.go` (512 lines, Load/SaveToFile/validate), `config_snapshot.go` (151 lines, SaveConfigSnapshot/RollbackConfig/ListConfigVersions), `config_mask.go` (83 lines, maskConfig/maskToken/maskSecret).
+
 # ChangeLog for Asika
 
 ## v20260510DEV > Unreleased

@@ -1,14 +1,11 @@
 package server
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"asika/common/auth"
@@ -20,82 +17,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
-
-var (
-	csrfTokens   = make(map[string]time.Time)
-	csrfTokensMu sync.Mutex
-	csrfTTL      = 1 * time.Hour
-)
-
-func init() {
-	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			csrfTokensMu.Lock()
-			for token, created := range csrfTokens {
-				if time.Since(created) > csrfTTL {
-					delete(csrfTokens, token)
-				}
-			}
-			csrfTokensMu.Unlock()
-		}
-	}()
-}
-
-func generateCSRFToken() string {
-	b := make([]byte, 32)
-	rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-func CSRFProtect() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if c.Request.Method == "GET" || c.Request.Method == "HEAD" || c.Request.Method == "OPTIONS" {
-			c.Next()
-			return
-		}
-
-		username, _ := c.Get("username")
-		if username == nil || username.(string) == "" {
-			c.Next()
-			return
-		}
-
-		token := c.GetHeader("X-CSRF-Token")
-		if token == "" {
-			token = c.PostForm("_csrf")
-		}
-		if token == "" {
-			token = c.Query("_csrf")
-		}
-
-		csrfTokensMu.Lock()
-		_, valid := csrfTokens[token]
-		csrfTokensMu.Unlock()
-
-		if !valid {
-			slog.Warn("csrf validation failed", "path", c.Request.URL.Path, "ip", c.ClientIP())
-			c.JSON(http.StatusForbidden, gin.H{"error": "CSRF validation failed", "code": 403})
-			c.Abort()
-			return
-		}
-
-		c.Next()
-	}
-}
-
-func IssueCSRFToken() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		token := generateCSRFToken()
-		csrfTokensMu.Lock()
-		csrfTokens[token] = time.Now()
-		csrfTokensMu.Unlock()
-		c.Header("X-CSRF-Token", token)
-		c.Set("csrf_token", token)
-		c.Next()
-	}
-}
 
 // Logger is a custom logger middleware
 func Logger() gin.HandlerFunc {
@@ -382,53 +303,6 @@ func RequireRepoAccess() gin.HandlerFunc {
 	}
 }
 
-// resolveRepoFromRequest resolves the owner/repo string from the request context.
-func resolveRepoFromRequest(c *gin.Context) string {
-	repoGroup := c.Param("repo_group")
-	prID := c.Param("pr_id")
-	if repoGroup == "" || prID == "" {
-		return ""
-	}
-
-	cfg := config.Current()
-	if cfg == nil {
-		return ""
-	}
-
-	group := config.GetRepoGroupByName(cfg, repoGroup)
-	if group == nil {
-		return ""
-	}
-
-	var platform string
-	if prID != "" {
-		var prRecord *models.PRRecord
-		db.ForEach(db.BucketPRs, func(key, value []byte) error {
-			var rec models.PRRecord
-			if json.Unmarshal(value, &rec) == nil && rec.ID == prID && rec.RepoGroup == repoGroup {
-				prRecord = &rec
-				return errStopForEach
-			}
-			return nil
-		})
-		if prRecord != nil {
-			platform = prRecord.Platform
-		}
-	}
-
-	if platform == "" {
-		platform = config.GetPlatformForGroup(group)
-	}
-
-	owner, repo := config.GetOwnerRepoFromGroup(group, platform)
-	if owner == "" || repo == "" {
-		return ""
-	}
-	return owner + "/" + repo
-}
-
-var errStopForEach = fmt.Errorf("__stop__")
-
 // RequireSpaceAccess checks if the user has access to the space that owns the
 // requested repo group. Admins bypass this check.
 func RequireSpaceAccess() gin.HandlerFunc {
@@ -551,13 +425,13 @@ func RequirePermission(permField string) gin.HandlerFunc {
 							hasPerm = key.Permissions.CanSpam
 						case "manage_queue":
 							hasPerm = key.Permissions.CanManageQueue
-		case "revert":
-			hasPerm = key.Permissions.CanRevert
-		case "comment":
-			hasPerm = key.Permissions.CanComment
-		case "label":
-			hasPerm = key.Permissions.CanLabel
-		}
+						case "revert":
+							hasPerm = key.Permissions.CanRevert
+						case "comment":
+							hasPerm = key.Permissions.CanComment
+						case "label":
+							hasPerm = key.Permissions.CanLabel
+						}
 						if hasPerm {
 							c.Next()
 							return
@@ -639,26 +513,6 @@ func RequirePermission(permField string) gin.HandlerFunc {
 	}
 }
 
-// extractToken extracts the JWT token from Authorization header or cookie
-func extractToken(c *gin.Context) string {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader != "" {
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
-			return parts[1]
-		}
-	}
-	if token, err := c.Cookie("asika_token"); err == nil {
-		return token
-	}
-	return ""
-}
-
-// extractAPIKey extracts the API key from X-API-Key header
-func extractAPIKey(c *gin.Context) string {
-	return c.GetHeader("X-API-Key")
-}
-
 // FingerprintMiddleware creates a middleware that validates fingerprint tokens.
 // It looks for the token in X-Fingerprint-Token header or Authorization: Fingerprint <token>.
 // If fingerprint auth is not configured, the middleware is a no-op.
@@ -686,20 +540,4 @@ func FingerprintMiddleware() gin.HandlerFunc {
 		c.Set("fingerprint_verified", true)
 		c.Next()
 	}
-}
-
-func extractFingerprintToken(c *gin.Context) string {
-	if token := c.GetHeader("X-Fingerprint-Token"); token != "" {
-		return token
-	}
-
-	authHeader := c.GetHeader("Authorization")
-	if authHeader != "" {
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) == 2 && strings.EqualFold(parts[0], "fingerprint") {
-			return parts[1]
-		}
-	}
-
-	return ""
 }
