@@ -54,7 +54,11 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 		slog.Warn("fetch failed, continuing", "error", err)
 	}
 
-	s.preSyncConflictCheck(ctx, pr, group)
+	if err := s.preSyncConflictCheck(ctx, pr, group); err != nil {
+		slog.Error("sync blocked by conflict check", "error", err)
+		s.notifySyncFailure(pr, "conflict-check", err.Error())
+		return err
+	}
 
 	if err := s.syncDefaultBranch(gitRepo, pr, group); err != nil {
 		return err

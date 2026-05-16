@@ -235,6 +235,7 @@ color   = "#008672"
  gerrit         = "my-project"         # optional: Gerrit project name
  default_branch = "main"
  sync_pr_state  = true             # auto merge/close corresponding PRs on target platforms after sync
+ conflict_check = "warn"             # "warn" = notify only (default), "blocking" = abort sync on conflict
  hookpath       = ""
  ci_provider    = "github_actions"  # "github_actions" | "gitlab_ci" | "gitea_actions" | "none"
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"asika/common/config"
@@ -57,6 +58,19 @@ func (s *Syncer) findTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 		if tpr.BranchInfo.HeadBranch == pr.BranchInfo.HeadBranch &&
 			tpr.BranchInfo.BaseBranch == pr.BranchInfo.BaseBranch {
 			return tpr, nil
+		}
+	}
+	// Fallback: match by head SHA when branch names differ across platforms
+	if pr.BranchInfo.HeadSHA != "" {
+		for _, tpr := range targetPRs {
+			if tpr.BranchInfo == nil {
+				continue
+			}
+			if tpr.BranchInfo.HeadSHA == pr.BranchInfo.HeadSHA {
+				slog.Info("findTargetPR: matched by head SHA fallback",
+					"target", targetPlatform, "pr", tpr.PRNumber, "head_sha", pr.BranchInfo.HeadSHA)
+				return tpr, nil
+			}
 		}
 	}
 	return nil, nil
@@ -115,30 +129,14 @@ func (s *Syncer) syncTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 		}
 	}
 
+	go s.verifyPRState(ctx, targetPR, group, targetPlatform, pr)
+
 	slog.Info("syncPRState: synced PR state on target",
 		"target", targetPlatform, "pr", targetPR.PRNumber, "source_pr", pr.PRNumber)
 }
 
-// preSyncConflictCheck checks target platforms for open PRs whose head branch
-// matches the source PR's head branch. If found, it logs a warning because
-// syncing the merge commit may cause those PRs to silently lose their changes
-// (dabao1955's concern: PR B's changes get included in PR A's merge commit
-// through the sync, making PR B appear already-merged on the target platform).
-func (s *Syncer) preSyncConflictCheck(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) {
-	s.fetchBranchInfo(ctx, pr, group)
-	if pr.BranchInfo == nil {
-		return
-	}
-	targetPlatforms := s.getTargetPlatforms(group, pr.Platform)
-	for _, target := range targetPlatforms {
-		s.checkTargetConflict(ctx, pr, group, target.name)
-	}
-}
-
-func (s *Syncer) checkTargetConflict(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup, targetPlatform string) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
+// verifyPRState polls the target platform to confirm the PR is actually closed.
+func (s *Syncer) verifyPRState(ctx context.Context, targetPR *models.PRRecord, group *models.RepoGroup, targetPlatform string, sourcePR *models.PRRecord) {
 	client, ok := s.clients[platforms.PlatformType(targetPlatform)]
 	if !ok {
 		return
@@ -148,14 +146,87 @@ func (s *Syncer) checkTargetConflict(ctx context.Context, pr *models.PRRecord, g
 		return
 	}
 
+	var verified bool
+	for attempt := 1; attempt <= 5; attempt++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		updated, err := client.GetPR(ctx, owner, repo, targetPR.PRNumber)
+		if err != nil {
+			slog.Warn("verifyPRState: get PR failed",
+				"attempt", attempt, "target", targetPlatform, "pr", targetPR.PRNumber, "error", err)
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+			continue
+		}
+		if updated != nil && updated.State != "open" {
+			slog.Info("verifyPRState: confirmed PR closed on target",
+				"target", targetPlatform, "pr", targetPR.PRNumber, "state", updated.State, "attempts", attempt)
+			verified = true
+			break
+		}
+
+		slog.Warn("verifyPRState: PR still open, retrying",
+			"attempt", attempt, "target", targetPlatform, "pr", targetPR.PRNumber)
+		time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+	}
+
+	if !verified {
+		slog.Error("verifyPRState: could not confirm PR closure on target",
+			"target", targetPlatform, "pr", targetPR.PRNumber, "source_pr", sourcePR.PRNumber)
+		s.notifySyncFailure(sourcePR, targetPlatform,
+			fmt.Sprintf("⚠️ PR #%d on %s may still be open after sync PR state (5 retries exhausted)",
+				targetPR.PRNumber, targetPlatform))
+	}
+}
+
+// preSyncConflictCheck checks target platforms for open PRs whose head branch
+// matches the source PR's head branch. If found, it logs a warning because
+// syncing the merge commit may cause those PRs to silently lose their changes
+// (dabao1955's concern: PR B's changes get included in PR A's merge commit
+// through the sync, making PR B appear already-merged on the target platform).
+func (s *Syncer) preSyncConflictCheck(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) error {
+	s.fetchBranchInfo(ctx, pr, group)
+	if pr.BranchInfo == nil {
+		return nil
+	}
+	targetPlatforms := s.getTargetPlatforms(group, pr.Platform)
+	var conflicts []string
+	for _, target := range targetPlatforms {
+		if found := s.checkTargetConflict(ctx, pr, group, target.name); found != "" {
+			conflicts = append(conflicts, found)
+		}
+	}
+	if len(conflicts) > 0 && group.ConflictCheck == "blocking" {
+		return fmt.Errorf("sync blocked by conflict check: %s", strings.Join(conflicts, "; "))
+	}
+	return nil
+}
+
+func (s *Syncer) checkTargetConflict(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup, targetPlatform string) string {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	client, ok := s.clients[platforms.PlatformType(targetPlatform)]
+	if !ok {
+		return ""
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, targetPlatform)
+	if owner == "" || repo == "" {
+		return ""
+	}
+
 	targetPRs, err := client.ListPRs(ctx, owner, repo, "open")
 	if err != nil {
 		slog.Warn("preSyncConflictCheck: list PRs failed",
 			"target", targetPlatform, "error", err)
-		return
+		return ""
 	}
 
 	sourceHead := pr.BranchInfo.HeadBranch
+	var conflicts []string
 	for _, tpr := range targetPRs {
 		if tpr.BranchInfo == nil {
 			continue
@@ -173,6 +244,11 @@ func (s *Syncer) checkTargetConflict(ctx context.Context, pr *models.PRRecord, g
 					"Merging source may cause target PR changes to be lost. "+
 					"Consider merging target PR first.",
 					tpr.PRNumber, targetPlatform, sourceHead, pr.PRNumber))
+			conflicts = append(conflicts, fmt.Sprintf("%s#%d", targetPlatform, tpr.PRNumber))
 		}
 	}
+	if len(conflicts) > 0 {
+		return fmt.Sprintf("%s: %s", targetPlatform, strings.Join(conflicts, ", "))
+	}
+	return ""
 }

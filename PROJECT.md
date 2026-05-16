@@ -277,7 +277,7 @@ Feed items are stored in an in-memory ring buffer (default 50 items max). The fe
 - **Branch deletion sync**: `SyncBranchDeletion` syncs branch deletes to all targets with retry on transient errors
 - **Concurrency**: Per-repo-group mutex prevents concurrent syncs for the same group
 - **Sync history**: All sync attempts recorded in `sync_history` bucket with status (success/failed) and error messages
-- **PR state sync**: When `sync_pr_state = true` is configured in `[[repo_groups]]`, `syncPRState` automatically merges/closes the corresponding PR on target platforms after successful git sync (matched by head+base branch). Pre-sync `preSyncConflictCheck` warns if target has open PRs with the same head branch (dabao1955 scenario: PR changes may be silently lost).
+- **PR state sync**: When `sync_pr_state = true` is configured in `[[repo_groups]]`, `syncPRState` automatically merges/closes the corresponding PR on target platforms after successful git sync (matched by head+base branch, with head SHA fallback). Pre-sync `preSyncConflictCheck` checks for open PRs with the same head branch (dabao1955 scenario). `conflict_check` config: `"warn"` (default) = notify only, `"blocking"` = abort sync and alert. Post-sync `verifyPRState` polls target to confirm PR closure (5 retries, exponential backoff).
 - **Bug fix**: `GetRepoGroupByName` and `GetRepoGroups` now correctly map the `Gerrit` field (previously silently dropped)
 
 ### Actor System (Goroutine Pools)

@@ -114,6 +114,7 @@ type RepoGroupConfig struct {
 	BranchSync     string           `toml:"branch_sync" json:"branch_sync"`
 	SyncTags       bool             `toml:"sync_tags" json:"sync_tags"`
 	SyncPRState    bool             `toml:"sync_pr_state" json:"sync_pr_state"`
+	ConflictCheck  string           `toml:"conflict_check" json:"conflict_check"`
 	HookPath       string           `toml:"hookpath" json:"hookpath"`
 	CIProvider     string           `toml:"ci_provider" json:"ci_provider"`
 	MergeQueue     MergeQueueConfig `toml:"merge_queue" json:"merge_queue"`

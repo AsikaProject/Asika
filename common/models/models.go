@@ -59,6 +59,7 @@ type RepoGroup struct {
 	BranchSync     string           `json:"branch_sync"`
 	SyncTags       bool             `json:"sync_tags"`
 	SyncPRState    bool             `json:"sync_pr_state"`
+	ConflictCheck  string           `json:"conflict_check"`
 	HookPath       string           `json:"hookpath"`
 	CIProvider     string           `json:"ci_provider"`
 	MergeQueue     MergeQueueConfig `json:"merge_queue"`
