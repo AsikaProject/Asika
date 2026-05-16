@@ -114,6 +114,35 @@ func TestPlatformClientInterface(t *testing.T) {
 	}
 }
 
+func TestGetApprovalsReturnType(t *testing.T) {
+	// Verify that GetApprovals returns *models.ApprovalStatus for all platforms.
+	// GiteaClient returns nil when the server is unreachable, so we skip it.
+	tests := []struct {
+		name   string
+		client PlatformClient
+	}{
+		{"GitHubClient", NewGitHubClient("test-token", "test-secret", "")},
+		{"GitLabClient", NewGitLabClient("test-token", "", "test-secret")},
+		{"BitbucketClient", NewBitbucketClient("test-token", "test-secret")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.client == nil {
+				t.Skipf("%s is nil", tt.name)
+				return
+			}
+			status, err := tt.client.GetApprovals(context.Background(), "owner", "repo", 1)
+			if err != nil {
+				t.Logf("GetApprovals returned error (expected): %v", err)
+			}
+			if status != nil {
+				t.Logf("GetApprovals returned: approvers=%v blockers=%v", status.Approvers, status.Blockers)
+			}
+		})
+	}
+}
+
 func TestGiteaClientCreation(t *testing.T) {
 	// Test with valid base URL
 	client := NewGiteaClient("https://gitea.example.com", "test-token", "test-webhook-secret")

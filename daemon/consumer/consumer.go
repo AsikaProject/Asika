@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math/rand"
+	"sync"
+	"time"
 
 	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/common/timeutil"
 	"asika/daemon/handlers"
 	"asika/daemon/labeler"
 	"asika/daemon/queue"
@@ -32,17 +36,22 @@ type Consumer struct {
 	cancel       context.CancelFunc
 
 	// Actor subsystems
-	writer     *writerActor
-	workers    *workerPool
-	eventCh    <-chan events.Event
+	writer  *writerActor
+	workers *workerPool
+	eventCh <-chan events.Event
+
+	// Debounce: random 1-10s delay per PR to avoid API rate limits
+	debounceMu     sync.Mutex
+	debounceTimers map[string]*time.Timer
 }
 
 // NewConsumer creates a new event consumer (basic, no wiring)
 func NewConsumer() *Consumer {
 	c := &Consumer{
-		stop:    make(chan struct{}),
-		writer:  newWriterActor(256),
-		workers: newWorkerPool(models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}),
+		stop:           make(chan struct{}),
+		writer:         newWriterActor(256),
+		workers:        newWorkerPool(models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}),
+		debounceTimers: make(map[string]*time.Timer),
 	}
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	return c
@@ -61,16 +70,17 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 		poolCfg = models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}
 	}
 	c := &Consumer{
-		cfg:          cfg,
-		clients:      clients,
-		labeler:      l,
-		reviewer:     r,
-		syncer:       s,
-		spamDetector: sd,
-		queue:        q,
-		stop:         make(chan struct{}),
-		writer:       newWriterActor(256),
-		workers:      newWorkerPool(poolCfg),
+		cfg:            cfg,
+		clients:        clients,
+		labeler:        l,
+		reviewer:       r,
+		syncer:         s,
+		spamDetector:   sd,
+		queue:          q,
+		stop:           make(chan struct{}),
+		writer:         newWriterActor(256),
+		workers:        newWorkerPool(poolCfg),
+		debounceTimers: make(map[string]*time.Timer),
 	}
 	s.SetRecordWriter(&syncRecordWriter{writer: c.writer})
 	c.ctx, c.cancel = context.WithCancel(context.Background())
@@ -140,6 +150,12 @@ func (c *Consumer) Stop() {
 		events.Unsubscribe(c.eventCh)
 		c.eventCh = nil
 	}
+	c.debounceMu.Lock()
+	for _, timer := range c.debounceTimers {
+		timer.Stop()
+	}
+	c.debounceTimers = make(map[string]*time.Timer)
+	c.debounceMu.Unlock()
 	if c.workers != nil {
 		c.workers.Stop()
 		c.workers = nil
@@ -175,31 +191,58 @@ func (c *Consumer) updatePR(event events.Event, pr *models.PRRecord) {
 	}
 }
 
-// dispatch routes events to subsystem goroutine pools
+// debounceKey generates a key for debouncing events per PR.
+func (c *Consumer) debounceKey(event events.Event) string {
+	if event.PR != nil {
+		return fmt.Sprintf("%s/%s#%d", event.RepoGroup, event.Platform, event.PR.PRNumber)
+	}
+	return fmt.Sprintf("%s/%s", event.RepoGroup, event.Platform)
+}
+
+// debounce dispatches an event with a random 1-10s delay to avoid API rate limits.
+// Multiple events for the same PR within the delay window are coalesced.
+func (c *Consumer) debounce(event events.Event, fn func()) {
+	key := c.debounceKey(event)
+
+	c.debounceMu.Lock()
+	if timer, ok := c.debounceTimers[key]; ok {
+		timer.Stop()
+	}
+	delay := time.Duration(1+rand.Intn(10)) * timeutil.Second
+	c.debounceTimers[key] = time.AfterFunc(delay, func() {
+		c.debounceMu.Lock()
+		delete(c.debounceTimers, key)
+		c.debounceMu.Unlock()
+		fn()
+	})
+	c.debounceMu.Unlock()
+}
+
+// dispatch routes events to subsystem goroutine pools with debounce.
 func (c *Consumer) dispatch(event events.Event) {
 	slog.Info("received event", "type", event.Type, "repo_group", event.RepoGroup, "platform", event.Platform)
 
 	switch event.Type {
 	case events.EventPROpened:
-		c.workers.Submit(func() { c.handlePROpened(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handlePROpened(event) }) })
 	case events.EventPRClosed:
-		c.workers.Submit(func() { c.handlePRClosed(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRClosed(event) }) })
 	case events.EventPRMerged:
-		c.workers.Submit(func() { c.handlePRMerged(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRMerged(event) }) })
 	case events.EventPRApproved:
-		c.workers.Submit(func() { c.handlePRApproved(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRApproved(event) }) })
 	case events.EventPRReopened:
-		c.workers.Submit(func() { c.handlePRReopened(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRReopened(event) }) })
 	case events.EventPRReverted:
-		c.workers.Submit(func() { c.handlePRReverted(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRReverted(event) }) })
 	case events.EventSpamDetected:
-		c.workers.Submit(func() { c.handleSpamDetected(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handleSpamDetected(event) }) })
 	case events.EventPRComment:
-		c.workers.Submit(func() { c.handlePRComment(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRComment(event) }) })
 	case events.EventPRLabeled:
-		c.workers.Submit(func() { c.handlePRLabeled(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRLabeled(event) }) })
 	case events.EventBranchDeleted:
-		c.workers.Submit(func() { c.handleBranchDeleted(event) })
+		c.debounce(event, func() { c.workers.Submit(func() { c.handleBranchDeleted(event) }) })
 	case events.EventSyncCompleted:
 		slog.Info("sync completed", "repo_group", event.RepoGroup)
 	case events.EventSyncFailed:

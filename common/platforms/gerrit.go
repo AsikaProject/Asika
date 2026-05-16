@@ -328,23 +328,42 @@ func (c *GerritClient) HasMultipleMergeMethods(ctx context.Context, owner, repo 
 	return false, nil
 }
 
-func (c *GerritClient) GetApprovals(ctx context.Context, owner, repo string, number int) ([]string, error) {
+func (c *GerritClient) GetApprovals(ctx context.Context, owner, repo string, number int) (*models.ApprovalStatus, error) {
 	changeID := fmt.Sprintf("%s~%d", owner, number)
 	opt := &gerrit.ChangeOptions{AdditionalFields: []string{"LABELS", "DETAILED_ACCOUNTS"}}
 	change, _, err := c.client.Changes.GetChangeDetail(ctx, changeID, opt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get gerrit change detail: %w", err)
 	}
-	var approvals []string
+	approverSet := make(map[string]bool)
+	blockerSet := make(map[string]bool)
 	if codeReview, ok := change.Labels["Code-Review"]; ok {
+		if codeReview.Rejected.AccountID > 0 {
+			blockerSet[gerritAccountToName(codeReview.Rejected)] = true
+			delete(approverSet, gerritAccountToName(codeReview.Rejected))
+		}
 		if codeReview.Approved.AccountID > 0 {
-			approvals = append(approvals, gerritAccountToName(codeReview.Approved))
+			approverSet[gerritAccountToName(codeReview.Approved)] = true
+			delete(blockerSet, gerritAccountToName(codeReview.Approved))
 		}
 		if codeReview.Recommended.AccountID > 0 {
-			approvals = append(approvals, gerritAccountToName(codeReview.Recommended))
+			approverSet[gerritAccountToName(codeReview.Recommended)] = true
+			delete(blockerSet, gerritAccountToName(codeReview.Recommended))
+		}
+		if codeReview.Disliked.AccountID > 0 {
+			blockerSet[gerritAccountToName(codeReview.Disliked)] = true
+			delete(approverSet, gerritAccountToName(codeReview.Disliked))
 		}
 	}
-	return approvals, nil
+	approvers := make([]string, 0, len(approverSet))
+	for a := range approverSet {
+		approvers = append(approvers, a)
+	}
+	blockers := make([]string, 0, len(blockerSet))
+	for b := range blockerSet {
+		blockers = append(blockers, b)
+	}
+	return &models.ApprovalStatus{Approvers: approvers, Blockers: blockers}, nil
 }
 
 func (c *GerritClient) VerifyWebhookSignature(body []byte, signature string) bool {

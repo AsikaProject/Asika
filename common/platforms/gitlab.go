@@ -432,21 +432,34 @@ func (c *GitLabClient) HasMultipleMergeMethods(ctx context.Context, owner, repo 
 	return false, nil
 }
 
-// GetApprovals gets the list of approvers
-func (c *GitLabClient) GetApprovals(ctx context.Context, owner, repo string, number int) ([]string, error) {
+// GetApprovals gets the list of approvers. GitLab's API returns computed
+// approval state, so we replay the ApprovedBy list directly.
+func (c *GitLabClient) GetApprovals(ctx context.Context, owner, repo string, number int) (*models.ApprovalStatus, error) {
 	project := owner + "/" + repo
 	approvals, _, err := c.client.MergeRequests.GetMergeRequestApprovals(project, int64(number))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get approvals: %w", err)
 	}
 
-	var approvers []string
+	approverSet := make(map[string]bool)
 	for _, approver := range approvals.ApprovedBy {
 		if approver.User != nil {
-			approvers = append(approvers, approver.User.Username)
+			approverSet[approver.User.Username] = true
 		}
 	}
-	return approvers, nil
+
+	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil)
+	if err == nil && mr != nil {
+		for _, r := range mr.Assignees {
+			delete(approverSet, r.Username)
+		}
+	}
+
+	approvers := make([]string, 0, len(approverSet))
+	for a := range approverSet {
+		approvers = append(approvers, a)
+	}
+	return &models.ApprovalStatus{Approvers: approvers}, nil
 }
 
 // VerifyWebhookSignature verifies the webhook signature using HMAC-SHA256

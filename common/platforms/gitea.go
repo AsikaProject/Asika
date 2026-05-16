@@ -397,20 +397,63 @@ func (c *GiteaClient) HasMultipleMergeMethods(ctx context.Context, owner, repo s
 	return methods > 1, nil
 }
 
-// GetApprovals gets the list of approvers
-func (c *GiteaClient) GetApprovals(ctx context.Context, owner, repo string, number int) ([]string, error) {
-	reviews, _, err := c.client.ListPullReviews(owner, repo, int64(number), gitea.ListPullReviewsOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list reviews: %w", err)
+// GetApprovals gets the list of approvers by replaying all reviews.
+func (c *GiteaClient) GetApprovals(ctx context.Context, owner, repo string, number int) (*models.ApprovalStatus, error) {
+	opts := gitea.ListPullReviewsOptions{
+		ListOptions: gitea.ListOptions{Page: 1, PageSize: 100},
+	}
+	approverSet := make(map[string]bool)
+	blockerSet := make(map[string]bool)
+
+	for {
+		reviews, _, err := c.client.ListPullReviews(owner, repo, int64(number), opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list reviews: %w", err)
+		}
+		if len(reviews) == 0 {
+			break
+		}
+		for _, review := range reviews {
+			if review.Reviewer == nil {
+				continue
+			}
+			login := review.Reviewer.UserName
+			switch review.State {
+			case gitea.ReviewStateApproved:
+				approverSet[login] = true
+				delete(blockerSet, login)
+			case gitea.ReviewStateRequestChanges:
+				delete(approverSet, login)
+				blockerSet[login] = true
+			case gitea.ReviewStateRequestReview:
+				delete(approverSet, login)
+				delete(blockerSet, login)
+			}
+		}
+		if len(reviews) < 100 {
+			break
+		}
+		opts.Page++
 	}
 
-	var approvers []string
-	for _, review := range reviews {
-		if review.State == gitea.ReviewStateApproved && review.Reviewer != nil {
-			approvers = append(approvers, review.Reviewer.UserName)
+	pr, _, err := c.client.GetPullRequest(owner, repo, int64(number))
+	if err == nil && pr != nil {
+		for _, r := range pr.Assignees {
+			login := r.UserName
+			delete(approverSet, login)
+			delete(blockerSet, login)
 		}
 	}
-	return approvers, nil
+
+	approvers := make([]string, 0, len(approverSet))
+	for a := range approverSet {
+		approvers = append(approvers, a)
+	}
+	blockers := make([]string, 0, len(blockerSet))
+	for b := range blockerSet {
+		blockers = append(blockers, b)
+	}
+	return &models.ApprovalStatus{Approvers: approvers, Blockers: blockers}, nil
 }
 
 // VerifyWebhookSignature verifies the webhook signature using HMAC-SHA256

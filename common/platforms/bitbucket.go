@@ -356,7 +356,7 @@ func (c *BitbucketClient) HasMultipleMergeMethods(ctx context.Context, owner, re
 	return false, nil
 }
 
-func (c *BitbucketClient) GetApprovals(ctx context.Context, owner, repo string, number int) ([]string, error) {
+func (c *BitbucketClient) GetApprovals(ctx context.Context, owner, repo string, number int) (*models.ApprovalStatus, error) {
 	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
 	result, err := c.client.Repositories.PullRequests.Get(opts)
 	if err != nil {
@@ -370,7 +370,7 @@ func (c *BitbucketClient) GetApprovals(ctx context.Context, owner, repo string, 
 	if !ok {
 		return nil, nil
 	}
-	var approvers []string
+	approverSet := make(map[string]bool)
 	for _, p := range participants {
 		pm, ok := p.(map[string]interface{})
 		if !ok {
@@ -379,12 +379,28 @@ func (c *BitbucketClient) GetApprovals(ctx context.Context, owner, repo string, 
 		if approved, ok := pm["approved"].(bool); ok && approved {
 			if user, ok := pm["user"].(map[string]interface{}); ok {
 				if dn, ok := user["display_name"].(string); ok {
-					approvers = append(approvers, dn)
+					approverSet[dn] = true
 				}
 			}
 		}
 	}
-	return approvers, nil
+	reviewers, ok := m["reviewers"].([]interface{})
+	if ok {
+		for _, r := range reviewers {
+			rm, ok := r.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if dn, ok := rm["display_name"].(string); ok {
+				delete(approverSet, dn)
+			}
+		}
+	}
+	approvers := make([]string, 0, len(approverSet))
+	for a := range approverSet {
+		approvers = append(approvers, a)
+	}
+	return &models.ApprovalStatus{Approvers: approvers}, nil
 }
 
 func (c *BitbucketClient) VerifyWebhookSignature(body []byte, signature string) bool {

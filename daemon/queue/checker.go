@@ -69,11 +69,12 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 		}
 	}
 
-	approvals, err := c.fetchApprovals(ctx, pr, group)
+	approvalStatus, err := c.fetchApprovals(ctx, pr, group)
 	if err != nil {
 		return false, err
 	}
 
+	approvals := approvalStatus.Approvers
 	coreApproved := 0
 	coreSet := make(map[string]bool, len(mq.CoreContributors))
 	for _, cc := range mq.CoreContributors {
@@ -170,7 +171,7 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 	return true, nil
 }
 
-func (c *Checker) fetchApprovals(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) ([]string, error) {
+func (c *Checker) fetchApprovals(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) (*models.ApprovalStatus, error) {
 	client := c.clients[platforms.PlatformType(pr.Platform)]
 	if client == nil {
 		return nil, fmt.Errorf("no client for platform: %s", pr.Platform)
@@ -179,10 +180,10 @@ func (c *Checker) fetchApprovals(ctx context.Context, pr *models.PRRecord, group
 	if owner == "" || repo == "" {
 		return nil, fmt.Errorf("cannot resolve repo for platform %s in group %s", pr.Platform, group.Name)
 	}
-	var approvals []string
+	var status *models.ApprovalStatus
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
-		approvals, err = client.GetApprovals(ctx, owner, repo, pr.PRNumber)
+		status, err = client.GetApprovals(ctx, owner, repo, pr.PRNumber)
 		if err == nil {
 			break
 		}
@@ -196,7 +197,7 @@ func (c *Checker) fetchApprovals(ctx context.Context, pr *models.PRRecord, group
 	if err != nil {
 		return nil, &TransientError{Err: err}
 	}
-	return approvals, nil
+	return status, nil
 }
 
 // checkCI checks if CI passed

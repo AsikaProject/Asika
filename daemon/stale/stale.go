@@ -12,6 +12,7 @@ import (
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
+	"asika/common/timeutil"
 )
 
 type Manager struct {
@@ -362,7 +363,7 @@ func inactivityDays(lastActive time.Time) int {
 		return 0
 	}
 	dur := time.Since(lastActive)
-	return int(math.Floor(dur.Hours() / 24))
+	return int(math.Floor(float64(dur) / float64(timeutil.Day)))
 }
 
 func ensureLabelExists(ctx context.Context, client platforms.PlatformClient, owner, repo, labelName string) error {

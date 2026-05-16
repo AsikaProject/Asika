@@ -119,8 +119,8 @@ func (m *MockPlatformClient) HasMultipleMergeMethods(ctx context.Context, owner,
 	return len(m.MergeMethods) > 1, m.Err
 }
 
-func (m *MockPlatformClient) GetApprovals(ctx context.Context, owner, repo string, number int) ([]string, error) {
-	return m.Approvals, m.Err
+func (m *MockPlatformClient) GetApprovals(ctx context.Context, owner, repo string, number int) (*models.ApprovalStatus, error) {
+	return &models.ApprovalStatus{Approvers: m.Approvals}, m.Err
 }
 
 func (m *MockPlatformClient) VerifyWebhookSignature(body []byte, signature string) bool {

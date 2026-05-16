@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"strconv"
+	"strings"
+	"time"
+)
 
 func ParseTime(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
@@ -111,6 +115,42 @@ type PREvent struct {
 type PRCommentPayload struct {
 	CommentBody   string `json:"comment_body"`
 	CommentAuthor string `json:"comment_author"`
+}
+
+// ApprovalStatus holds the result of replaying all reviews for a PR.
+type ApprovalStatus struct {
+	Approvers []string
+	Blockers  []string
+}
+
+// ApprovalState represents the computed LGTM state for a PR.
+type ApprovalState string
+
+const (
+	ApprovalStatePending ApprovalState = "pending"
+	ApprovalStateSuccess ApprovalState = "success"
+	ApprovalStateFailure ApprovalState = "failure"
+)
+
+// ComputeApprovalState is a pure function that computes the LGTM state from approval status.
+// It returns the state, a human-readable message, and the desired LGTM label.
+func ComputeApprovalStatus(status *ApprovalStatus) (state ApprovalState, message, label string) {
+	approvers := status.Approvers
+	blockers := status.Blockers
+
+	if len(blockers) > 0 {
+		return ApprovalStateFailure, "Blocked by " + strings.Join(blockers, ", "), "lgtm/blocked"
+	}
+
+	if len(approvers) == 0 {
+		return ApprovalStatePending, "Needs two more approvals", "lgtm/need 2"
+	}
+
+	if len(approvers) == 1 {
+		return ApprovalStatePending, "Needs one more approval", "lgtm/need 1"
+	}
+
+	return ApprovalStateSuccess, "Approved by " + strconv.Itoa(len(approvers)) + " people", "lgtm/done"
 }
 
 type QueueItem struct {

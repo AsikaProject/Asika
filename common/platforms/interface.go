@@ -47,7 +47,7 @@ type PlatformClient interface {
 	HasMultipleMergeMethods(ctx context.Context, owner, repo string) (bool, error)
 
 	// Approval status
-	GetApprovals(ctx context.Context, owner, repo string, number int) ([]string, error)
+	GetApprovals(ctx context.Context, owner, repo string, number int) (*models.ApprovalStatus, error)
 
 	// Webhook
 	VerifyWebhookSignature(body []byte, signature string) bool
