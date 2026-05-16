@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -44,7 +45,7 @@ func FetchPRTemplate(repoGroup, platform string) (*models.PRTemplate, error) {
 	}
 
 	for _, path := range templatePaths {
-		content, err := client.GetFileContent(nil, owner, repo, path)
+		content, err := client.GetFileContent(context.Background(), owner, repo, path)
 		if err != nil || content == "" {
 			continue
 		}

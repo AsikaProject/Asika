@@ -18,6 +18,8 @@ type UserPermissions struct {
 	CanSpam        bool `json:"can_spam" toml:"can_spam"`
 	CanManageQueue bool `json:"can_manage_queue" toml:"can_manage_queue"`
 	CanRevert      bool `json:"can_revert" toml:"can_revert"`
+	CanComment     bool `json:"can_comment" toml:"can_comment"`
+	CanLabel       bool `json:"can_label" toml:"can_label"`
 }
 
 type APIKey struct {

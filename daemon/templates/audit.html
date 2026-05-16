@@ -76,7 +76,9 @@ function renderLogs(logs) {
     (logs || []).forEach(l => {
         const ts = l.timestamp ? new Date(l.timestamp).toLocaleString() : '-';
         const levelColor = l.level === 'error' ? '#f44336' : l.level === 'warn' ? '#ff9800' : '#4caf50';
-        tbody.innerHTML += '<tr><td>' + ts + '</td><td style="color:' + levelColor + '">' + (l.level || '-') + '</td><td>' + (l.category || '-') + '</td><td>' + (l.actor || '-') + '</td><td>' + (l.action || '-') + '</td><td>' + (l.repo_group || '-') + '</td><td>' + (l.message || '') + '</td></tr>';
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + escapeHtml(ts) + '</td><td style="color:' + levelColor + '">' + escapeHtml(l.level || '-') + '</td><td>' + escapeHtml(l.category || '-') + '</td><td>' + escapeHtml(l.actor || '-') + '</td><td>' + escapeHtml(l.action || '-') + '</td><td>' + escapeHtml(l.repo_group || '-') + '</td><td>' + escapeHtml(l.message || '') + '</td>';
+        tbody.appendChild(tr);
     });
 }
 

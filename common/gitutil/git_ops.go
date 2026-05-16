@@ -2,7 +2,6 @@ package gitutil
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
@@ -18,25 +17,109 @@ func CherryPick(repo *git.Repository, commitSHA string) error {
 		return fmt.Errorf("failed to get commit %s: %w", commitSHA, err)
 	}
 
+	if sourceCommit.NumParents() >= 2 {
+		return CherryPickMergeDiff(repo, commitSHA)
+	}
+
+	return cherryPickRegular(repo, sourceCommit, commitHash)
+}
+
+func cherryPickRegular(repo *git.Repository, sourceCommit *object.Commit, commitHash plumbing.Hash) error {
 	w, err := repo.Worktree()
 	if err != nil {
 		return fmt.Errorf("failed to get worktree: %w", err)
 	}
 
-	err = w.Reset(&git.ResetOptions{
-		Commit: commitHash,
-		Mode:   git.HardReset,
-	})
+	headRef, err := repo.Head()
 	if err != nil {
-		return fmt.Errorf("failed to reset worktree to cherry-pick commit: %w", err)
+		return fmt.Errorf("failed to get HEAD: %w", err)
+	}
+	headCommit, err := repo.CommitObject(headRef.Hash())
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD commit: %w", err)
 	}
 
-	_, err = w.Add(".")
+	parentCommit, err := sourceCommit.Parent(0)
 	if err != nil {
-		return fmt.Errorf("failed to stage cherry-pick changes: %w", err)
+		return fmt.Errorf("failed to get parent commit: %w", err)
 	}
 
-	commitMsg := fmt.Sprintf("cherry-pick: %s\n\n(original commit: %s)", sourceCommit.Message, commitSHA)
+	parentTree, err := parentCommit.Tree()
+	if err != nil {
+		return fmt.Errorf("failed to get parent tree: %w", err)
+	}
+
+	sourceTree, err := sourceCommit.Tree()
+	if err != nil {
+		return fmt.Errorf("failed to get source tree: %w", err)
+	}
+
+	changes, err := object.DiffTree(parentTree, sourceTree)
+	if err != nil {
+		return fmt.Errorf("failed to diff trees: %w", err)
+	}
+
+	if len(changes) == 0 {
+		return nil
+	}
+
+	headTree, err := headCommit.Tree()
+	if err != nil {
+		return fmt.Errorf("failed to get HEAD tree: %w", err)
+	}
+
+	headChanged := make(map[string]bool)
+	headChanges, err := object.DiffTree(parentTree, headTree)
+	if err != nil {
+		return fmt.Errorf("failed to diff HEAD vs parent: %w", err)
+	}
+	for _, ch := range headChanges {
+		if ch.To.Name != "" {
+			headChanged[ch.To.Name] = true
+		}
+	}
+
+	conflictedFiles := make([]string, 0)
+	appliedFiles := make([]string, 0)
+
+	for _, change := range changes {
+		filename := change.To.Name
+		if filename == "" {
+			filename = change.From.Name
+		}
+		if filename == "" {
+			continue
+		}
+
+		if headChanged[filename] {
+			conflictedFiles = append(conflictedFiles, filename)
+			continue
+		}
+
+		sourceEntry, err := sourceTree.File(filename)
+		if err != nil {
+			continue
+		}
+		content, err := sourceEntry.Contents()
+		if err != nil {
+			return fmt.Errorf("failed to read file %s: %w", filename, err)
+		}
+
+		if err := writeFileAndStage(w, filename, content); err != nil {
+			return err
+		}
+		appliedFiles = append(appliedFiles, filename)
+	}
+
+	if len(conflictedFiles) > 0 {
+		return fmt.Errorf("files modified on both target branch and source commit, cannot auto-cherry-pick: %v", conflictedFiles)
+	}
+
+	if len(appliedFiles) == 0 {
+		return nil
+	}
+
+	commitMsg := fmt.Sprintf("cherry-pick: %s\n\n(original commit: %s)", sourceCommit.Message, commitHash.String())
 	_, err = w.Commit(commitMsg, &git.CommitOptions{
 		Author: &object.Signature{
 			Name:  "Asika Bot",
@@ -48,6 +131,22 @@ func CherryPick(repo *git.Repository, commitSHA string) error {
 		return fmt.Errorf("failed to commit cherry-pick: %w", err)
 	}
 
+	return nil
+}
+
+func writeFileAndStage(w *git.Worktree, filename, content string) error {
+	f, err := w.Filesystem.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", filename, err)
+	}
+	if _, err := f.Write([]byte(content)); err != nil {
+		f.Close()
+		return fmt.Errorf("failed to write file %s: %w", filename, err)
+	}
+	f.Close()
+	if _, err := w.Add(filename); err != nil {
+		return fmt.Errorf("failed to stage file %s: %w", filename, err)
+	}
 	return nil
 }
 
@@ -151,18 +250,8 @@ func CherryPickMergeDiff(repo *git.Repository, commitSHA string) error {
 			return fmt.Errorf("failed to read file %s from merge tree: %w", filename, err)
 		}
 
-		worktreePath := w.Filesystem.Join(w.Filesystem.Root(), filename)
-		f, err := w.Filesystem.OpenFile(worktreePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-		if err != nil {
-			return fmt.Errorf("failed to open file %s: %w", filename, err)
-		}
-		if _, err := f.Write([]byte(content)); err != nil {
-			f.Close()
-			return fmt.Errorf("failed to write file %s: %w", filename, err)
-		}
-		f.Close()
-		if _, err := w.Add(filename); err != nil {
-			return fmt.Errorf("failed to stage file %s: %w", filename, err)
+		if err := writeFileAndStage(w, filename, content); err != nil {
+			return err
 		}
 		appliedFiles = append(appliedFiles, filename)
 	}

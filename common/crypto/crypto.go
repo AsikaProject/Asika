@@ -29,7 +29,7 @@ func init() {
 	if key := os.Getenv(keyEnvVar); key != "" {
 		masterKey = deriveKey(key)
 	} else {
-		slog.Warn("encryption not enabled: " + keyEnvVar + " environment variable not set; tokens will be stored in plaintext")
+		slog.Warn("encryption not enabled: " + keyEnvVar + " environment variable not set; tokens will be stored in plaintext. Set " + keyEnvVar + " in production.")
 	}
 }
 
@@ -105,7 +105,7 @@ func Decrypt(ciphertext string) (string, error) {
 	return string(plaintext), nil
 }
 
-func EncryptTokensInConfig(cfg *models.Config) error {
+func EncryptSecretsInConfig(cfg *models.Config) error {
 	if !IsEncryptionEnabled() {
 		return nil
 	}
@@ -136,10 +136,76 @@ func EncryptTokensInConfig(cfg *models.Config) error {
 		return fmt.Errorf("encrypt bitbucket token: %w", err)
 	}
 
+	cfg.Tokens.Gerrit.Password, err = Encrypt(cfg.Tokens.Gerrit.Password)
+	if err != nil {
+		return fmt.Errorf("encrypt gerrit password: %w", err)
+	}
+
+	cfg.Auth.JWTSecret, err = Encrypt(cfg.Auth.JWTSecret)
+	if err != nil {
+		return fmt.Errorf("encrypt jwt secret: %w", err)
+	}
+
+	if cfg.Auth.FingerprintSecret != "" {
+		cfg.Auth.FingerprintSecret, err = Encrypt(cfg.Auth.FingerprintSecret)
+		if err != nil {
+			return fmt.Errorf("encrypt fingerprint secret: %w", err)
+		}
+	}
+
+	if cfg.Events.WebhookSecret != "" {
+		cfg.Events.WebhookSecret, err = Encrypt(cfg.Events.WebhookSecret)
+		if err != nil {
+			return fmt.Errorf("encrypt webhook secret: %w", err)
+		}
+	}
+
+	if cfg.Feishu.AppSecret != "" {
+		cfg.Feishu.AppSecret, err = Encrypt(cfg.Feishu.AppSecret)
+		if err != nil {
+			return fmt.Errorf("encrypt feishu app secret: %w", err)
+		}
+	}
+	if cfg.Feishu.EncryptKey != "" {
+		cfg.Feishu.EncryptKey, err = Encrypt(cfg.Feishu.EncryptKey)
+		if err != nil {
+			return fmt.Errorf("encrypt feishu encrypt key: %w", err)
+		}
+	}
+
+	if cfg.Telegram.Token != "" {
+		cfg.Telegram.Token, err = Encrypt(cfg.Telegram.Token)
+		if err != nil {
+			return fmt.Errorf("encrypt telegram token: %w", err)
+		}
+	}
+	if cfg.Discord.Token != "" {
+		cfg.Discord.Token, err = Encrypt(cfg.Discord.Token)
+		if err != nil {
+			return fmt.Errorf("encrypt discord token: %w", err)
+		}
+	}
+	if cfg.Slack.Token != "" {
+		cfg.Slack.Token, err = Encrypt(cfg.Slack.Token)
+		if err != nil {
+			return fmt.Errorf("encrypt slack token: %w", err)
+		}
+	}
+	if cfg.Slack.AppToken != "" {
+		cfg.Slack.AppToken, err = Encrypt(cfg.Slack.AppToken)
+		if err != nil {
+			return fmt.Errorf("encrypt slack app token: %w", err)
+		}
+	}
+
 	return nil
 }
 
-func DecryptTokensInConfig(cfg *models.Config) error {
+func EncryptTokensInConfig(cfg *models.Config) error {
+	return EncryptSecretsInConfig(cfg)
+}
+
+func DecryptSecretsInConfig(cfg *models.Config) error {
 	if !IsEncryptionEnabled() {
 		return nil
 	}
@@ -170,7 +236,73 @@ func DecryptTokensInConfig(cfg *models.Config) error {
 		return fmt.Errorf("decrypt bitbucket token: %w", err)
 	}
 
+	cfg.Tokens.Gerrit.Password, err = Decrypt(cfg.Tokens.Gerrit.Password)
+	if err != nil {
+		return fmt.Errorf("decrypt gerrit password: %w", err)
+	}
+
+	cfg.Auth.JWTSecret, err = Decrypt(cfg.Auth.JWTSecret)
+	if err != nil {
+		return fmt.Errorf("decrypt jwt secret: %w", err)
+	}
+
+	if cfg.Auth.FingerprintSecret != "" {
+		cfg.Auth.FingerprintSecret, err = Decrypt(cfg.Auth.FingerprintSecret)
+		if err != nil {
+			return fmt.Errorf("decrypt fingerprint secret: %w", err)
+		}
+	}
+
+	if cfg.Events.WebhookSecret != "" {
+		cfg.Events.WebhookSecret, err = Decrypt(cfg.Events.WebhookSecret)
+		if err != nil {
+			return fmt.Errorf("decrypt webhook secret: %w", err)
+		}
+	}
+
+	if cfg.Feishu.AppSecret != "" {
+		cfg.Feishu.AppSecret, err = Decrypt(cfg.Feishu.AppSecret)
+		if err != nil {
+			return fmt.Errorf("decrypt feishu app secret: %w", err)
+		}
+	}
+	if cfg.Feishu.EncryptKey != "" {
+		cfg.Feishu.EncryptKey, err = Decrypt(cfg.Feishu.EncryptKey)
+		if err != nil {
+			return fmt.Errorf("decrypt feishu encrypt key: %w", err)
+		}
+	}
+
+	if cfg.Telegram.Token != "" {
+		cfg.Telegram.Token, err = Decrypt(cfg.Telegram.Token)
+		if err != nil {
+			return fmt.Errorf("decrypt telegram token: %w", err)
+		}
+	}
+	if cfg.Discord.Token != "" {
+		cfg.Discord.Token, err = Decrypt(cfg.Discord.Token)
+		if err != nil {
+			return fmt.Errorf("decrypt discord token: %w", err)
+		}
+	}
+	if cfg.Slack.Token != "" {
+		cfg.Slack.Token, err = Decrypt(cfg.Slack.Token)
+		if err != nil {
+			return fmt.Errorf("decrypt slack token: %w", err)
+		}
+	}
+	if cfg.Slack.AppToken != "" {
+		cfg.Slack.AppToken, err = Decrypt(cfg.Slack.AppToken)
+		if err != nil {
+			return fmt.Errorf("decrypt slack app token: %w", err)
+		}
+	}
+
 	return nil
+}
+
+func DecryptTokensInConfig(cfg *models.Config) error {
+	return DecryptSecretsInConfig(cfg)
 }
 
 func GenerateMasterKey() string {

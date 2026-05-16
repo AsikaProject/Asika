@@ -218,7 +218,12 @@
             loadKeys();
         })
         .catch(e => {
-            document.getElementById('createMsg').innerHTML = '<span class="error">' + e.message + '</span>';
+            var m = document.getElementById('createMsg');
+            m.innerHTML = '';
+            var errSpan = document.createElement('span');
+            errSpan.className = 'error';
+            errSpan.textContent = e.message;
+            m.appendChild(errSpan);
         });
     }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -169,7 +170,7 @@ func (s *mongoStorage) ForEach(bucket string, fn func(key, value []byte) error) 
 func (s *mongoStorage) ForEachPrefix(indexBucket, targetBucket, prefix string, fn func(key, value []byte) error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cursor, err := s.coll(indexBucket).Find(ctx, bson.M{"_id": bson.M{"$regex": "^" + prefix}})
+	cursor, err := s.coll(indexBucket).Find(ctx, bson.M{"_id": bson.M{"$regex": "^" + regexp.QuoteMeta(prefix)}})
 	if err != nil {
 		return err
 	}
@@ -202,7 +203,7 @@ func (s *mongoStorage) ForEachPrefix(indexBucket, targetBucket, prefix string, f
 func (s *mongoStorage) BucketForEachPrefix(bucket, prefix string, fn func(key, value []byte) error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cursor, err := s.coll(bucket).Find(ctx, bson.M{"_id": bson.M{"$regex": "^" + prefix}})
+	cursor, err := s.coll(bucket).Find(ctx, bson.M{"_id": bson.M{"$regex": "^" + regexp.QuoteMeta(prefix)}})
 	if err != nil {
 		return err
 	}

@@ -28,7 +28,6 @@ type apiKeyResponse struct {
 	AllowedRepoGroups []string               `json:"allowed_repo_groups"`
 	AllowedRepos      []string               `json:"allowed_repos"`
 	Permissions       models.UserPermissions `json:"permissions"`
-	KeyHMAC           string                 `json:"key_hmac"`
 	RawKey            string                 `json:"key,omitempty"` // only on creation
 }
 
@@ -43,7 +42,6 @@ func toAPIKeyResponse(key *models.APIKey, rawKey string) apiKeyResponse {
 		AllowedRepoGroups: key.AllowedRepoGroups,
 		AllowedRepos:      key.AllowedRepos,
 		Permissions:       key.Permissions,
-		KeyHMAC:           key.KeyHMAC,
 		RawKey:            rawKey,
 	}
 }
@@ -68,6 +66,7 @@ func CreateAPIKey(c *gin.Context) {
 			CanReopen      *bool `json:"can_reopen"`
 			CanSpam        *bool `json:"can_spam"`
 			CanManageQueue *bool `json:"can_manage_queue"`
+			CanRevert      *bool `json:"can_revert"`
 		} `json:"permissions"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -117,6 +116,9 @@ func CreateAPIKey(c *gin.Context) {
 		}
 		if p.CanManageQueue != nil {
 			perms.CanManageQueue = *p.CanManageQueue
+		}
+		if p.CanRevert != nil {
+			perms.CanRevert = *p.CanRevert
 		}
 	}
 

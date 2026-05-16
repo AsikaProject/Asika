@@ -18,6 +18,15 @@ func GetNotificationPrefs(c *gin.Context) {
 		return
 	}
 
+	currentUser, _ := c.Get("username")
+	currentRole, _ := c.Get("role")
+	if currentUser != nil && currentRole != nil {
+		if currentUser.(string) != username && currentRole.(string) != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: can only view own preferences", "code": 403})
+			return
+		}
+	}
+
 	data, err := db.GetNotificationPrefs(username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read preferences"})
@@ -47,6 +56,15 @@ func UpdateNotificationPrefs(c *gin.Context) {
 	if username == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "username required"})
 		return
+	}
+
+	currentUser, _ := c.Get("username")
+	currentRole, _ := c.Get("role")
+	if currentUser != nil && currentRole != nil {
+		if currentUser.(string) != username && currentRole.(string) != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: can only modify own preferences", "code": 403})
+			return
+		}
 	}
 
 	var prefs models.NotificationPreferences

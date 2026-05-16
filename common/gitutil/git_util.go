@@ -1,8 +1,11 @@
 package gitutil
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-git/go-git/v5"
@@ -38,6 +41,13 @@ func prepareRepo(workdir, url, token string, persistentPath string) (*git.Reposi
 			return nil, "", false, fmt.Errorf("failed to create temp dir: %w", err)
 		}
 		cleanup = true
+	} else {
+		repoDir := repoScopedPath(dir, url)
+		repo, err := git.PlainOpen(repoDir)
+		if err == nil {
+			return repo, repoDir, false, nil
+		}
+		dir = repoDir
 	}
 
 	repo, err := CloneOrOpen(dir, url, token)
@@ -45,6 +55,11 @@ func prepareRepo(workdir, url, token string, persistentPath string) (*git.Reposi
 		return nil, dir, cleanup, fmt.Errorf("failed to clone repo: %w", err)
 	}
 	return repo, dir, cleanup, nil
+}
+
+func repoScopedPath(basePath, url string) string {
+	h := sha256.Sum256([]byte(url))
+	return filepath.Join(basePath, hex.EncodeToString(h[:8]))
 }
 
 func cloneRepo(workdir, url, token string) (*git.Repository, error) {

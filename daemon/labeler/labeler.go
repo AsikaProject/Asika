@@ -203,6 +203,8 @@ func matchPattern(pattern string, files []string) bool {
 	return false
 }
 
+const maxCompiledPatterns = 1000
+
 var (
 	compiledPatterns   = make(map[string]*regexp.Regexp)
 	compiledPatternsMu sync.RWMutex
@@ -219,6 +221,12 @@ func matchSinglePattern(pattern, file string) bool {
 	compiledPatternsMu.Lock()
 	re, ok := compiledPatterns[pattern]
 	if !ok {
+		if len(compiledPatterns) >= maxCompiledPatterns {
+			for k := range compiledPatterns {
+				delete(compiledPatterns, k)
+				break
+			}
+		}
 		var err error
 		re, err = regexp.Compile(pattern)
 		if err != nil {

@@ -41,12 +41,23 @@ function renderSpaces(spaces) {
         container.innerHTML = '<p>No team spaces yet.</p>';
         return;
     }
-    let html = '<table><thead><tr><th>Name</th><th>Description</th><th>Created By</th><th>Members</th><th>Actions</th></tr></thead><tbody>';
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th>Name</th><th>Description</th><th>Created By</th><th>Members</th><th>Actions</th></tr></thead>';
+    const tbody = document.createElement('tbody');
     spaces.forEach(s => {
-        html += '<tr><td>' + s.name + '</td><td>' + (s.description || '-') + '</td><td>' + (s.created_by || '-') + '</td><td>' + (s.members ? s.members.length : 0) + '</td><td><button onclick="deleteSpace(\'' + s.name + '\')">Delete</button></td></tr>';
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + escapeHtml(s.name) + '</td><td>' + escapeHtml(s.description || '-') + '</td><td>' + escapeHtml(s.created_by || '-') + '</td><td>' + (s.members ? s.members.length : 0) + '</td><td></td>';
+        const btnCell = tr.querySelector('td:last-child');
+        const btn = document.createElement('button');
+        btn.textContent = 'Delete';
+        btn.dataset.spaceName = s.name;
+        btn.addEventListener('click', function() { deleteSpace(this.dataset.spaceName); });
+        btnCell.appendChild(btn);
+        tbody.appendChild(tr);
     });
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    table.appendChild(tbody);
+    container.innerHTML = '';
+    container.appendChild(table);
 }
 
 function createSpace() {

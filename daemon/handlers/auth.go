@@ -55,10 +55,11 @@ func Login(c *gin.Context) {
 		return
 	}
 
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
 		"asika_token", token,
 		int(config.GenerateTokenExpiry(cfg.Auth.TokenExpiry).Seconds()),
-		"/", "", false, true,
+		"/", "", true, true,
 	)
 
 	c.JSON(http.StatusOK, gin.H{"token": token, "username": user.Username, "role": user.Role})
@@ -70,7 +71,8 @@ func Logout(c *gin.Context) {
 	if token != "" {
 		auth.BlacklistToken(token)
 	}
-	c.SetCookie("asika_token", "", -1, "/", "", false, true)
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("asika_token", "", -1, "/", "", true, true)
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
 
@@ -191,6 +193,8 @@ func UpdateUser(c *gin.Context) {
 			CanSpam        *bool `json:"can_spam"`
 			CanManageQueue *bool `json:"can_manage_queue"`
 			CanRevert      *bool `json:"can_revert"`
+			CanComment     *bool `json:"can_comment"`
+			CanLabel       *bool `json:"can_label"`
 		} `json:"permissions"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -257,6 +261,12 @@ func UpdateUser(c *gin.Context) {
 		if p.CanRevert != nil {
 			user.Permissions.CanRevert = *p.CanRevert
 		}
+		if p.CanComment != nil {
+			user.Permissions.CanComment = *p.CanComment
+		}
+		if p.CanLabel != nil {
+			user.Permissions.CanLabel = *p.CanLabel
+		}
 	}
 
 	data, err = json.Marshal(user)
@@ -286,6 +296,18 @@ func DeleteUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "user deleted"})
+}
+
+var permRoleRequirement = map[string]string{
+	"can_approve":     "operator",
+	"can_merge":       "operator",
+	"can_close":       "operator",
+	"can_reopen":      "operator",
+	"can_spam":        "operator",
+	"can_manage_queue": "operator",
+	"can_revert":      "operator",
+	"can_comment":     "viewer",
+	"can_label":       "operator",
 }
 
 // CreateTempToken handles POST /api/v1/auth/temp-token
@@ -322,7 +344,7 @@ func CreateTempToken(c *gin.Context) {
 
 	validPerms := map[string]bool{
 		"can_approve": true, "can_merge": true, "can_close": true,
-		"can_reopen": true, "can_spam": true, "can_manage_queue": true, "can_revert": true,
+		"can_reopen": true, "can_spam": true, "can_manage_queue": true, "can_revert": true, "can_comment": true, "can_label": true,
 	}
 	for k := range req.Permissions {
 		if !validPerms[k] {
@@ -331,7 +353,21 @@ func CreateTempToken(c *gin.Context) {
 		}
 	}
 
-	token, err := auth.GenerateTempToken(username.(string), role.(string), d, req.Permissions)
+	currentRole := role.(string)
+	roleLevel := map[string]int{"viewer": 1, "operator": 2, "admin": 3}
+	userLevel := roleLevel[currentRole]
+	for perm := range req.Permissions {
+		if !req.Permissions[perm] {
+			continue
+		}
+		requiredRole := permRoleRequirement[perm]
+		if userLevel < roleLevel[requiredRole] {
+			c.JSON(http.StatusForbidden, gin.H{"error": "cannot grant permission " + perm + ": requires " + requiredRole + " role"})
+			return
+		}
+	}
+
+	token, err := auth.GenerateTempToken(username.(string), currentRole, d, req.Permissions)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 		return
@@ -354,6 +390,6 @@ func SetLocale(c *gin.Context) {
 		return
 	}
 	i18n.SetLocale(req.Locale)
-	c.SetCookie("asika_lang", req.Locale, 86400*365, "/", "", false, true)
+	c.SetCookie("asika_lang", req.Locale, 86400*365, "/", "", true, true)
 	c.JSON(http.StatusOK, gin.H{"message": "locale set", "locale": req.Locale})
 }

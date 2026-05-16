@@ -18,6 +18,8 @@ func (s *Server) setupRoutes() {
 
 	if s.cfg != nil && s.cfg.Server.EnablePprof {
 		debug := s.engine.Group("/debug/pprof")
+		debug.Use(RequireAuth())
+		debug.Use(RequireRole("admin"))
 		debug.GET("/", gin.WrapF(pprof.Index))
 		debug.GET("/cmdline", gin.WrapF(pprof.Cmdline))
 		debug.GET("/profile", gin.WrapF(pprof.Profile))
@@ -77,7 +79,11 @@ func (s *Server) setupRoutes() {
 			prs.GET("", handlers.ListPRs)
 			prs.POST("/sync", handlers.ListPRs)
 			prs.GET("/:pr_id", handlers.GetPR)
-			prs.POST("/:pr_id/comment", handlers.CommentPR)
+			prsComment := prs.Group("")
+			prsComment.Use(RequirePermission("comment"))
+			{
+				prsComment.POST("/:pr_id/comment", handlers.CommentPR)
+			}
 
 			prsApprove := prs.Group("")
 			prsApprove.Use(RequirePermission("approve"))
@@ -119,7 +125,11 @@ func (s *Server) setupRoutes() {
 				prsRevert.POST("/:pr_id/revert", handlers.RevertPR)
 			}
 
-			prs.POST("/batch/label", handlers.BatchLabelPR)
+			prsLabel := prs.Group("")
+			prsLabel.Use(RequirePermission("label"))
+			{
+				prsLabel.POST("/batch/label", handlers.BatchLabelPR)
+			}
 
 			prsAssign := prs.Group("")
 			prsAssign.Use(RequirePermission("approve"))
@@ -218,24 +228,44 @@ func (s *Server) setupRoutes() {
 		protected.GET("/stats/bottlenecks", handlers.GetBottleneckStats)
 
 		// Issue-PR links
-		protected.GET("/repos/:repo_group/issues/:issue_id/prs", handlers.GetIssueLinks)
-		protected.GET("/repos/:repo_group/prs/:pr_id/issues", handlers.GetPRLinks)
-		protected.POST("/repos/:repo_group/prs/:pr_id/sync-links", handlers.SyncIssueLinks)
+		issueLinks := protected.Group("/repos/:repo_group")
+		issueLinks.Use(RequireRepoGroupAccess())
+		{
+			issueLinks.GET("/issues/:issue_id/prs", handlers.GetIssueLinks)
+			issueLinks.GET("/prs/:pr_id/issues", handlers.GetPRLinks)
+			issueLinks.POST("/prs/:pr_id/sync-links", handlers.SyncIssueLinks)
+		}
 
 		// PR templates
-		protected.GET("/repos/:repo_group/template", handlers.GetPRTemplate)
-		protected.POST("/repos/:repo_group/template/fetch", handlers.FetchTemplate)
-		protected.POST("/repos/:repo_group/prs/:pr_id/checklist", handlers.CheckChecklist)
+		prTemplates := protected.Group("/repos/:repo_group")
+		prTemplates.Use(RequireRepoGroupAccess())
+		{
+			prTemplates.GET("/template", handlers.GetPRTemplate)
+			prTemplates.POST("/template/fetch", handlers.FetchTemplate)
+			prTemplates.POST("/prs/:pr_id/checklist", handlers.CheckChecklist)
+		}
 
 		// PR dependencies
-		protected.GET("/repos/:repo_group/prs/:pr_id/dependencies", handlers.GetPRDependencies)
-		protected.GET("/repos/:repo_group/prs/:pr_id/dependents", handlers.GetPRDependents)
-		protected.POST("/repos/:repo_group/prs/:pr_id/sync-deps", handlers.SyncDependencies)
+		prDeps := protected.Group("/repos/:repo_group")
+		prDeps.Use(RequireRepoGroupAccess())
+		{
+			prDeps.GET("/prs/:pr_id/dependencies", handlers.GetPRDependencies)
+			prDeps.GET("/prs/:pr_id/dependents", handlers.GetPRDependents)
+			prDeps.POST("/prs/:pr_id/sync-deps", handlers.SyncDependencies)
+		}
 
 		// Cross-space dependencies
-		protected.GET("/repos/:repo_group/prs/:pr_id/cross-space-deps", handlers.ListCrossSpaceDeps)
-		protected.GET("/cross-space-deps/:source_pr_id/:target_pr_id", handlers.GetCrossSpaceDeps)
-		protected.POST("/cross-space-deps/:source_pr_id/:target_pr_id/resolve", handlers.ResolveCrossSpaceDep)
+		crossSpaceDeps := protected.Group("/repos/:repo_group")
+		crossSpaceDeps.Use(RequireRepoGroupAccess())
+		{
+			crossSpaceDeps.GET("/prs/:pr_id/cross-space-deps", handlers.ListCrossSpaceDeps)
+		}
+		crossSpaceWrite := protected.Group("/cross-space-deps")
+		crossSpaceWrite.Use(RequirePermission("merge"))
+		{
+			crossSpaceWrite.GET("/:source_pr_id/:target_pr_id", handlers.GetCrossSpaceDeps)
+			crossSpaceWrite.POST("/:source_pr_id/:target_pr_id/resolve", handlers.ResolveCrossSpaceDep)
+		}
 
 		// PR Stacks
 		stacksGroup := protected.Group("/stacks")
@@ -288,7 +318,7 @@ func (s *Server) setupRoutes() {
 		update.Use(RequireRole("admin"))
 		{
 			update.GET("/check", handlers.CheckForUpdate)
-			update.GET("/run", handlers.PerformWebUpdate)
+			update.POST("/run", handlers.PerformWebUpdate)
 		}
 
 		staleGroup := protected.Group("/stale")

@@ -42,22 +42,28 @@ func extractDeliveryID(platform string, c *gin.Context) string {
 	return ""
 }
 
-func isDuplicateWebhook(deliveryID string) bool {
+func dedupKey(platform, repoGroup, deliveryID string) string {
+	return platform + ":" + repoGroup + ":" + deliveryID
+}
+
+func isDuplicateWebhook(platform, repoGroup, deliveryID string) bool {
 	if deliveryID == "" {
 		return false
 	}
-	data, err := db.GetWebhookDedup(deliveryID)
+	key := dedupKey(platform, repoGroup, deliveryID)
+	data, err := db.GetWebhookDedup(key)
 	if err != nil || data == nil {
 		return false
 	}
 	return true
 }
 
-func markWebhookProcessed(deliveryID string) {
+func markWebhookProcessed(platform, repoGroup, deliveryID string) {
 	if deliveryID == "" {
 		return
 	}
-	db.PutWebhookDedup(deliveryID, []byte(time.Now().Format(time.RFC3339)))
+	key := dedupKey(platform, repoGroup, deliveryID)
+	db.PutWebhookDedup(key, []byte(time.Now().Format(time.RFC3339)))
 }
 
 func WebhookHandler(c *gin.Context) {
@@ -108,13 +114,12 @@ func WebhookHandler(c *gin.Context) {
 	deliveryID := extractDeliveryID(platform, c)
 
 	dedupMu.Lock()
-	if isDuplicateWebhook(deliveryID) {
+	if isDuplicateWebhook(platform, repoGroup, deliveryID) {
 		dedupMu.Unlock()
 		slog.Info("duplicate webhook, skipping", "delivery_id", deliveryID, "platform", platform, "repo_group", repoGroup)
 		c.JSON(http.StatusOK, gin.H{"message": "webhook already processed", "duplicate": true})
 		return
 	}
-	markWebhookProcessed(deliveryID)
 	dedupMu.Unlock()
 
 	webhookID := uuid.New().String()
@@ -143,6 +148,8 @@ func WebhookHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to process webhook"})
 		return
 	}
+
+	markWebhookProcessed(platform, repoGroup, deliveryID)
 
 	if eventType == "" {
 		slog.Info("webhook processed with no actionable event, cleaning up retry record", "webhook_id", webhookID, "platform", platform)

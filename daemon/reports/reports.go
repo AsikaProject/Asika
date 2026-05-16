@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -209,7 +210,13 @@ func (s *Scheduler) generateReport() (string, int, error) {
 }
 
 func fetchStats(addr string, period int) (map[string]interface{}, error) {
-	url := fmt.Sprintf("http://localhost%s/api/v1/stats?period=%d", addr, period)
+	host := addr
+	if strings.HasPrefix(host, ":") {
+		host = "localhost" + host
+	} else if strings.HasPrefix(host, "0.0.0.0:") {
+		host = "localhost" + host[len("0.0.0.0"):]
+	}
+	url := fmt.Sprintf("http://%s/api/v1/stats?period=%d", host, period)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -231,7 +238,13 @@ func fetchStats(addr string, period int) (map[string]interface{}, error) {
 }
 
 func fetchTeamStats(addr string, period int) (*models.TeamStats, error) {
-	url := fmt.Sprintf("http://localhost%s/api/v1/stats/team?period=%d", addr, period)
+	host := addr
+	if strings.HasPrefix(host, ":") {
+		host = "localhost" + host
+	} else if strings.HasPrefix(host, "0.0.0.0:") {
+		host = "localhost" + host[len("0.0.0.0"):]
+	}
+	url := fmt.Sprintf("http://%s/api/v1/stats/team?period=%d", host, period)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err

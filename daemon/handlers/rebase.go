@@ -308,7 +308,7 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 
 	pr.Events = append(pr.Events, models.PREvent{
 		Action: "cherry_picked",
-		Detail: fmt.Sprintf("Cherry-picked %s onto %s", pr.MergeCommitSHA[:8], targetBranch),
+		Detail: fmt.Sprintf("Cherry-picked %s onto %s", shortSHA(pr.MergeCommitSHA), targetBranch),
 	})
 	prData, _ := json.Marshal(pr)
 	prKey := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
@@ -324,7 +324,14 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 
 	return &CherryPickResponse{
 		Success: true,
-		Message: fmt.Sprintf("Cherry-picked %s onto %s", pr.MergeCommitSHA[:8], targetBranch),
+		Message: fmt.Sprintf("Cherry-picked %s onto %s", shortSHA(pr.MergeCommitSHA), targetBranch),
 		PRID:    prID,
 	}, nil
+}
+
+func shortSHA(sha string) string {
+	if len(sha) < 8 {
+		return sha
+	}
+	return sha[:8]
 }

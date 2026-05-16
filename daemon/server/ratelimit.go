@@ -11,7 +11,8 @@ import (
 
 type visitor struct {
 	limiter  *rate.Limiter
-	lastSeen time.Time
+	lastSeen int64
+	mu       sync.Mutex
 }
 
 var visitors sync.Map
@@ -20,11 +21,13 @@ func getVisitor(ip string, r rate.Limit, b int) *rate.Limiter {
 	v, exists := visitors.Load(ip)
 	if !exists {
 		limiter := rate.NewLimiter(r, b)
-		visitors.Store(ip, &visitor{limiter: limiter, lastSeen: time.Now()})
+		visitors.Store(ip, &visitor{limiter: limiter, lastSeen: time.Now().UnixNano()})
 		return limiter
 	}
 	vv := v.(*visitor)
-	vv.lastSeen = time.Now()
+	vv.mu.Lock()
+	vv.lastSeen = time.Now().UnixNano()
+	vv.mu.Unlock()
 	return vv.limiter
 }
 
@@ -35,7 +38,10 @@ func cleanupVisitors(interval time.Duration) {
 		for range ticker.C {
 			visitors.Range(func(key, value interface{}) bool {
 				v := value.(*visitor)
-				if time.Since(v.lastSeen) > 3*time.Minute {
+				v.mu.Lock()
+				ls := v.lastSeen
+				v.mu.Unlock()
+				if time.Since(time.Unix(0, ls)) > 3*time.Minute {
 					visitors.Delete(key)
 				}
 				return true
@@ -44,10 +50,14 @@ func cleanupVisitors(interval time.Duration) {
 	}()
 }
 
+var cleanupStarted sync.Once
+
 // RateLimit middleware limits requests per IP.
 // r = requests per second, b = burst size.
 func RateLimit(r rate.Limit, b int) gin.HandlerFunc {
-	cleanupVisitors(time.Minute)
+	cleanupStarted.Do(func() {
+		cleanupVisitors(time.Minute)
+	})
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 		limiter := getVisitor(ip, r, b)

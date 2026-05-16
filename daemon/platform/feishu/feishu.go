@@ -2,11 +2,14 @@ package feishu
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"asika/common/config"
 )
 
 // feishuBotHandler is a package-level reference to the feishu bot.
@@ -29,10 +32,26 @@ func FeishuEventHandler(c *gin.Context) {
 		return
 	}
 
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
+
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read body"})
 		return
+	}
+
+	cfg := config.Current()
+	if cfg != nil && cfg.Feishu.VerificationToken != "" {
+		var tokenCheck struct {
+			Token string `json:"token"`
+		}
+		if unmarshalErr := json.Unmarshal(body, &tokenCheck); unmarshalErr == nil {
+			if tokenCheck.Token != cfg.Feishu.VerificationToken {
+				slog.Warn("feishu: invalid verification token")
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid verification token"})
+				return
+			}
+		}
 	}
 
 	resp, err := feishuBotHandler.HandleEvent(c.Request.Context(), body)

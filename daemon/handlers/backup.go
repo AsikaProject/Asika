@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -125,7 +126,8 @@ func RestoreBackup(c *gin.Context) {
 		return
 	}
 	absDir, _ := filepath.Abs(backupDir)
-	if len(absBackup) <= len(absDir) || absBackup[:len(absDir)] != absDir {
+	rel, err := filepath.Rel(absDir, absBackup)
+	if err != nil || strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "backup path outside backup directory"})
 		return
 	}

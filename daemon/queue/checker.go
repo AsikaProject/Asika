@@ -44,7 +44,8 @@ func (e *TransientError) Unwrap() error {
 
 // ShouldMerge checks if a queue item should be merged
 func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
 
 	pr, err := getPRFromDB(item.RepoGroup, item.PRID)
 	if err != nil {

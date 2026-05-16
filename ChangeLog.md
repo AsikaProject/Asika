@@ -1,3 +1,93 @@
+## v20260517DEV > Unreleased
+
+### Security Fixes
+
+- **Security**: Feishu event endpoint (`/api/v1/feishu/event`) lacked verification token check, allowing forged events. Added `VerificationToken` validation against config + 1MB body size limit.
+
+- **Security**: Feishu bot `isAdmin()` returned `true` for any user when no admin/operator/viewer IDs were configured. Now defaults to reject-all with a warning log.
+
+- **Security**: Batch label endpoint (`POST /api/v1/repos/:rg/prs/batch/label`) had no permission check beyond viewer role. Added `RequirePermission("label")`.
+
+- **Security**: Comment endpoint (`POST /api/v1/repos/:rg/prs/:id/comment`) had no permission check beyond viewer role. Added `RequirePermission("comment")`.
+
+- **Security**: Issue-link, template fetch, and dependency sync routes lacked repo group authorization. Added `RequireRepoGroupAccess()` middleware.
+
+- **Security**: Cross-space dependency endpoints (`GET/POST /api/v1/cross-space-deps/...`) lacked authorization. Added `RequirePermission("merge")` for write operations.
+
+- **Security**: `AuthMiddleware` skipped all `/api/v1/auth/*` prefixed routes, preventing `RequireAuth()` from working on `temp-token` and `fingerprints` sub-routes. Now only skips `login` and `logout`.
+
+- **Security**: Temp token creation allowed granting arbitrary permissions regardless of the user's actual role. Now validates each permission against role hierarchy (viewer cannot grant operator-level permissions).
+
+- **Security**: Config API (`GET /api/v1/config`) only masked GitHub/GitLab/Gitea tokens and JWT secret. Now comprehensively masks Forgejo, Codeberg, Bitbucket, Gerrit credentials, webhook secret, notifier tokens, bot tokens, SMTP password, DB URI, Feishu secrets via unified `maskConfig()` function.
+
+- **Security**: Config snapshots stored plaintext (decrypted) config in DB. Now masks all secrets via `maskConfigForStorage()` before persisting.
+
+- **Security**: Encryption (`EncryptTokensInConfig`/`DecryptTokensInConfig`) only covered platform tokens. Extended to Gerrit password, JWT secret, fingerprint secret, webhook secret, Feishu app secret/encrypt key, Telegram/Discord/Slack tokens.
+
+- **Security**: MongoDB prefix queries (`ForEachPrefix`, `BucketForEachPrefix`) used unsanitized user input in `$regex`, enabling regex injection. Added `regexp.QuoteMeta()` escaping.
+
+- **Security**: Login cookie had `Secure=false` and no SameSite. Set `Secure=true` and `SameSite=Lax`. Added CSRF protection middleware with token generation/validation.
+
+- **Security**: pprof debug endpoints (`/debug/pprof/*`) were unauthenticated. Added `RequireAuth()` + `RequireRole("admin")`.
+
+- **Security**: Notification preference endpoints (`GET/PUT /api/v1/users/:username/notifications`) allowed any authenticated user to read/modify any user's preferences. Added ownership check (self or admin only).
+
+- **Security**: SSE event stream (`GET /api/v1/events`) broadcast all events to all authenticated users without filtering. Added per-user repo group access filtering.
+
+- **Security**: `GetRepoGroupByName` silently fell back to "default" group for unknown repo groups. Now returns nil for unknown groups.
+
+- **Security**: Webhook dedup key used only `deliveryID`, allowing cross-platform collisions. Now uses `platform:repoGroup:deliveryID` composite key.
+
+- **Security**: Webhook was marked as processed before handling, causing lost events if processing failed. Now marks processed only after successful handling.
+
+- **Security**: RestoreBackup used string prefix check for path traversal, bypassable via paths like `/path/backups_evil/x`. Now uses `filepath.Rel` and rejects `..` components.
+
+- **Security**: API key list endpoint returned `KeyHMAC` field unnecessarily. Removed from response struct.
+
+- **Security**: API key creation permissions struct was missing `CanRevert` field. Added it.
+
+- **Security**: `FetchPRTemplate` passed `nil` context to platform client. Now uses `context.Background()`.
+
+- **Security (XSS)**: Audit log page (`audit.html`) used `innerHTML` to render log entries containing user-controlled data. Now uses DOM API with `textContent`.
+
+- **Security (XSS)**: Reports page (`reports.html`) used `innerHTML` to render report content. Now uses DOM API with `textContent`.
+
+- **Security (XSS)**: Users page (`users.html`) used inline `onclick` with `escapeHtml()` (HTML-only escaping) for JS string parameters. Replaced with `data-*` attributes + `addEventListener`.
+
+- **Security (XSS)**: Spaces page (`spaces.html`) used `innerHTML` for space name/description/created_by. Now uses DOM API + `escapeHtml`.
+
+- **Security (XSS)**: Error messages in `users.html`, `apikeys.html`, `queue.html` used `innerHTML` with server error messages. Now uses `textContent`.
+
+### Bug Fixes
+
+- **Bug fix**: `CherryPick()` used `HardReset` to replace the entire target tree with the source commit tree, destroying base branch content. Replaced with proper diff-based cherry-pick that applies only the changes introduced by the source commit.
+
+- **Bug fix**: Git clone operations used a single shared directory (`cfg.Git.RepoClonePath`), risking cross-repo interference. Now uses per-repo scoped paths based on URL hash.
+
+- **Bug fix**: Sync records were written to `BucketPRs` via `PutPRWithIndex` instead of `BucketSyncHistory`. Added dedicated `writeSyncRecord()` method on writer actor.
+
+- **Bug fix**: `CheckQueue()` had no concurrency protection, allowing duplicate merges from concurrent triggers. Added `sync.Mutex` around the entire check cycle.
+
+- **Bug fix**: Self-update used GET method (triggerable via cross-site navigation). Changed to POST.
+
+- **Bug fix**: Self-update skipped checksum verification when checksum asset was missing, and ignored `io.Copy` errors. Now requires checksum and checks all write errors.
+
+- **Bug fix**: `MergeCommitSHA[:8]` in rebase/cherry-pick logs panicked if SHA was shorter than 8 characters. Added `shortSHA()` helper with length check.
+
+- **Bug fix**: Scheduled report URL construction used `"http://localhost" + addr`, producing invalid URLs for non-standard bind addresses (e.g., `0.0.0.0:8080`). Now parses host correctly.
+
+- **Bug fix**: Rate limiter `lastSeen` was written without synchronization, causing data race. Added per-visitor `sync.Mutex`.
+
+- **Bug fix**: Consumer `Stop()` did not unsubscribe from the event bus, leaking channels. Added `events.Unsubscribe()` call.
+
+- **Bug fix**: i18n `SetLocale()` set global state, causing concurrent requests to overwrite each other's locale. Changed to request-scoped locale via gin context.
+
+### Performance
+
+- **Performance**: Labeler `compiledPatterns` map grew without bound. Added 1000-entry LRU eviction.
+
+- **Performance**: Rate limiter cleanup goroutine was started on every `RateLimit()` middleware construction. Changed to `sync.Once` singleton.
+
 # ChangeLog for Asika
 
 ## v20260510DEV > Unreleased

@@ -164,31 +164,36 @@ func PerformWebUpdate(c *gin.Context) {
 		return
 	}
 
-	if checksumURL != "" {
-		sendEvent("progress", `{"status":"verifying","progress":100,"message":"Verifying checksum..."}`)
+	if checksumURL == "" {
+		sendEvent("error", `{"error":"checksum file not available, refusing to install unverified binary"}`)
+		return
+	}
 
-		checksumPath := filepath.Join(tmpDir, assetName+".sha256sum")
-		resp, err := httpUpdateClient.Get(checksumURL)
-		if err != nil {
-			sendEvent("error", fmt.Sprintf(`{"error":"failed to download checksum: %s"}`, err.Error()))
-			return
-		}
-		f, err := os.Create(checksumPath)
-		if err != nil {
-			sendEvent("error", fmt.Sprintf(`{"error":"%s"}`, err.Error()))
-			resp.Body.Close()
-			return
-		}
-		io.Copy(f, resp.Body)
-		f.Close()
+	sendEvent("progress", `{"status":"verifying","progress":100,"message":"Verifying checksum..."}`)
+
+	checksumPath := filepath.Join(tmpDir, assetName+".sha256sum")
+	resp, err := httpUpdateClient.Get(checksumURL)
+	if err != nil {
+		sendEvent("error", fmt.Sprintf(`{"error":"failed to download checksum: %s"}`, err.Error()))
+		return
+	}
+	f, err := os.Create(checksumPath)
+	if err != nil {
+		sendEvent("error", fmt.Sprintf(`{"error":"%s"}`, err.Error()))
 		resp.Body.Close()
+		return
+	}
+	written, err := io.Copy(f, resp.Body)
+	f.Close()
+	resp.Body.Close()
+	if err != nil || written == 0 {
+		sendEvent("error", `{"error":"failed to download checksum file"}`)
+		return
+	}
 
-		if err := verifyWebChecksum(binaryPath, checksumPath); err != nil {
-			sendEvent("error", fmt.Sprintf(`{"error":"checksum verification failed: %s"}`, err.Error()))
-			return
-		}
-	} else {
-		sendEvent("progress", `{"status":"verifying","progress":100,"message":"No checksum file available, skipping verification..."}`)
+	if err := verifyWebChecksum(binaryPath, checksumPath); err != nil {
+		sendEvent("error", fmt.Sprintf(`{"error":"checksum verification failed: %s"}`, err.Error()))
+		return
 	}
 
 	sendEvent("progress", `{"status":"installing","progress":100,"message":"Installing update..."}`)
@@ -223,7 +228,13 @@ func PerformWebUpdate(c *gin.Context) {
 		sendEvent("error", fmt.Sprintf(`{"error":"failed to create target binary: %s"}`, err.Error()))
 		return
 	}
-	io.Copy(out, in)
+	if _, err := io.Copy(out, in); err != nil {
+		in.Close()
+		out.Close()
+		os.Rename(backupPath, currentPath)
+		sendEvent("error", fmt.Sprintf(`{"error":"failed to write binary: %s"}`, err.Error()))
+		return
+	}
 	in.Close()
 	out.Close()
 	os.Chmod(currentPath, 0755)

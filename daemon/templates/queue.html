@@ -131,17 +131,17 @@
              } else {
                  alert('Failed to clear queue');
              }
-         } catch(e) { alert('Failed to clear queue: ' + e.message); }
+         } catch(e) { alert('Failed to clear queue: ' + escapeHtml(e.message)); }
      }
      async function recheckQueue() {
         const repoGroup = document.getElementById('repoGroupSelect').value;
         try {
             const resp = await apiRequest('/api/v1/queue/' + repoGroup + '/recheck', {method:'POST'});
-            if(resp.ok){ alert('Queue recheck triggered!'); setTimeout(loadQueue, 1000); } 
-            else { alert('Nothing to recheck'); }
-        } catch(e){ alert('Failed to trigger recheck'); }
-    }
-    loadRepoGroups().then(() => loadQueue());
+         if(resp.ok){ alert('Queue recheck triggered!'); setTimeout(loadQueue, 1000); }
+             else { alert('Nothing to recheck'); }
+         } catch(e){ alert('Failed to trigger recheck: ' + escapeHtml(e.message)); }
+     }
+     loadRepoGroups().then(() => loadQueue());
 </script>
 {{template "client_auth"}}
 {{template "pwa_sw"}}

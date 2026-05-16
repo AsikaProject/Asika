@@ -47,7 +47,7 @@ func init() {
 	}
 }
 
-// SetLocale sets the current locale.
+// SetLocale sets the current locale (global fallback).
 func SetLocale(locale string) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -58,7 +58,13 @@ func SetLocale(locale string) {
 	current = locale
 }
 
-// Locale returns the current locale.
+// GetLocale returns the message for the given key using the current global locale.
+// For request-scoped locale, use TWithLocale instead.
+func GetLocaleMessage(key string, args ...interface{}) string {
+	return T(key, args...)
+}
+
+// Locale returns the current global locale.
 func Locale() string {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -101,9 +107,19 @@ func T(key string, args ...interface{}) string {
 	mu.RLock()
 	defer mu.RUnlock()
 	locale := current
+	return translate(locale, key, args...)
+}
+
+// TWithLocale translates a key for a specific locale.
+func TWithLocale(locale, key string, args ...interface{}) string {
+	mu.RLock()
+	defer mu.RUnlock()
+	return translate(locale, key, args...)
+}
+
+func translate(locale, key string, args ...interface{}) string {
 	msg, ok := messages[locale][key]
 	if !ok {
-		// Fallback to en
 		if locale != "en" {
 			if msg, ok = messages["en"][key]; ok {
 				return fmt.Sprintf(msg, args...)

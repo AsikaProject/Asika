@@ -58,7 +58,11 @@ func (w *writerActor) run() {
 						req.result <- fmt.Errorf("write panic: %v", r)
 					}
 				}()
-				req.result <- db.PutPRWithIndex(req.key, req.value, req.prID, req.repoGroup, req.prNumber)
+				if req.prID == "" && req.repoGroup == "" && req.prNumber == 0 {
+					req.result <- db.Put(db.BucketSyncHistory, req.key, req.value)
+				} else {
+					req.result <- db.PutPRWithIndex(req.key, req.value, req.prID, req.repoGroup, req.prNumber)
+				}
 			}()
 		case <-w.stop:
 			slog.Info("writer actor stopped")
@@ -82,6 +86,26 @@ func (w *writerActor) write(key string, value []byte, prID, repoGroup string, pr
 		repoGroup: repoGroup,
 		prNumber:  prNumber,
 		result:    make(chan error, 1),
+	}
+	select {
+	case w.requests <- req:
+		select {
+		case err := <-req.result:
+			return err
+		case <-w.stop:
+			return fmt.Errorf("writer actor stopped")
+		}
+	case <-w.stop:
+		return fmt.Errorf("writer actor stopped")
+	}
+}
+
+// writeSyncRecord writes a sync history record to BucketSyncHistory.
+func (w *writerActor) writeSyncRecord(key string, value []byte) error {
+	req := writeRequest{
+		key:    key,
+		value:  value,
+		result: make(chan error, 1),
 	}
 	select {
 	case w.requests <- req:

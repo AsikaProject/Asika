@@ -60,18 +60,7 @@ func GetConfig(c *gin.Context) {
 		return
 	}
 
-	// Create a copy with masked sensitive fields
-	masked := *cfg
-
-	// Mask tokens
-	masked.Tokens = models.TokensConfig{
-		GitHub: maskToken(cfg.Tokens.GitHub),
-		GitLab: maskToken(cfg.Tokens.GitLab),
-		Gitea:  maskToken(cfg.Tokens.Gitea),
-	}
-
-	// Mask JWT secret
-	masked.Auth.JWTSecret = maskSecret(cfg.Auth.JWTSecret)
+	masked := maskConfig(cfg)
 
 	c.Header("Cache-Control", "private, max-age=10")
 	c.JSON(http.StatusOK, masked)
@@ -222,18 +211,71 @@ func DryRunConfig(c *gin.Context) {
 		return
 	}
 
-	masked := *merged
-	masked.Tokens = models.TokensConfig{
-		GitHub: maskToken(merged.Tokens.GitHub),
-		GitLab: maskToken(merged.Tokens.GitLab),
-		Gitea:  maskToken(merged.Tokens.Gitea),
-	}
-	masked.Auth.JWTSecret = maskSecret(merged.Auth.JWTSecret)
+	masked := maskConfig(merged)
 
 	c.JSON(http.StatusOK, gin.H{
 		"valid":  true,
 		"config": masked,
 	})
+}
+
+func maskConfig(cfg *models.Config) *models.Config {
+	masked := *cfg
+
+	masked.Tokens = models.TokensConfig{
+		GitHub:    maskToken(cfg.Tokens.GitHub),
+		GitLab:    maskToken(cfg.Tokens.GitLab),
+		Gitea:     maskToken(cfg.Tokens.Gitea),
+		Forgejo:   maskToken(cfg.Tokens.Forgejo),
+		Codeberg:  maskToken(cfg.Tokens.Codeberg),
+		Bitbucket: maskToken(cfg.Tokens.Bitbucket),
+		Gerrit: models.GerritAuth{
+			URL:      cfg.Tokens.Gerrit.URL,
+			Username: cfg.Tokens.Gerrit.Username,
+			Password: maskToken(cfg.Tokens.Gerrit.Password),
+		},
+	}
+
+	masked.Auth.JWTSecret = maskSecret(cfg.Auth.JWTSecret)
+	masked.Auth.FingerprintSecret = maskSecret(cfg.Auth.FingerprintSecret)
+
+	masked.Events.WebhookSecret = maskSecret(cfg.Events.WebhookSecret)
+
+	for i := range masked.Notify {
+		if masked.Notify[i].Config != nil {
+			for k, v := range masked.Notify[i].Config {
+				if isSecretNotifyKey(k) {
+					if s, ok := v.(string); ok {
+						masked.Notify[i].Config[k] = maskSecret(s)
+					}
+				}
+			}
+		}
+	}
+
+	if masked.Database.Type == "mongo" {
+		masked.Database.Path = maskSecret(cfg.Database.Path)
+	}
+
+	masked.Feishu.AppSecret = maskSecret(cfg.Feishu.AppSecret)
+	masked.Feishu.EncryptKey = maskSecret(cfg.Feishu.EncryptKey)
+
+	masked.Telegram.Token = maskSecret(cfg.Telegram.Token)
+
+	masked.Discord.Token = maskSecret(cfg.Discord.Token)
+
+	masked.Slack.Token = maskSecret(cfg.Slack.Token)
+	masked.Slack.AppToken = maskSecret(cfg.Slack.AppToken)
+
+	return &masked
+}
+
+func isSecretNotifyKey(key string) bool {
+	switch strings.ToLower(key) {
+	case "password", "secret", "token", "api_key", "apikey", "webhook_url", "bot_token", "app_secret", "access_key", "private_key":
+		return true
+	}
+	return false
 }
 
 // maskToken masks a token for display
@@ -246,6 +288,9 @@ func maskToken(token string) string {
 
 // maskSecret masks a secret for display
 func maskSecret(secret string) string {
+	if secret == "" {
+		return ""
+	}
 	if len(secret) <= 8 {
 		return "***"
 	}
@@ -274,17 +319,11 @@ func GetConfigHistory(c *gin.Context) {
 	}
 	entries := make([]historyEntry, 0, len(snapshots))
 	for _, s := range snapshots {
-		cfg := *s.Config
-		cfg.Tokens = models.TokensConfig{
-			GitHub: maskToken(s.Config.Tokens.GitHub),
-			GitLab: maskToken(s.Config.Tokens.GitLab),
-			Gitea:  maskToken(s.Config.Tokens.Gitea),
-		}
-		cfg.Auth.JWTSecret = maskSecret(s.Config.Auth.JWTSecret)
+		masked := maskConfig(s.Config)
 		entries = append(entries, historyEntry{
 			Version:   s.Version,
 			Timestamp: s.Timestamp,
-			Config:    &cfg,
+			Config:    masked,
 		})
 	}
 	c.JSON(http.StatusOK, entries)

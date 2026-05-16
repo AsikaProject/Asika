@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"asika/common/config"
@@ -16,10 +17,11 @@ import (
 
 // Manager manages the merge queue
 type Manager struct {
-	cfg     *models.Config
-	clients map[platforms.PlatformType]platforms.PlatformClient
-	checker *Checker
-	stop    chan struct{}
+	cfg       *models.Config
+	clients   map[platforms.PlatformType]platforms.PlatformClient
+	checker   *Checker
+	stop      chan struct{}
+	checkMu   sync.Mutex
 }
 
 // NewManager creates a new queue manager
@@ -145,6 +147,9 @@ func (m *Manager) AddToQueueScheduled(pr *models.PRRecord, scheduleAt time.Time)
 
 // CheckQueue checks all items in the queue
 func (m *Manager) CheckQueue() {
+	m.checkMu.Lock()
+	defer m.checkMu.Unlock()
+
 	// First, read all items and collect done keys for cleanup
 	var items []models.QueueItem
 	var keys []string
@@ -245,7 +250,8 @@ func (m *Manager) CheckQueue() {
 
 // merge performs the merge operation
 func (m *Manager) merge(item *models.QueueItem) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
 	// Find PR in bbolt
 	pr, err := FindPRByID(item.PRID)

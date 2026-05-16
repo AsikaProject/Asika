@@ -32,8 +32,9 @@ type Consumer struct {
 	cancel       context.CancelFunc
 
 	// Actor subsystems
-	writer  *writerActor
-	workers *workerPool
+	writer     *writerActor
+	workers    *workerPool
+	eventCh    <-chan events.Event
 }
 
 // NewConsumer creates a new event consumer (basic, no wiring)
@@ -82,7 +83,7 @@ type syncRecordWriter struct {
 }
 
 func (w *syncRecordWriter) WriteSyncRecord(recordID string, data []byte) error {
-	return w.writer.write(recordID, data, "", "", 0)
+	return w.writer.writeSyncRecord(recordID, data)
 }
 
 // Start starts consuming events and dispatching to subsystem goroutine pools.
@@ -100,7 +101,7 @@ func (c *Consumer) Start() {
 		poolCfg = c.cfg.WorkerPool
 	}
 	c.workers = newWorkerPool(poolCfg)
-	ch := events.Subscribe()
+	c.eventCh = events.Subscribe()
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -109,7 +110,7 @@ func (c *Consumer) Start() {
 		}()
 		for {
 			select {
-			case event, ok := <-ch:
+			case event, ok := <-c.eventCh:
 				if !ok {
 					slog.Info("event channel closed, consumer stopping")
 					return
@@ -134,6 +135,10 @@ func (c *Consumer) Stop() {
 	if c.stop != nil {
 		close(c.stop)
 		c.stop = nil
+	}
+	if c.eventCh != nil {
+		events.Unsubscribe(c.eventCh)
+		c.eventCh = nil
 	}
 	if c.workers != nil {
 		c.workers.Stop()

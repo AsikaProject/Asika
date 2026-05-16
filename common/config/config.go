@@ -133,8 +133,8 @@ func Load(path string) (*models.Config, error) {
 		return nil, err
 	}
 
-	if err := crypto.DecryptTokensInConfig(cfg); err != nil {
-		return nil, fmt.Errorf("failed to decrypt tokens: %w", err)
+	if err := crypto.DecryptSecretsInConfig(cfg); err != nil {
+		return nil, fmt.Errorf("failed to decrypt secrets: %w", err)
 	}
 
 	Store(cfg)
@@ -365,9 +365,8 @@ func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 			}
 		}
 	}
-	if defaultGroup != nil {
-		slog.Info("repo group not found, falling back to default", "requested", name)
-		return defaultGroup
+	if defaultGroup != nil && name != "default" {
+		slog.Warn("repo group not found, falling back to default", "requested", name)
 	}
 	return nil
 }
@@ -569,7 +568,8 @@ func SaveConfigSnapshot() error {
 	if cfg == nil {
 		return fmt.Errorf("no config loaded")
 	}
-	data, err := json.Marshal(cfg)
+	masked := maskConfigForStorage(cfg)
+	data, err := json.Marshal(masked)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -580,6 +580,43 @@ func SaveConfigSnapshot() error {
 	pruneConfigSnapshots(20)
 	slog.Info("config snapshot saved", "version", v)
 	return nil
+}
+
+func maskConfigForStorage(cfg *models.Config) *models.Config {
+	masked := *cfg
+	masked.Tokens = models.TokensConfig{
+		GitHub:    "***",
+		GitLab:    "***",
+		Gitea:     "***",
+		Forgejo:   "***",
+		Codeberg:  "***",
+		Bitbucket: "***",
+		Gerrit: models.GerritAuth{
+			URL:      cfg.Tokens.Gerrit.URL,
+			Username: cfg.Tokens.Gerrit.Username,
+			Password: "***",
+		},
+	}
+	masked.Auth.JWTSecret = "***"
+	masked.Auth.FingerprintSecret = "***"
+	masked.Events.WebhookSecret = "***"
+	masked.Feishu.AppSecret = "***"
+	masked.Feishu.EncryptKey = "***"
+	masked.Telegram.Token = "***"
+	masked.Discord.Token = "***"
+	masked.Slack.Token = "***"
+	masked.Slack.AppToken = "***"
+	for i := range masked.Notify {
+		if masked.Notify[i].Config != nil {
+			for k := range masked.Notify[i].Config {
+				masked.Notify[i].Config[k] = "***"
+			}
+		}
+	}
+	if masked.Database.Type == "mongo" {
+		masked.Database.Path = "***"
+	}
+	return &masked
 }
 
 func pruneConfigSnapshots(keep int) {

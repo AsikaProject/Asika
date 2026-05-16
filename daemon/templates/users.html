@@ -143,7 +143,7 @@
             const users = await resp.json();
             document.getElementById('userCount').textContent = users.length + ' {{t "users.total"}}';
             if (users.length === 0) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">{{t "users.no_users"}}</td></tr>'; return; }
-            tbody.innerHTML = users.map(u => {
+            users.forEach(u => {
                 const groups = (u.allowed_repo_groups && u.allowed_repo_groups.length > 0)
                     ? u.allowed_repo_groups.map(g => '<span class="group-tag">' + escapeHtml(g) + '</span>').join('')
                     : '<span style="color:#999;font-size:12px;">{{t "users.all_groups"}}</span>';
@@ -157,16 +157,30 @@
                     if (u.permissions.can_manage_queue) perms.push('{{t "users.perm.queue"}}');
                 }
                 const permStr = perms.length > 0 ? perms.join(', ') : '<span style="color:#999;font-size:12px;">{{t "users.perm.none"}}</span>';
-                return '<tr><td>' + escapeHtml(u.username) + '</td>'
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td>' + escapeHtml(u.username) + '</td>'
                     + '<td>' + escapeHtml(u.role) + '</td>'
                     + '<td>' + groups + '</td>'
                     + '<td style="font-size:12px;">' + permStr + '</td>'
                     + '<td>' + (u.created_at ? escapeHtml(u.created_at.substring(0,10)) : '-') + '</td>'
-                    + '<td>'
-                    + '<button class="btn btn-secondary btn-sm" onclick="openEditModal(\'' + escapeHtml(u.username) + '\')" style="padding:2px 6px;font-size:11px;margin-right:4px;">{{t "common.edit"}}</button>'
-                    + '<button class="btn btn-danger btn-sm" onclick="deleteUser(\'' + escapeHtml(u.username) + '\')" style="padding:2px 6px;font-size:11px;">{{t "users.delete"}}</button>'
-                    + '</td></tr>';
-            }).join('');
+                    + '<td></td>';
+                const btnCell = tr.querySelector('td:last-child');
+                const editBtn = document.createElement('button');
+                editBtn.className = 'btn btn-secondary btn-sm';
+                editBtn.style.cssText = 'padding:2px 6px;font-size:11px;margin-right:4px;';
+                editBtn.textContent = '{{t "common.edit"}}';
+                editBtn.dataset.username = u.username;
+                editBtn.addEventListener('click', function() { openEditModal(this.dataset.username); });
+                const delBtn = document.createElement('button');
+                delBtn.className = 'btn btn-danger btn-sm';
+                delBtn.style.cssText = 'padding:2px 6px;font-size:11px;';
+                delBtn.textContent = '{{t "users.delete"}}';
+                delBtn.dataset.username = u.username;
+                delBtn.addEventListener('click', function() { deleteUser(this.dataset.username); });
+                btnCell.appendChild(editBtn);
+                btnCell.appendChild(delBtn);
+                tbody.appendChild(tr);
+            });
         } catch(e) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;">{{t "users.no_users"}}</td></tr>'; }
     }
 
@@ -294,13 +308,23 @@
                 renderPermCheckboxes('newUserPerms', {});
                 loadUsers();
             } else {
-                m.innerHTML = '<span class="error">' + (d.error || 'Failed') + '</span>';
+                m.innerHTML = '';
+                const errSpan = document.createElement('span');
+                errSpan.className = 'error';
+                errSpan.textContent = d.error || 'Failed';
+                m.appendChild(errSpan);
             }
-        } catch(e) { m.innerHTML = '<span class="error">Error: ' + e.message + '</span>'; }
+        } catch(e) {
+            m.innerHTML = '';
+            const errSpan = document.createElement('span');
+            errSpan.className = 'error';
+            errSpan.textContent = 'Error: ' + e.message;
+            m.appendChild(errSpan);
+        }
     }
 
     async function deleteUser(username) {
-        if (!confirm('{{t "users.confirm_delete"}} ' + username + '?')) return;
+        if (!confirm('{{t "users.confirm_delete"}} "' + escapeHtml(username) + '"?')) return;
         try {
             await apiRequest('/api/v1/users/' + username, {method: 'DELETE'});
             loadUsers();
@@ -367,12 +391,26 @@
             });
             const d = await resp.json();
             if (resp.ok) {
-                m.innerHTML = '<span class="success">{{t "users.updated"}}</span>';
+                m.innerHTML = '';
+                const okSpan = document.createElement('span');
+                okSpan.className = 'success';
+                okSpan.textContent = '{{t "users.updated"}}';
+                m.appendChild(okSpan);
                 setTimeout(() => { closeEditModal(); loadUsers(); }, 1000);
             } else {
-                m.innerHTML = '<span class="error">' + (d.error || 'Failed') + '</span>';
+                m.innerHTML = '';
+                const errSpan = document.createElement('span');
+                errSpan.className = 'error';
+                errSpan.textContent = d.error || 'Failed';
+                m.appendChild(errSpan);
             }
-        } catch(e) { m.innerHTML = '<span class="error">Error: ' + e.message + '</span>'; }
+        } catch(e) {
+            m.innerHTML = '';
+            const errSpan = document.createElement('span');
+            errSpan.className = 'error';
+            errSpan.textContent = 'Error: ' + e.message;
+            m.appendChild(errSpan);
+        }
     }
 
     // Close modal on overlay click
