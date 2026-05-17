@@ -1,4 +1,6 @@
-## v20260517DEV > Unreleased
+# ChangeLog for Asika
+
+## v20260510DEV > v20260517DEV
 
 ### Security Fixes
 
@@ -94,10 +96,6 @@
 
 - **Refactor**: Split `common/config/config.go` (682 lines) into `config.go` (512 lines, Load/SaveToFile/validate), `config_snapshot.go` (151 lines, SaveConfigSnapshot/RollbackConfig/ListConfigVersions), `config_mask.go` (83 lines, maskConfig/maskToken/maskSecret).
 
-# ChangeLog for Asika
-
-## v20260510DEV > Unreleased
-
 - **Feature**: CLI `pr list` supports `--page` and `--per-page` flags; `handleResponse` now prints pagination summary (page/total) for paginated API responses.
 
 - **Feature**: Added HMAC-based fingerprint authentication. Configurable via `[auth] fingerprint_enabled/secret/expiry`. Endpoints: register, verify, list, revoke. Middleware reads `X-Fingerprint-Token` header or `Authorization: Fingerprint <token>`.
@@ -153,8 +151,6 @@
 - **Performance**: `GetIssuePRLinksByPR` and `GetPRDependentsByPR` did full table scan. Added reverse index buckets.
 
 - **Performance**: MongoDB added indexes on `issue_pr_links.pr_id` and `pr_dependencies.depends_on_pr_id`.
-
-## v20260510DEV > Unreleased
 
 - **WebUI PR detail enhancements**: PR detail page now shows PR body/description, last commit SHA, and audit log events. Added Rebase, Cherry-pick, and Comment action buttons directly on the detail page.
 
@@ -296,8 +292,6 @@
 - All platform bots (Telegram, Discord, Slack, Feishu) display CPU thread config in /config command.
 - Add notification channel fault alerting: when a notifier fails 3 consecutive times, an alert is sent through all other configured notifiers (excluding the failed one).
 
-## v20260514DEV > Unreleased
-
 - **Bug fix**: Webhook idempotency — duplicate webhooks from platforms (e.g. GitHub retries) were processed multiple times. Added `webhook_dedup` bucket and delivery ID extraction (`X-GitHub-Delivery`, `X-Gitlab-Event-ID`, etc.) for dedup check.
 
 - **Bug fix**: Webhook request body had no size limit. Added 1MB max via `http.MaxBytesReader` to prevent memory exhaustion attacks.
@@ -347,8 +341,6 @@
 - **Bug fix**: `writerActor` main-loop panic killed the writer goroutine permanently — subsequent writes blocked forever. Now auto-restarts up to 3 times on panic.
 
 - **Performance**: `dedupMu` lock in `WebhookHandler` now covers both dedup check and mark-as-processed atomically, preventing concurrent duplicate processing of the same delivery.
-
-## v20260516DEV > Unreleased
 
 - **Feature: PR state sync**: New `sync_pr_state = true` config option in `[[repo_groups]]`. After a successful cross-platform sync, `syncPRState` automatically merges or closes the corresponding PR on target platforms (matched by head+base branch). Prevents PRs from remaining open on platforms where the code has already been merged. Configurable per repo group.
 
