@@ -18,16 +18,13 @@ type visitor struct {
 var visitors sync.Map
 
 func getVisitor(ip string, r rate.Limit, b int) *rate.Limiter {
-	v, exists := visitors.Load(ip)
-	if !exists {
-		limiter := rate.NewLimiter(r, b)
-		visitors.Store(ip, &visitor{limiter: limiter, lastSeen: time.Now().UnixNano()})
-		return limiter
-	}
+	v, loaded := visitors.LoadOrStore(ip, &visitor{limiter: rate.NewLimiter(r, b), lastSeen: time.Now().UnixNano()})
 	vv := v.(*visitor)
-	vv.mu.Lock()
-	vv.lastSeen = time.Now().UnixNano()
-	vv.mu.Unlock()
+	if loaded {
+		vv.mu.Lock()
+		vv.lastSeen = time.Now().UnixNano()
+		vv.mu.Unlock()
+	}
 	return vv.limiter
 }
 

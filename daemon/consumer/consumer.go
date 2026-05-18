@@ -43,6 +43,9 @@ type Consumer struct {
 	// Debounce: random 1-10s delay per PR to avoid API rate limits
 	debounceMu     sync.Mutex
 	debounceTimers map[string]*time.Timer
+
+	// Protect Start/Stop from concurrent access
+	lifecycleMu sync.Mutex
 }
 
 // NewConsumer creates a new event consumer (basic, no wiring)
@@ -99,7 +102,10 @@ func (w *syncRecordWriter) WriteSyncRecord(recordID string, data []byte) error {
 // Start starts consuming events and dispatching to subsystem goroutine pools.
 // Safe to call multiple times: stops previous goroutines before restarting.
 func (c *Consumer) Start() {
-	c.Stop()
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
+
+	c.stopInternal()
 	c.stop = make(chan struct{})
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	c.writer = newWriterActor(256)
@@ -138,6 +144,14 @@ func (c *Consumer) Start() {
 // It waits for the dispatch goroutine to exit before returning.
 // Safe to call multiple times.
 func (c *Consumer) Stop() {
+	c.lifecycleMu.Lock()
+	defer c.lifecycleMu.Unlock()
+
+	c.stopInternal()
+}
+
+// stopInternal performs the actual stop logic. Caller must hold lifecycleMu.
+func (c *Consumer) stopInternal() {
 	if c.cancel != nil {
 		c.cancel()
 		c.cancel = nil
@@ -213,6 +227,13 @@ func (c *Consumer) debounce(event events.Event, fn func()) {
 		c.debounceMu.Lock()
 		delete(c.debounceTimers, key)
 		c.debounceMu.Unlock()
+		// Check if workers are still valid before executing
+		c.lifecycleMu.Lock()
+		workers := c.workers
+		c.lifecycleMu.Unlock()
+		if workers == nil {
+			return
+		}
 		fn()
 	})
 	c.debounceMu.Unlock()

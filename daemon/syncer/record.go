@@ -62,12 +62,15 @@ func (s *Syncer) SyncBranchDeletion(repoGroup, sourcePlatform, branch string) {
 
 // notifySyncFailure sends a notification about sync failure.
 func (s *Syncer) notifySyncFailure(pr *models.PRRecord, targetPlatforms, reason string) {
-	if s.notifyFn == nil {
+	s.notifyFnMu.RLock()
+	fn := s.notifyFn
+	s.notifyFnMu.RUnlock()
+	if fn == nil {
 		return
 	}
 	title := fmt.Sprintf("⚠️ Sync Failed: %s#%d", pr.RepoGroup, pr.PRNumber)
 	body := fmt.Sprintf("PR: %s\nSource: %s\nTarget: %s\nReason: %s", pr.Title, pr.Platform, targetPlatforms, reason)
-	s.notifyFn(title, body)
+	fn(title, body)
 }
 
 // recordSync records sync history in bbolt.
@@ -90,8 +93,11 @@ func (s *Syncer) recordSync(pr *models.PRRecord, branch, targetPlatform, status,
 	if err != nil {
 		return fmt.Errorf("marshal sync record: %w", err)
 	}
-	if s.recordWriter != nil {
-		if err := s.recordWriter.WriteSyncRecord(record.ID, data); err != nil {
+	s.recordMu.RLock()
+	writer := s.recordWriter
+	s.recordMu.RUnlock()
+	if writer != nil {
+		if err := writer.WriteSyncRecord(record.ID, data); err != nil {
 			return fmt.Errorf("store sync record: %w", err)
 		}
 	} else {

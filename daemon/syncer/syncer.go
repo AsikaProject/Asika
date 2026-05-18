@@ -26,7 +26,9 @@ type Syncer struct {
 	clients      map[platforms.PlatformType]platforms.PlatformClient
 	syncLocks    sync.Map
 	notifyFn     func(title, body string)
+	notifyFnMu   sync.RWMutex
 	recordWriter SyncRecordWriter
+	recordMu     sync.RWMutex
 }
 
 // NewSyncer creates a new syncer
@@ -39,13 +41,17 @@ func NewSyncer(cfg *models.Config, clients map[platforms.PlatformType]platforms.
 
 // SetNotifyFunc sets the notification function for sync conflict alerts.
 func (s *Syncer) SetNotifyFunc(fn func(title, body string)) {
+	s.notifyFnMu.Lock()
 	s.notifyFn = fn
+	s.notifyFnMu.Unlock()
 }
 
 // SetRecordWriter sets the writer for sync records.
 // If nil, recordSync falls back to direct db.Put.
 func (s *Syncer) SetRecordWriter(w SyncRecordWriter) {
+	s.recordMu.Lock()
 	s.recordWriter = w
+	s.recordMu.Unlock()
 }
 
 // getTargetPlatforms returns all configured target platforms for sync.

@@ -56,7 +56,9 @@ func (b *Bot) handleApprovePR(ev *slack.MessageEvent, client *socketmode.Client,
 	pr.Events = append(pr.Events, models.PREvent{Timestamp: time.Now(), Action: "approved", Actor: ev.User})
 	prData, _ := json.Marshal(pr)
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
-	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	if prData != nil {
+		db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	}
 	addedToQueue := false
 	if b.queueMgr != nil {
 		if pr.State != "" && pr.State != "open" {

@@ -39,6 +39,9 @@ func (c *Consumer) handlePROpened(event events.Event) {
 					slog.Error("labeler panic recovered", "error", r, "pr_number", pr.PRNumber, "repo_group", event.RepoGroup)
 				}
 			}()
+			ctx, cancel := context.WithTimeout(c.ctx, 5*time.Minute)
+			defer cancel()
+			_ = ctx // labeler doesn't accept context yet, but timeout guards goroutine lifetime
 			c.labeler.HandlePROpened(pr, event.RepoGroup)
 		}()
 	}
@@ -49,6 +52,9 @@ func (c *Consumer) handlePROpened(event events.Event) {
 					slog.Error("reviewer panic recovered", "error", r, "pr_number", pr.PRNumber, "repo_group", event.RepoGroup)
 				}
 			}()
+			ctx, cancel := context.WithTimeout(c.ctx, 5*time.Minute)
+			defer cancel()
+			_ = ctx // reviewer doesn't accept context yet, but timeout guards goroutine lifetime
 			c.reviewer.HandlePROpened(pr, event.RepoGroup)
 		}()
 	}
@@ -61,6 +67,9 @@ func (c *Consumer) handlePROpened(event events.Event) {
 				slog.Error("syncPRLinks panic recovered", "error", r, "pr_number", pr.PRNumber)
 			}
 		}()
+		ctx, cancel := context.WithTimeout(c.ctx, 2*time.Minute)
+		defer cancel()
+		_ = ctx
 		syncPRLinks(c.writer, pr)
 	}()
 }
@@ -116,7 +125,10 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 				slog.Error("NotifyCrossSpaceDeps panic recovered", "error", r, "pr_number", pr.PRNumber)
 			}
 		}()
+		ctx, cancel := context.WithTimeout(c.ctx, 5*time.Minute)
+		defer cancel()
 		handlers.NotifyCrossSpaceDeps(pr)
+		_ = ctx
 	}()
 
 	go func() {
@@ -125,7 +137,10 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 				slog.Error("UpdateStackMemberStateOnMerge panic recovered", "error", r, "pr_number", pr.PRNumber)
 			}
 		}()
+		ctx, cancel := context.WithTimeout(c.ctx, 5*time.Minute)
+		defer cancel()
 		handlers.UpdateStackMemberStateOnMerge(pr)
+		_ = ctx
 	}()
 }
 

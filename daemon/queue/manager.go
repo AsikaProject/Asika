@@ -17,11 +17,12 @@ import (
 
 // Manager manages the merge queue
 type Manager struct {
-	cfg       *models.Config
-	clients   map[platforms.PlatformType]platforms.PlatformClient
-	checker   *Checker
-	stop      chan struct{}
-	checkMu   sync.Mutex
+	cfg      *models.Config
+	clients  map[platforms.PlatformType]platforms.PlatformClient
+	checker  *Checker
+	stop     chan struct{}
+	stopOnce sync.Once
+	checkMu  sync.Mutex
 }
 
 // NewManager creates a new queue manager
@@ -66,7 +67,9 @@ func (m *Manager) Recover() {
 		pr, findErr := FindPRByID(entry.item.PRID)
 		if findErr == nil && pr != nil && pr.State == "merged" {
 			slog.Info("queue recovery: PR already merged, removing from queue", "pr_id", entry.item.PRID)
-			db.Delete(db.BucketQueueItems, entry.key)
+			if delErr := db.Delete(db.BucketQueueItems, entry.key); delErr != nil {
+				slog.Error("queue recovery: failed to delete merged PR from queue", "pr_id", entry.item.PRID, "error", delErr)
+			}
 			continue
 		}
 		entry.item.Status = "waiting"
@@ -313,7 +316,9 @@ func (m *Manager) merge(item *models.QueueItem) error {
 		if marshalErr != nil {
 			slog.Error("failed to marshal PR after merge", "error", marshalErr, "pr_id", pr.ID)
 		} else {
-			db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
+			if putErr := db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber); putErr != nil {
+				slog.Error("failed to save PR after merge", "error", putErr, "pr_id", pr.ID)
+			}
 		}
 	}
 	return err
@@ -409,10 +414,9 @@ func (m *Manager) ClearQueue(repoGroup string) (int, error) {
 
 // Stop signals the periodic checker goroutine to stop.
 func (m *Manager) Stop() {
-	if m.stop != nil {
+	m.stopOnce.Do(func() {
 		close(m.stop)
-		m.stop = nil
-	}
+	})
 }
 
 // StopChan returns the stop channel for external select loops.

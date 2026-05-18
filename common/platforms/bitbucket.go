@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -28,7 +29,8 @@ type BitbucketClient struct {
 func NewBitbucketClient(token string, webhookSecret string) *BitbucketClient {
 	c, err := bitbucket.NewAPITokenAuth("", token)
 	if err != nil {
-		return &BitbucketClient{webhookSecret: webhookSecret}
+		slog.Error("failed to create bitbucket client", "error", err)
+		return nil
 	}
 	return &BitbucketClient{
 		client:        c,
@@ -297,7 +299,7 @@ func (c *BitbucketClient) GetCIStatus(ctx context.Context, owner, repo string, c
 	}
 	result, err := c.client.Repositories.Pipelines.List(opts)
 	if err != nil {
-		return "none", nil
+		return "none", fmt.Errorf("list pipelines: %w", err)
 	}
 	m, ok := result.(map[string]interface{})
 	if !ok {

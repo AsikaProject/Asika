@@ -299,15 +299,15 @@ func DeleteUser(c *gin.Context) {
 }
 
 var permRoleRequirement = map[string]string{
-	"can_approve":     "operator",
-	"can_merge":       "operator",
-	"can_close":       "operator",
-	"can_reopen":      "operator",
-	"can_spam":        "operator",
+	"can_approve":      "operator",
+	"can_merge":        "operator",
+	"can_close":        "operator",
+	"can_reopen":       "operator",
+	"can_spam":         "operator",
 	"can_manage_queue": "operator",
-	"can_revert":      "operator",
-	"can_comment":     "viewer",
-	"can_label":       "operator",
+	"can_revert":       "operator",
+	"can_comment":      "viewer",
+	"can_label":        "operator",
 }
 
 // CreateTempToken handles POST /api/v1/auth/temp-token

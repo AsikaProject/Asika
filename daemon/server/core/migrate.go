@@ -51,10 +51,14 @@ func MigrateRepoGroupNames(cfg *models.Config) {
 		return nil
 	})
 	for _, item := range prsToReinsert {
-		db.PutPRWithIndex(item.newKey, item.value, item.pr.ID, item.pr.RepoGroup, item.pr.PRNumber)
+		if err := db.PutPRWithIndex(item.newKey, item.value, item.pr.ID, item.pr.RepoGroup, item.pr.PRNumber); err != nil {
+			slog.Error("repo group migration: failed to reinsert PR", "pr_id", item.pr.ID, "error", err)
+		}
 	}
 	for _, k := range prKeysToDelete {
-		db.Delete(db.BucketPRs, k)
+		if err := db.Delete(db.BucketPRs, k); err != nil {
+			slog.Error("repo group migration: failed to delete old PR key", "key", k, "error", err)
+		}
 	}
 
 	// Migrate queue items
@@ -83,10 +87,14 @@ func MigrateRepoGroupNames(cfg *models.Config) {
 		return nil
 	})
 	for _, item := range qisToReinsert {
-		db.Put(db.BucketQueueItems, item.newKey, item.value)
+		if err := db.Put(db.BucketQueueItems, item.newKey, item.value); err != nil {
+			slog.Error("repo group migration: failed to reinsert queue item", "key", item.newKey, "error", err)
+		}
 	}
 	for _, k := range qiKeysToDelete {
-		db.Delete(db.BucketQueueItems, k)
+		if err := db.Delete(db.BucketQueueItems, k); err != nil {
+			slog.Error("repo group migration: failed to delete old queue key", "key", k, "error", err)
+		}
 	}
 
 	if len(prsToReinsert)+len(qisToReinsert) > 0 {
@@ -116,7 +124,9 @@ func MigratePRStates(cfg *models.Config) {
 		return nil
 	})
 	for _, item := range keysToUpdate {
-		db.Put(db.BucketPRs, item.key, item.value)
+		if err := db.Put(db.BucketPRs, item.key, item.value); err != nil {
+			slog.Error("PR state migration: failed to update PR", "key", item.key, "error", err)
+		}
 	}
 	if len(keysToUpdate) > 0 {
 		slog.Info("PR state migration complete", "merged_fixed", len(keysToUpdate))
@@ -186,7 +196,9 @@ func SyncPRStates(cfg *models.Config, clients map[platforms.PlatformType]platfor
 	})
 
 	for _, u := range updates {
-		db.PutPRWithIndex(u.key, u.data, u.pr.ID, u.pr.RepoGroup, u.pr.PRNumber)
+		if err := db.PutPRWithIndex(u.key, u.data, u.pr.ID, u.pr.RepoGroup, u.pr.PRNumber); err != nil {
+			slog.Error("PR state sync: failed to update PR", "pr_id", u.pr.ID, "error", err)
+		}
 	}
 
 	if len(updates) > 0 {

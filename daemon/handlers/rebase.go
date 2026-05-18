@@ -141,8 +141,14 @@ func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID
 
 	pr.BranchInfo = branchInfo
 	prKey := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
-	prData, _ := json.Marshal(pr)
-	db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	prData, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal PR for rebase", "error", err, "pr_id", prID)
+		return nil, fmt.Errorf("failed to marshal PR: %w", err)
+	}
+	if err := db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber); err != nil {
+		slog.Error("failed to save PR before rebase", "error", err, "pr_id", prID)
+	}
 
 	cloneURL := config.GetCloneURL(platform, owner, repo)
 	clonePath := cfg.Git.RepoClonePath
@@ -153,8 +159,10 @@ func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID
 			Action: "rebase_failed",
 			Detail: rebaseErr.Error(),
 		})
-		prData, _ = json.Marshal(pr)
-		db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		prData, _ := json.Marshal(pr)
+		if prData != nil {
+			db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		}
 		return nil, fmt.Errorf("rebase failed: %w", rebaseErr)
 	}
 
@@ -164,7 +172,9 @@ func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID
 		Detail: fmt.Sprintf("Successfully rebased onto %s", branchInfo.BaseBranch),
 	})
 	prData, _ = json.Marshal(pr)
-	db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	if prData != nil {
+		db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	}
 
 	db.AppendAuditLog("info", "PR rebased successfully", map[string]interface{}{
 		"pr_id":       prID,
@@ -302,7 +312,9 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 		})
 		prData, _ := json.Marshal(pr)
 		prKey := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
-		db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		if prData != nil {
+			db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		}
 		return nil, fmt.Errorf("cherry-pick failed: %w", cpErr)
 	}
 
@@ -312,7 +324,9 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 	})
 	prData, _ := json.Marshal(pr)
 	prKey := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
-	db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	if prData != nil {
+		db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	}
 
 	db.AppendAuditLog("info", "PR cherry-picked successfully", map[string]interface{}{
 		"pr_id":         prID,

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"asika/common/config"
@@ -51,17 +52,36 @@ func resolveRepoFromRequest(c *gin.Context) string {
 
 	var platform string
 	if prID != "" {
-		var prRecord *models.PRRecord
-		db.ForEach(db.BucketPRs, func(key, value []byte) error {
+		// Try index-based lookup first
+		data, err := db.GetPRByIndex(prID, repoGroup, 0)
+		if err == nil && data != nil {
 			var rec models.PRRecord
-			if json.Unmarshal(value, &rec) == nil && rec.ID == prID && rec.RepoGroup == repoGroup {
-				prRecord = &rec
-				return errStopForEach
+			if json.Unmarshal(data, &rec) == nil {
+				platform = rec.Platform
 			}
-			return nil
-		})
-		if prRecord != nil {
-			platform = prRecord.Platform
+		}
+		// Also try by repo_group:prNumber if prID looks like a number
+		if platform == "" {
+			if prNum := parsePRNumber(prID); prNum > 0 {
+				data, err = db.GetPRByIndex("", repoGroup, prNum)
+				if err == nil && data != nil {
+					var rec models.PRRecord
+					if json.Unmarshal(data, &rec) == nil {
+						platform = rec.Platform
+					}
+				}
+			}
+		}
+		// Fallback to full scan only if index miss
+		if platform == "" {
+			db.ForEach(db.BucketPRs, func(key, value []byte) error {
+				var rec models.PRRecord
+				if json.Unmarshal(value, &rec) == nil && rec.ID == prID && rec.RepoGroup == repoGroup {
+					platform = rec.Platform
+					return errStopForEach
+				}
+				return nil
+			})
 		}
 	}
 
@@ -77,6 +97,14 @@ func resolveRepoFromRequest(c *gin.Context) string {
 }
 
 var errStopForEach = fmt.Errorf("__stop__")
+
+func parsePRNumber(s string) int {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0
+	}
+	return n
+}
 
 func extractLogoutToken(c *gin.Context) string {
 	if token, err := c.Cookie("asika_token"); err == nil && token != "" {

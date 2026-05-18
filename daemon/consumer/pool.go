@@ -122,7 +122,11 @@ func (w *workerPool) exec(task func()) {
 }
 
 func (w *workerPool) Submit(task func()) {
-	w.tasks <- task
+	select {
+	case w.tasks <- task:
+	case <-w.stop:
+		slog.Warn("worker pool: submit after stop, dropping task")
+	}
 }
 
 func (w *workerPool) Stop() {
@@ -135,11 +139,13 @@ func (w *workerPool) Metrics() map[string]any {
 }
 
 func (w *workerPool) UpdateConfig(cfg models.WorkerPoolConfig) {
+	w.mu.Lock()
 	w.minWorkers = cfg.MinWorkers
 	w.maxWorkers = cfg.MaxWorkers
 	w.scaleUpPct = cfg.ScaleUpPct
 	w.scaleDownPct = cfg.ScaleDownPct
 	w.cooldown = time.Duration(cfg.CooldownSecs) * time.Second
+	w.mu.Unlock()
 	w.cfg.Store(cfg)
 	slog.Info("worker pool config updated", "min", cfg.MinWorkers, "max", cfg.MaxWorkers)
 }
@@ -177,13 +183,17 @@ func (w *workerPool) adjust() {
 
 	w.mu.Lock()
 	canScale := now.Sub(w.lastScaled) >= w.cooldown
+	scaleUp := w.scaleUpPct
+	scaleDown := w.scaleDownPct
+	maxW := w.maxWorkers
+	minW := w.minWorkers
 	w.mu.Unlock()
 
 	if !canScale {
 		return
 	}
 
-	if pct >= int(w.scaleUpPct) && currentWorkers < w.maxWorkers {
+	if pct >= scaleUp && currentWorkers < maxW {
 		w.mu.Lock()
 		w.lastScaled = now
 		w.mu.Unlock()
@@ -193,7 +203,7 @@ func (w *workerPool) adjust() {
 		return
 	}
 
-	if pct <= int(w.scaleDownPct) && currentWorkers > w.minWorkers {
+	if pct <= scaleDown && currentWorkers > minW {
 		w.mu.Lock()
 		w.lastScaled = now
 		if len(w.cancels) > 0 {

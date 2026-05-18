@@ -288,7 +288,7 @@ func (c *GitHubClient) GetDefaultBranch(ctx context.Context, owner, repo string)
 func (c *GitHubClient) GetCIStatus(ctx context.Context, owner, repo string, commitSHA string) (string, error) {
 	statuses, _, err := c.client.Repositories.GetCombinedStatus(ctx, owner, repo, commitSHA, nil)
 	if err != nil {
-		return "none", nil
+		return "none", fmt.Errorf("get combined status: %w", err)
 	}
 
 	state := statuses.GetState()

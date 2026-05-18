@@ -182,7 +182,7 @@ func UpdateConfig(c *gin.Context) {
 	reloadedCfg, err := config.Load(configPath)
 	if err != nil {
 		slog.Error("config saved but reload failed", "error", err)
-		c.JSON(http.StatusOK, gin.H{"message": "config saved but reload failed", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "config saved but reload failed", "error": err.Error()})
 		return
 	}
 	config.Store(reloadedCfg)

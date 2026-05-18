@@ -89,8 +89,6 @@ func StartWorkers(
 				select {
 				case <-ticker.C:
 					slog.Info("spam auto-clean running")
-					cfg.Spam.TriggerOnTitleKw = nil
-					cfg.Spam.TriggerOnAuthor = false
 					persistSpamClean(cfg)
 				case <-spamDetector.StopChan():
 					slog.Info("spam auto-clean worker stopped")
@@ -144,9 +142,15 @@ func StartWorkers(
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
-		for range ticker.C {
-			auth.CleanupBlacklist()
-			auth.CleanupExpiredFingerprints()
+		stopCh := make(chan struct{})
+		for {
+			select {
+			case <-ticker.C:
+				auth.CleanupBlacklist()
+				auth.CleanupExpiredFingerprints()
+			case <-stopCh:
+				return
+			}
 		}
 	}()
 	slog.Info("token blacklist & fingerprint cleanup worker started")
@@ -191,14 +195,21 @@ func startStaleCheck(cfg *models.Config, mgr *stale.Manager) {
 	}
 
 	interval := utils.ParseDuration(cfg.Stale.CheckInterval, 6*time.Hour)
+	stopCh := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		mgr.CheckAllGroups()
-		for range ticker.C {
-			mgr.CheckAllGroups()
+		for {
+			select {
+			case <-ticker.C:
+				mgr.CheckAllGroups()
+			case <-stopCh:
+				return
+			}
 		}
 	}()
+	_ = stopCh // available for future graceful shutdown
 	slog.Info("stale checker started", "interval", interval)
 }
 
@@ -209,8 +220,14 @@ func startWebhookHealthChecker(cfg *models.Config, poller *polling.Poller) {
 	go func() {
 		ticker := time.NewTicker(healthCheckInterval)
 		defer ticker.Stop()
-		for range ticker.C {
-			checkWebhookHealth(cfg, poller, threshold)
+		stopCh := make(chan struct{})
+		for {
+			select {
+			case <-ticker.C:
+				checkWebhookHealth(cfg, poller, threshold)
+			case <-stopCh:
+				return
+			}
 		}
 	}()
 	slog.Info("webhook health checker started", "interval", healthCheckInterval, "threshold", threshold)

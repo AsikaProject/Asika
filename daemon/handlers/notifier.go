@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"asika/common/models"
@@ -13,6 +14,9 @@ import (
 
 // notifyFunc is an optional external notification sender (set by core).
 var notifyFunc func(title, body string)
+
+// notifyFuncMu protects notifyFunc from concurrent access.
+var notifyFuncMu sync.RWMutex
 
 // notifyUrgentFunc is an optional external urgent notification sender (bypasses quiet hours).
 var notifyUrgentFunc func(title, body string)
@@ -33,15 +37,20 @@ func resetNotifierPrefsCache() {
 
 // SetNotifyFunc sets the external notification function.
 func SetNotifyFunc(fn func(title, body string)) {
+	notifyFuncMu.Lock()
 	notifyFunc = fn
+	notifyFuncMu.Unlock()
 }
 
 // SetNotifyUrgentFunc sets the external urgent notification function.
 func SetNotifyUrgentFunc(fn func(title, body string)) {
+	notifyFuncMu.Lock()
 	notifyUrgentFunc = fn
+	notifyFuncMu.Unlock()
 }
 
 var globalNotifiers []notifier.Notifier
+var globalNotifiersMu sync.RWMutex
 
 // InitNotifiers initializes the notification senders for handlers.
 func InitNotifiers(cfg *models.Config, clients map[platforms.PlatformType]platforms.PlatformClient) {
@@ -54,7 +63,9 @@ func InitNotifiers(cfg *models.Config, clients map[platforms.PlatformType]platfo
 		}
 	}
 	notifier.WirePlatformNotifiers(notifiers, clients)
+	globalNotifiersMu.Lock()
 	globalNotifiers = notifiers
+	globalNotifiersMu.Unlock()
 }
 
 // SendNotifications sends a notification to all configured notifiers.
@@ -68,13 +79,20 @@ func SendNotificationSync(title, body string) {
 }
 
 func sendNotifications(title, body string) {
-	if notifyFunc != nil {
-		notifyFunc(title, body)
+	notifyFuncMu.RLock()
+	fn := notifyFunc
+	notifyFuncMu.RUnlock()
+	if fn != nil {
+		fn(title, body)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	for _, n := range globalNotifiers {
+	globalNotifiersMu.RLock()
+	notifiers := make([]notifier.Notifier, len(globalNotifiers))
+	copy(notifiers, globalNotifiers)
+	globalNotifiersMu.RUnlock()
+	for _, n := range notifiers {
 		if err := n.Send(ctx, title, body); err != nil {
 			slog.Warn("notification send failed", "type", n.Type(), "error", err)
 		}

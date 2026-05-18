@@ -21,8 +21,9 @@ import (
 const dedupWindow = 5 * time.Minute
 
 var (
-	globalNotifiers []notifier.Notifier
-	failureTracker  *notifier.FailureTracker
+	globalNotifiers   []notifier.Notifier
+	globalNotifiersMu sync.RWMutex
+	failureTracker    *notifier.FailureTracker
 )
 
 // InitNotifiers creates and wires all configured notifiers with platform clients.
@@ -35,7 +36,9 @@ func InitNotifiers(cfg *models.Config, clients map[platforms.PlatformType]platfo
 		}
 	}
 	notifier.WirePlatformNotifiers(notifiers, clients)
+	globalNotifiersMu.Lock()
 	globalNotifiers = notifiers
+	globalNotifiersMu.Unlock()
 
 	failureTracker = notifier.NewFailureTracker(func(notifierType string, failures int, lastErr string) {
 		title, body := notifier.AlertMessage(notifierType, failures, lastErr)
@@ -61,7 +64,12 @@ func sendNotificationInternal(ctx context.Context, title, body, eventType, prID,
 	cfg := config.Current()
 	quiet := cfg != nil && notifier.IsQuietHours(cfg)
 
-	for _, n := range globalNotifiers {
+	globalNotifiersMu.RLock()
+	notifiers := make([]notifier.Notifier, len(globalNotifiers))
+	copy(notifiers, globalNotifiers)
+	globalNotifiersMu.RUnlock()
+
+	for _, n := range notifiers {
 		if quiet && !notifier.ShouldNotifyDuringQuietHours(cfg, n.Type(), false) {
 			slog.Info("notification suppressed by quiet hours", "notifier", n.Type())
 			continue
@@ -290,7 +298,12 @@ func sendDigest(ctx context.Context, notifierType string, n notifier.Notifier, e
 }
 
 func findNotifier(notifierType string) notifier.Notifier {
-	for _, n := range globalNotifiers {
+	globalNotifiersMu.RLock()
+	notifiers := make([]notifier.Notifier, len(globalNotifiers))
+	copy(notifiers, globalNotifiers)
+	globalNotifiersMu.RUnlock()
+
+	for _, n := range notifiers {
 		if n.Type() == notifierType {
 			return n
 		}
@@ -319,7 +332,12 @@ func mustMarshal(v interface{}) []byte {
 
 // SendNotificationUrgent sends a notification bypassing quiet hours.
 func SendNotificationUrgent(ctx context.Context, title, body string) {
-	for _, n := range globalNotifiers {
+	globalNotifiersMu.RLock()
+	notifiers := make([]notifier.Notifier, len(globalNotifiers))
+	copy(notifiers, globalNotifiers)
+	globalNotifiersMu.RUnlock()
+
+	for _, n := range notifiers {
 		sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := n.Send(sendCtx, title, body)
 		cancel()
@@ -347,7 +365,12 @@ func SendNotificationUrgentSync(title, body string) {
 
 // sendAlert sends a fault alert through all notifiers except the failed one.
 func sendAlert(title, body string, excludeType string) {
-	for _, n := range globalNotifiers {
+	globalNotifiersMu.RLock()
+	notifiers := make([]notifier.Notifier, len(globalNotifiers))
+	copy(notifiers, globalNotifiers)
+	globalNotifiersMu.RUnlock()
+
+	for _, n := range notifiers {
 		if n.Type() == excludeType {
 			continue
 		}

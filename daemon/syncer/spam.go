@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"asika/common/config"
@@ -19,9 +20,10 @@ import (
 
 // SpamDetector detects and handles spam PRs
 type SpamDetector struct {
-	cfg     *models.Config
-	clients map[platforms.PlatformType]platforms.PlatformClient
-	stop    chan struct{}
+	cfg      *models.Config
+	clients  map[platforms.PlatformType]platforms.PlatformClient
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 // NewSpamDetector creates a new spam detector
@@ -205,7 +207,6 @@ func (d *SpamDetector) sendSpamNotificationWithContext(ctx context.Context, pr *
 		title := fmt.Sprintf("[Spam Alert] PR #%d by %s", pr.PRNumber, pr.Author)
 		body := fmt.Sprintf("PR #%d \"%s\" by %s marked as spam.\nRepo: %s | Platform: %s", pr.PRNumber, pr.Title, pr.Author, pr.RepoGroup, pr.Platform)
 
-		ctx := context.Background()
 		if err := n.Send(ctx, title, body); err != nil {
 			slog.Error("notification failed", "type", nc.Type, "error", err)
 		}
@@ -214,10 +215,9 @@ func (d *SpamDetector) sendSpamNotificationWithContext(ctx context.Context, pr *
 
 // Stop signals the periodic scan goroutine to stop.
 func (d *SpamDetector) Stop() {
-	if d.stop != nil {
+	d.stopOnce.Do(func() {
 		close(d.stop)
-		d.stop = nil
-	}
+	})
 }
 
 // StopChan returns the stop channel for external select loops.

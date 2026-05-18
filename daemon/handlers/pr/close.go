@@ -96,9 +96,15 @@ func ClosePR(c *gin.Context) {
 	pr.State = "closed"
 	pr.CloseReason = reason
 	pr.UpdatedAt = time.Now()
-	prData, _ := json.Marshal(pr)
-	dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
-	db.PutPRWithIndex(dbKey, prData, pr.ID, repoGroup, prNumber)
+	prData, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal closed PR", "error", err, "pr_id", pr.ID)
+	} else {
+		dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
+		if err := db.PutPRWithIndex(dbKey, prData, pr.ID, repoGroup, prNumber); err != nil {
+			slog.Error("failed to save closed PR", "error", err, "pr_id", pr.ID)
+		}
+	}
 
 	if queueMgr != nil {
 		if rmErr := queueMgr.RemoveFromQueue(repoGroup, pr.ID); rmErr != nil {
@@ -203,9 +209,15 @@ func MarkSpam(c *gin.Context) {
 	pr.PRNumber = prNumber
 	pr.RepoGroup = repoGroup
 	pr.UpdatedAt = time.Now()
-	updated, _ := json.Marshal(pr)
-	dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
-	db.PutPRWithIndex(dbKey, updated, pr.ID, repoGroup, prNumber)
+	updated, err := json.Marshal(pr)
+	if err != nil {
+		slog.Error("failed to marshal spam PR", "error", err, "pr_id", pr.ID)
+	} else {
+		dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
+		if err := db.PutPRWithIndex(dbKey, updated, pr.ID, repoGroup, prNumber); err != nil {
+			slog.Error("failed to save spam PR", "error", err, "pr_id", pr.ID)
+		}
+	}
 
 	existing, _ := db.GetSpamAuthor(pr.Author, platform)
 	if existing != nil {
@@ -294,8 +306,10 @@ func BatchClosePR(c *gin.Context) {
 					pr.State = "closed"
 					pr.UpdatedAt = time.Now()
 					prData, _ := json.Marshal(pr)
-					dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
-					db.PutPRWithIndex(dbKey, prData, pr.ID, repoGroup, prNumber)
+					if prData != nil {
+						dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
+						db.PutPRWithIndex(dbKey, prData, pr.ID, repoGroup, prNumber)
+					}
 				}
 			}
 

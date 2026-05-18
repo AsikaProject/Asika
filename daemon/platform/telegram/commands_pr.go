@@ -170,7 +170,9 @@ func (b *Bot) handleApprovePR(c telebot.Context) error {
 	pr.IsApproved = true
 	prData, _ := json.Marshal(pr)
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
-	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	if prData != nil {
+		db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+	}
 	addedToQueue := false
 	if b.queueMgr != nil {
 		if pr.State != "" && pr.State != "open" {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"asika/common/config"
@@ -16,9 +17,10 @@ import (
 
 // SerialWorker handles serial merge validation: rebase → CI re-run → merge.
 type SerialWorker struct {
-	cfg     *models.Config
-	clients map[platforms.PlatformType]platforms.PlatformClient
-	stop    chan struct{}
+	cfg      *models.Config
+	clients  map[platforms.PlatformType]platforms.PlatformClient
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 func NewSerialWorker(cfg *models.Config, clients map[platforms.PlatformType]platforms.PlatformClient) *SerialWorker {
@@ -47,10 +49,9 @@ func (w *SerialWorker) Start() {
 }
 
 func (w *SerialWorker) Stop() {
-	if w.stop != nil {
+	w.stopOnce.Do(func() {
 		close(w.stop)
-		w.stop = nil
-	}
+	})
 }
 
 func (w *SerialWorker) Enqueue(item *models.QueueItem) error {
@@ -256,6 +257,12 @@ func (w *SerialWorker) fail(item *models.QueueItem, key, reason string) {
 }
 
 func (w *SerialWorker) updateItem(item *models.QueueItem, key string) {
-	data, _ := json.Marshal(item)
-	db.Put(db.BucketSerialQueue, key, data)
+	data, err := json.Marshal(item)
+	if err != nil {
+		slog.Error("serial worker: failed to marshal item", "pr_id", item.PRID, "error", err)
+		return
+	}
+	if err := db.Put(db.BucketSerialQueue, key, data); err != nil {
+		slog.Error("serial worker: failed to update item", "pr_id", item.PRID, "error", err)
+	}
 }

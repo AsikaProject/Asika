@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -38,7 +39,11 @@ func NewGitLabClient(token string, baseURL string, webhookSecret string) *GitLab
 	}
 
 	if err != nil {
-		client, _ = gitlab.NewClient(token)
+		client, err = gitlab.NewClient(token)
+		if err != nil {
+			slog.Error("failed to create gitlab client", "error", err)
+			return nil
+		}
 	}
 
 	return &GitLabClient{

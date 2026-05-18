@@ -237,7 +237,11 @@ func PerformWebUpdate(c *gin.Context) {
 	}
 	in.Close()
 	out.Close()
-	os.Chmod(currentPath, 0755)
+	if err := os.Chmod(currentPath, 0755); err != nil {
+		os.Rename(backupPath, currentPath)
+		sendEvent("error", fmt.Sprintf(`{"error":"failed to chmod binary: %s"}`, err.Error()))
+		return
+	}
 
 	slog.Info("self-update", "version", release.GetTagName(), "from", "webui")
 	sendEvent("done", `{"status":"done","progress":100,"message":"Update complete. Service restarting..."}`)

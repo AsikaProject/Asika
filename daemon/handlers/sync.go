@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"log/slog"
@@ -78,7 +79,8 @@ func RetrySync(c *gin.Context) {
 
 	// Trigger the sync
 	go func() {
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
 		if err := s.SyncOnMerge(ctx, pr); err != nil {
 			slog.Error("retry sync failed", "sync_id", syncID, "error", err)
 		}
@@ -89,6 +91,15 @@ func RetrySync(c *gin.Context) {
 
 // findPRInDB finds a PR by repo group and PR ID in bbolt
 func findPRInDB(repoGroup, prID string) *models.PRRecord {
+	// Try index lookup first
+	data, err := db.GetPRByIndex(prID, "", 0)
+	if err == nil && data != nil {
+		var pr models.PRRecord
+		if json.Unmarshal(data, &pr) == nil && pr.RepoGroup == repoGroup {
+			return &pr
+		}
+	}
+	// Fallback to full scan
 	var found *models.PRRecord
 	db.ForEach(db.BucketPRs, func(key, value []byte) error {
 		var pr models.PRRecord

@@ -129,14 +129,17 @@ func (s *Syncer) syncTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 		}
 	}
 
-	go s.verifyPRState(ctx, targetPR, group, targetPlatform, pr)
+	go s.verifyPRState(targetPR, group, targetPlatform, pr)
 
 	slog.Info("syncPRState: synced PR state on target",
 		"target", targetPlatform, "pr", targetPR.PRNumber, "source_pr", pr.PRNumber)
 }
 
 // verifyPRState polls the target platform to confirm the PR is actually closed.
-func (s *Syncer) verifyPRState(ctx context.Context, targetPR *models.PRRecord, group *models.RepoGroup, targetPlatform string, sourcePR *models.PRRecord) {
+func (s *Syncer) verifyPRState(targetPR *models.PRRecord, group *models.RepoGroup, targetPlatform string, sourcePR *models.PRRecord) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
 	client, ok := s.clients[platforms.PlatformType(targetPlatform)]
 	if !ok {
 		return

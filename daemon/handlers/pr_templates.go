@@ -25,6 +25,7 @@ var templatePaths = []string{
 }
 
 var checklistPattern = regexp.MustCompile(`(?m)^\s*[-*]\s+\[([ x])\]`)
+var depPattern = regexp.MustCompile(`(?i)depends-on:\s*(https?://\S+)`)
 
 // FetchPRTemplate fetches the PR template from the platform.
 func FetchPRTemplate(repoGroup, platform string) (*models.PRTemplate, error) {
@@ -139,7 +140,6 @@ func ParseDependencies(pr *models.PRRecord) []models.PRDependency {
 		return nil
 	}
 
-	depPattern := regexp.MustCompile(`(?i)depends-on:\s*(https?://\S+)`)
 	matches := depPattern.FindAllStringSubmatch(pr.Body, -1)
 	if len(matches) == 0 {
 		return nil
