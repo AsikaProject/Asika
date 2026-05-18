@@ -10,18 +10,35 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.25.0'
+          go-version-file: go.mod
+          cache: true
 
       - name: Get version
         id: version
@@ -35,99 +52,50 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build binaries
+        shell: bash
         run: |
+          TAG="${{ steps.version.outputs.version }}"
+          EXT=""
+          [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
+          LDFLAGS="-s -w -X 'asika/common/version.Version=${TAG}' -X 'asika/common/version.Enabled=true'"
+
           mkdir -p bin
-          TAG=${GITHUB_REF#refs/tags/v}
-          for GOOS in linux darwin windows; do
-            for GOARCH in amd64 arm64; do
-              if [ "$GOOS" = "windows" ] && [ "$GOARCH" = "arm64" ]; then
-                continue
-              fi
-              EXT=""
-              [ "$GOOS" = "windows" ] && EXT=".exe"
-              NAME="asikad-${GOOS}-${GOARCH}${EXT}"
-              echo "Building $NAME..."
-              LDFLAGS="-s -w -X 'asika/common/version.Version=$TAG'"
-              if [ "$GOOS" = "linux" ]; then
-                LDFLAGS="$LDFLAGS -X 'asika/common/version.Enabled=true'"
-              fi
-              GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 \
-                go build -ldflags="$LDFLAGS" \
-                -o "bin/$NAME" ./cmd/asikad
-            done
-          done
-          for GOOS in linux darwin; do
-            for GOARCH in amd64 arm64; do
-              NAME="asika-${GOOS}-${GOARCH}"
-              echo "Building $NAME..."
-              LDFLAGS="-s -w -X 'asika/common/version.Version=$TAG'"
-              if [ "$GOOS" = "linux" ]; then
-                LDFLAGS="$LDFLAGS -X 'asika/common/version.Enabled=true'"
-              fi
-              GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 \
-                go build -ldflags="$LDFLAGS" \
-                -o "bin/$NAME" ./cmd/asika
-            done
-          done
-          for GOARCH in amd64; do
-            NAME="asika-windows-${GOARCH}.exe"
-            echo "Building $NAME..."
-            LDFLAGS="-s -w -X 'asika/common/version.Version=$TAG'"
-            GOOS=windows GOARCH=$GOARCH CGO_ENABLED=0 \
-              go build -ldflags="$LDFLAGS" \
-              -o "bin/$NAME" ./cmd/asika
-          done
+
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -ldflags="${LDFLAGS}" -o "bin/asikad-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/asikad/main.go
+
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -ldflags="${LDFLAGS}" -o "bin/asika-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/asika/main.go
 
       - name: Package tarballs and generate checksums
+        if: matrix.goos != 'windows'
+        shell: bash
         run: |
-          TAG=${GITHUB_REF#refs/tags/v}
+          TAG="${{ steps.version.outputs.version }}"
           mkdir -p dist
-
-          for GOARCH in amd64 arm64; do
-            PKG="asika-linux-${GOARCH}"
-            mkdir -p "dist/${PKG}"
-            cp "bin/asikad-linux-${GOARCH}" "dist/${PKG}/asikad"
-            cp "bin/asika-linux-${GOARCH}" "dist/${PKG}/asika"
+          PKG="asika-${{ matrix.goos }}-${{ matrix.goarch }}"
+          mkdir -p "dist/${PKG}"
+          EXT=""
+          [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
+          cp "bin/asikad-${{ matrix.goos }}-${{ matrix.goarch }}$EXT" "dist/${PKG}/asikad${EXT}"
+          cp "bin/asika-${{ matrix.goos }}-${{ matrix.goarch }}$EXT" "dist/${PKG}/asika${EXT}"
+          if [ "${{ matrix.goos }}" = "linux" ]; then
             cp pack/templates/service/asikad.service "dist/${PKG}/"
             cp pack/templates/service/asikad.openrc "dist/${PKG}/"
-            cp pack/doc/asika.1 "dist/${PKG}/"
-            cp pack/doc/asikad.1 "dist/${PKG}/"
-            cp pack/doc/asika.html "dist/${PKG}/"
-            cp pack/doc/asikad.html "dist/${PKG}/"
-            tar -czf "dist/${PKG}.tar.gz" -C dist "${PKG}"
-            sha256sum "bin/asikad-linux-${GOARCH}" > "dist/asikad-linux-${GOARCH}.sha256sum"
-          done
-
-          for GOARCH in amd64 arm64; do
-            PKG="asika-darwin-${GOARCH}"
-            mkdir -p "dist/${PKG}"
-            cp "bin/asikad-darwin-${GOARCH}" "dist/${PKG}/asikad"
-            cp "bin/asika-darwin-${GOARCH}" "dist/${PKG}/asika"
+          fi
+          if [ "${{ matrix.goos }}" = "darwin" ]; then
             cp pack/templates/service/com.asika.daemon.plist "dist/${PKG}/"
-            cp pack/doc/asika.1 "dist/${PKG}/"
-            cp pack/doc/asikad.1 "dist/${PKG}/"
-            cp pack/doc/asika.html "dist/${PKG}/"
-            cp pack/doc/asikad.html "dist/${PKG}/"
-            tar -czf "dist/${PKG}.tar.gz" -C dist "${PKG}"
-            sha256sum "bin/asikad-darwin-${GOARCH}" > "dist/asikad-darwin-${GOARCH}.sha256sum"
-          done
-
-          PKG="asika-windows-amd64"
-          mkdir -p "dist/${PKG}"
-          cp "bin/asikad-windows-amd64.exe" "dist/${PKG}/asikad.exe"
-          cp "bin/asika-windows-amd64.exe" "dist/${PKG}/asika.exe"
+          fi
           cp pack/doc/asika.1 "dist/${PKG}/"
           cp pack/doc/asikad.1 "dist/${PKG}/"
           cp pack/doc/asika.html "dist/${PKG}/"
           cp pack/doc/asikad.html "dist/${PKG}/"
           tar -czf "dist/${PKG}.tar.gz" -C dist "${PKG}"
-          sha256sum "bin/asikad-windows-amd64.exe" > "dist/asikad-windows-amd64.sha256sum"
-
-          ls -lh dist/
+          sha256sum "bin/asikad-${{ matrix.goos }}-${{ matrix.goarch }}$EXT" > "dist/asikad-${{ matrix.goos }}-${{ matrix.goarch }}.sha256sum"
 
       - uses: actions/upload-artifact@v6
         with:
-          name: binaries
+          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             dist/*.tar.gz
             dist/*.sha256sum
@@ -147,8 +115,9 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          name: binaries
+          pattern: binaries-linux-${{ matrix.goarch }}
           path: bin/
+          merge-multiple: true
 
       - name: Checkout pack
         uses: actions/checkout@v6
@@ -190,8 +159,9 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          name: binaries
+          pattern: binaries-darwin-${{ matrix.goarch }}
           path: bin/
+          merge-multiple: true
 
       - name: Checkout pack
         uses: actions/checkout@v6
@@ -225,8 +195,9 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          name: binaries
+          pattern: binaries-windows-amd64
           path: bin/
+          merge-multiple: true
 
       - name: Checkout pack
         uses: actions/checkout@v6
@@ -277,8 +248,9 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          name: binaries
+          pattern: binaries-linux-amd64
           path: bin/
+          merge-multiple: true
 
       - name: Checkout pack
         uses: actions/checkout@v6
@@ -307,15 +279,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v7
+        with:
+          pattern: binaries-*
+          path: binaries/
+          merge-multiple: true
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: '*-packages'
+          path: packages/
+          merge-multiple: true
 
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
           cp binaries/*.tar.gz release-assets/
           cp binaries/*.sha256sum release-assets/
-          cp deb-packages/* release-assets/ 2>/dev/null || true
-          cp pkg-packages/* release-assets/ 2>/dev/null || true
-          cp inno-packages/* release-assets/ 2>/dev/null || true
+          cp packages/deb-packages/* release-assets/ 2>/dev/null || true
+          cp packages/pkg-packages/* release-assets/ 2>/dev/null || true
+          cp packages/inno-packages/* release-assets/ 2>/dev/null || true
           ls -lh release-assets/
           wget https://github.com/AsikaProject/asika/raw/main/ChangeLog.md -O release-assets/ChangeLog.md
 

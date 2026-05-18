@@ -217,9 +217,12 @@ cross_build() {
 	local outdir="dist"
 	mkdir -p "$outdir"
 
-	info "Cross-compiling for ${#platforms[@]} platforms (version: ${version})"
+	info "Cross-compiling for ${#platforms[@]} platforms in parallel (version: ${version})"
 
-	local failed=0
+	local tmpdir
+	tmpdir=$(mktemp -d)
+	local pids=()
+
 	for platform in "${platforms[@]}"; do
 		local GOOS="${platform%%:*}"
 		local GOARCH="${platform##*:}"
@@ -227,24 +230,46 @@ cross_build() {
 		local ext=""
 		[ "$GOOS" = "windows" ] && ext=".exe"
 
-		local start=$SECONDS
-		if CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-			go build -ldflags="${ldflags}" -o "${outdir}/asikad-${suffix}${ext}" ./cmd/asikad/main.go 2>/dev/null; then
-			info "  asikad-${suffix} ✓ ($(( SECONDS - start ))s)"
-		else
-			warn "  asikad-${suffix} ✗"
-			(( failed++ ))
-		fi
+		(
+			local start=$SECONDS
+			local logfile="${tmpdir}/${suffix}.log"
+			local fail=0
 
-		start=$SECONDS
-		if CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
-			go build -ldflags="${ldflags}" -o "${outdir}/asika-${suffix}${ext}" ./cmd/asika/main.go 2>/dev/null; then
-			info "  asika-${suffix}  ✓ ($(( SECONDS - start ))s)"
+			if CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+				go build -ldflags="${ldflags}" -o "${outdir}/asikad-${suffix}${ext}" ./cmd/asikad/main.go 2>"$logfile"; then
+				echo "  asikad-${suffix} ✓ ($(( SECONDS - start ))s)" >> "$logfile"
+			else
+				echo "  asikad-${suffix} ✗" >> "$logfile"
+				fail=1
+			fi
+
+			start=$SECONDS
+			if CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+				go build -ldflags="${ldflags}" -o "${outdir}/asika-${suffix}${ext}" ./cmd/asika/main.go 2>>"$logfile"; then
+				echo "  asika-${suffix}  ✓ ($(( SECONDS - start ))s)" >> "$logfile"
+			else
+				echo "  asika-${suffix}  ✗" >> "$logfile"
+				fail=1
+			fi
+
+			exit "$fail"
+		) &
+		pids+=($!)
+	done
+
+	local failed=0
+	for i in "${!pids[@]}"; do
+		local platform="${platforms[$i]}"
+		local suffix="${platform%%:*}-${platform##*:}"
+		if wait "${pids[$i]}"; then
+			cat "${tmpdir}/${suffix}.log"
 		else
-			warn "  asika-${suffix}  ✗"
+			cat "${tmpdir}/${suffix}.log"
 			(( failed++ ))
 		fi
 	done
+
+	rm -rf "$tmpdir"
 
 	if [ "$failed" -gt 0 ]; then
 		error "Cross-compile completed with ${failed} failure(s). See ${outdir}/"
