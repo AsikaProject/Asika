@@ -1077,3 +1077,32 @@ func TestQueueRecovery_PRNotFoundInDB(t *testing.T) {
 		t.Errorf("expected 1 item (orphan should be reset to waiting), got %d", count)
 	}
 }
+
+func TestManager_StopIdempotent(t *testing.T) {
+	cfg := &models.Config{}
+	m := NewManager(cfg, nil)
+
+	m.Stop()
+	m.Stop()
+	m.Stop()
+}
+
+func TestManager_StopConcurrent(t *testing.T) {
+	cfg := &models.Config{}
+	m := NewManager(cfg, nil)
+
+	done := make(chan struct{})
+	for i := 0; i < 10; i++ {
+		go func() {
+			m.Stop()
+			done <- struct{}{}
+		}()
+	}
+	for i := 0; i < 10; i++ {
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("concurrent Stop deadlocked")
+		}
+	}
+}

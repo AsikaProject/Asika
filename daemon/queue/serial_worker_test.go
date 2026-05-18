@@ -141,3 +141,32 @@ func TestSerialWorker_CheckRebaseTimeout(t *testing.T) {
 		t.Errorf("ValidationStatus = %q, want %q", item.ValidationStatus, "validation_failed")
 	}
 }
+
+func TestSerialWorker_StopIdempotent(t *testing.T) {
+	w, _, cleanup := setupSerialTest(t)
+	defer cleanup()
+
+	w.Stop()
+	w.Stop()
+	w.Stop()
+}
+
+func TestSerialWorker_StopConcurrent(t *testing.T) {
+	w, _, cleanup := setupSerialTest(t)
+	defer cleanup()
+
+	done := make(chan struct{})
+	for i := 0; i < 10; i++ {
+		go func() {
+			w.Stop()
+			done <- struct{}{}
+		}()
+	}
+	for i := 0; i < 10; i++ {
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Fatal("concurrent Stop deadlocked")
+		}
+	}
+}

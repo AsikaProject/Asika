@@ -1831,3 +1831,47 @@ func TestConsumerStop_ThenRestart(t *testing.T) {
 		t.Fatal("PR2 data is nil")
 	}
 }
+
+func TestConsumerStop_Concurrent(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+	c.Start()
+
+	done := make(chan struct{})
+	for i := 0; i < 5; i++ {
+		go func() {
+			c.Stop()
+			done <- struct{}{}
+		}()
+	}
+	for i := 0; i < 5; i++ {
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			t.Fatal("concurrent Stop deadlocked")
+		}
+	}
+}
+
+func TestConsumerStartStop_RapidCycle(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	cfg := &models.Config{}
+	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	c := NewConsumerWithClients(cfg, clients)
+
+	for i := 0; i < 5; i++ {
+		c.Start()
+		time.Sleep(10 * time.Millisecond)
+		c.Stop()
+	}
+}

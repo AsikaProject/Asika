@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"asika/common/config"
@@ -633,4 +634,50 @@ func (s *syncFailStorage) Put(bucket, key string, value []byte) error {
 		return fmt.Errorf("injected Put failure on %s", bucket)
 	}
 	return s.Storage.Put(bucket, key, value)
+}
+
+func TestSetNotifyFunc_Concurrent(t *testing.T) {
+	s, _, cleanup := setupSyncerTest(t)
+	defer cleanup()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.SetNotifyFunc(func(title, body string) {})
+		}()
+	}
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pr := &models.PRRecord{ID: "c", RepoGroup: "test-group", Platform: "github", PRNumber: 1}
+			s.notifySyncFailure(pr, "gitlab", "test")
+		}()
+	}
+	wg.Wait()
+}
+
+func TestSetRecordWriter_Concurrent(t *testing.T) {
+	s, _, cleanup := setupSyncerTest(t)
+	defer cleanup()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.SetRecordWriter(nil)
+		}()
+	}
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pr := &models.PRRecord{ID: "rw", RepoGroup: "test-group", Platform: "github", PRNumber: 1}
+			s.recordSync(pr, "main", "gitlab", "success", "")
+		}()
+	}
+	wg.Wait()
 }

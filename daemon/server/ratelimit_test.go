@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -116,5 +117,25 @@ func TestRateLimit_DifferentIPsIndependent(t *testing.T) {
 	engine.ServeHTTP(w3, req3)
 	if w3.Code != http.StatusOK {
 		t.Errorf("different IP: expected 200, got %d", w3.Code)
+	}
+}
+
+func TestGetVisitor_ConcurrentSameIP(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			limiter := getVisitor("10.99.99.99", rate.Limit(10), 5)
+			if limiter == nil {
+				t.Error("getVisitor returned nil")
+			}
+		}()
+	}
+	wg.Wait()
+
+	limiter := getVisitor("10.99.99.99", rate.Limit(10), 5)
+	if limiter == nil {
+		t.Fatal("getVisitor returned nil after concurrent access")
 	}
 }

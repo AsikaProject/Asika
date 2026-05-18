@@ -311,3 +311,61 @@ func TestWorkerPool_MetricsUnderLoad(t *testing.T) {
 		t.Errorf("total_tasks = %d, want 100", totalTasks)
 	}
 }
+
+func TestWorkerPool_UpdateConfigConcurrent(t *testing.T) {
+	p := testPool(models.WorkerPoolConfig{
+		MinWorkers:    1,
+		MaxWorkers:    4,
+		ScaleUpPct:    75,
+		ScaleDownPct:  25,
+		CooldownSecs:  0,
+		StatsInterval: "10ms",
+	})
+	defer p.Stop()
+
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			p.UpdateConfig(models.WorkerPoolConfig{
+				MinWorkers:    1 + i%3,
+				MaxWorkers:    4 + i%5,
+				ScaleUpPct:    50 + i%30,
+				ScaleDownPct:  10 + i%20,
+				CooldownSecs:  0,
+				StatsInterval: "10ms",
+			})
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 100; i++ {
+			p.Submit(func() {
+				time.Sleep(time.Microsecond)
+			})
+		}
+	}()
+
+	wg.Wait()
+}
+
+func TestWorkerPool_SubmitDoesNotBlockAfterStop(t *testing.T) {
+	p := testPool(models.WorkerPoolConfig{MinWorkers: 1, MaxWorkers: 2, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"})
+	p.Stop()
+
+	done := make(chan struct{})
+	go func() {
+		p.Submit(func() {})
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Error("Submit blocked after Stop")
+	}
+}

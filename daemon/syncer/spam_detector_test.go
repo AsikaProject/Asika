@@ -3,6 +3,7 @@ package syncer
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -489,5 +490,31 @@ func TestParseDuration(t *testing.T) {
 				t.Errorf("ParseDuration(%q, %v) = %v, want %v", tt.input, tt.defaultD, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestStop_Concurrent(t *testing.T) {
+	cfg := &models.Config{}
+	sd := NewSpamDetector(cfg)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sd.Stop()
+		}()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("concurrent Stop deadlocked")
 	}
 }

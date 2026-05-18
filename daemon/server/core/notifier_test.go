@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -259,4 +260,65 @@ func mustMarshalJSON(v interface{}) []byte {
 		panic(err)
 	}
 	return data
+}
+
+func TestSendNotification_ConcurrentWithInit(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	cfg := &models.Config{
+		Notify: []models.NotifyConfig{},
+	}
+	InitNotifiers(cfg, nil)
+
+	var wg sync.WaitGroup
+
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			InitNotifiers(cfg, nil)
+		}()
+	}
+
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			SendNotification(context.Background(), "test", "body")
+		}()
+	}
+
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			defer wg.Done()
+			SendNotificationUrgent(context.Background(), "test", "body")
+		}()
+	}
+
+	wg.Wait()
+}
+
+func TestFindNotifier_Concurrent(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	cfg := &models.Config{
+		Notify: []models.NotifyConfig{},
+	}
+	InitNotifiers(cfg, nil)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			findNotifier("smtp")
+			findNotifier("nonexistent")
+		}()
+	}
+	wg.Wait()
 }
