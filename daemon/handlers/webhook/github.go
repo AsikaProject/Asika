@@ -56,12 +56,6 @@ func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 				User    struct {
 					Login string `json:"login"`
 				} `json:"user"`
-				Head struct {
-					Sha string `json:"sha"`
-				} `json:"head"`
-				Base struct {
-					Ref string `json:"ref"`
-				} `json:"base"`
 				Labels []struct {
 					Name string `json:"name"`
 				} `json:"labels"`
@@ -114,6 +108,7 @@ func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 			} `json:"user"`
 			Head struct {
 				Sha string `json:"sha"`
+				Ref string `json:"ref"`
 			} `json:"head"`
 			Base struct {
 				Ref string `json:"ref"`
@@ -140,6 +135,11 @@ func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		State:     payload.PullRequest.State,
 		RepoGroup: repoGroup,
 		IsDraft:   payload.PullRequest.Draft,
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: payload.PullRequest.Head.Ref,
+			BaseBranch: payload.PullRequest.Base.Ref,
+			HeadSHA:    payload.PullRequest.Head.Sha,
+		},
 	}
 
 	if payload.PullRequest.Merged {

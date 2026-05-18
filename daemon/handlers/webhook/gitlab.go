@@ -24,12 +24,17 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		ObjectKind       string `json:"object_kind"`
 		EventName        string `json:"event_name"`
 		ObjectAttributes struct {
-			IID         int    `json:"iid"`
-			Title       string `json:"title"`
-			Description string `json:"description"`
-			State       string `json:"state"`
-			Action      string `json:"action"`
-			Merged      bool   `json:"merged"`
+			IID          int    `json:"iid"`
+			Title        string `json:"title"`
+			Description  string `json:"description"`
+			State        string `json:"state"`
+			Action       string `json:"action"`
+			Merged       bool   `json:"merged"`
+			SourceBranch string `json:"source_branch"`
+			TargetBranch string `json:"target_branch"`
+			LastCommit   struct {
+				ID string `json:"id"`
+			} `json:"last_commit"`
 		} `json:"object_attributes"`
 		User struct {
 			Username string `json:"username"`
@@ -62,6 +67,14 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		State:     payload.ObjectAttributes.State,
 		RepoGroup: repoGroup,
 		IsDraft:   isDraft,
+	}
+
+	if payload.ObjectAttributes.SourceBranch != "" || payload.ObjectAttributes.TargetBranch != "" {
+		pr.BranchInfo = &models.PRBranchInfo{
+			HeadBranch: payload.ObjectAttributes.SourceBranch,
+			BaseBranch: payload.ObjectAttributes.TargetBranch,
+			HeadSHA:    payload.ObjectAttributes.LastCommit.ID,
+		}
 	}
 
 	if payload.ObjectAttributes.Merged {

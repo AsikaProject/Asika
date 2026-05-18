@@ -37,6 +37,7 @@ func newBboltStorage(dbPath string) (*bboltStorage, error) {
 			BucketSerialQueue, BucketCrossSpaceDeps, BucketEscalationRules,
 			BucketPRStacks, BucketAuditLogIndex,
 			BucketWebhookDedup,
+			BucketSyncLocks,
 		}
 		for _, b := range buckets {
 			if _, err := tx.CreateBucketIfNotExists([]byte(b)); err != nil {

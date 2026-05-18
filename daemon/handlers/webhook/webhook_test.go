@@ -979,3 +979,123 @@ func mustMarshal(v map[string]interface{}) []byte {
 	b, _ := json.Marshal(v)
 	return b
 }
+
+func TestParseGitHubWebhook_BranchInfo(t *testing.T) {
+	body := `{
+		"action": "opened",
+		"pull_request": {
+			"id": 200, "number": 50, "title": "Branch info test", "state": "open",
+			"html_url": "https://github.com/org/repo/pull/50",
+			"user": {"login": "dev5"},
+			"head": {"ref": "feature-branch", "sha": "head-sha-123"},
+			"base": {"ref": "develop", "sha": "base-sha-456"}
+		},
+		"repository": {"full_name": "org/repo"}
+	}`
+	_, pr, err := parseGitHubWebhook([]byte(body), "test-group")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr.BranchInfo == nil {
+		t.Fatal("BranchInfo should not be nil")
+	}
+	if pr.BranchInfo.HeadBranch != "feature-branch" {
+		t.Errorf("HeadBranch = %q, want %q", pr.BranchInfo.HeadBranch, "feature-branch")
+	}
+	if pr.BranchInfo.BaseBranch != "develop" {
+		t.Errorf("BaseBranch = %q, want %q", pr.BranchInfo.BaseBranch, "develop")
+	}
+	if pr.BranchInfo.HeadSHA != "head-sha-123" {
+		t.Errorf("HeadSHA = %q, want %q", pr.BranchInfo.HeadSHA, "head-sha-123")
+	}
+}
+
+func TestParseGitLabWebhook_BranchInfo(t *testing.T) {
+	body := `{
+		"object_kind": "merge_request",
+		"object_attributes": {
+			"iid": 30,
+			"title": "GitLab branch test",
+			"state": "opened",
+			"source_branch": "feature-gl",
+			"target_branch": "main",
+			"last_commit": {"id": "commit-sha-789"}
+		},
+		"user": {"username": "gl-dev"}
+	}`
+	_, pr, err := parseGitLabWebhook([]byte(body), "test-group")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr.BranchInfo == nil {
+		t.Fatal("BranchInfo should not be nil")
+	}
+	if pr.BranchInfo.HeadBranch != "feature-gl" {
+		t.Errorf("HeadBranch = %q, want %q", pr.BranchInfo.HeadBranch, "feature-gl")
+	}
+	if pr.BranchInfo.BaseBranch != "main" {
+		t.Errorf("BaseBranch = %q, want %q", pr.BranchInfo.BaseBranch, "main")
+	}
+	if pr.BranchInfo.HeadSHA != "commit-sha-789" {
+		t.Errorf("HeadSHA = %q, want %q", pr.BranchInfo.HeadSHA, "commit-sha-789")
+	}
+}
+
+func TestParseGiteaWebhook_BranchInfo(t *testing.T) {
+	body := `{
+		"action": "opened",
+		"number": 15,
+		"pull_request": {
+			"title": "Gitea branch test",
+			"state": "open",
+			"poster": {"login": "gitea-dev"},
+			"head": {"ref": "feature-gt", "sha": "gt-sha-111"},
+			"base": {"ref": "main"}
+		},
+		"sender": {"login": "gitea-dev"}
+	}`
+	_, pr, err := parseGiteaWebhook([]byte(body), "test-group", "gitea")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr.BranchInfo == nil {
+		t.Fatal("BranchInfo should not be nil")
+	}
+	if pr.BranchInfo.HeadBranch != "feature-gt" {
+		t.Errorf("HeadBranch = %q, want %q", pr.BranchInfo.HeadBranch, "feature-gt")
+	}
+	if pr.BranchInfo.BaseBranch != "main" {
+		t.Errorf("BaseBranch = %q, want %q", pr.BranchInfo.BaseBranch, "main")
+	}
+	if pr.BranchInfo.HeadSHA != "gt-sha-111" {
+		t.Errorf("HeadSHA = %q, want %q", pr.BranchInfo.HeadSHA, "gt-sha-111")
+	}
+}
+
+func TestParseGerritWebhook_BranchInfo(t *testing.T) {
+	body := `{
+		"type": "patchset-created",
+		"change": {
+			"project": "my-project",
+			"number": 99,
+			"subject": "Gerrit branch test",
+			"status": "NEW",
+			"branch": "main",
+			"owner": {"name": "gerrit-dev"}
+		},
+		"patchSet": {"number": 3, "ref": "refs/changes/99/99/3"}
+	}`
+	_, pr, err := parseGerritWebhook([]byte(body), "test-group")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr.BranchInfo == nil {
+		t.Fatal("BranchInfo should not be nil")
+	}
+	if pr.BranchInfo.BaseBranch != "main" {
+		t.Errorf("BaseBranch = %q, want %q", pr.BranchInfo.BaseBranch, "main")
+	}
+	if pr.BranchInfo.HeadBranch != "refs/changes/99/99/3" {
+		t.Errorf("HeadBranch = %q, want %q", pr.BranchInfo.HeadBranch, "refs/changes/99/99/3")
+	}
+}

@@ -73,6 +73,16 @@ func (s *Syncer) findTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 			}
 		}
 	}
+	// Fallback: match by title when branch/SHA matching fails (different forks, renamed branches)
+	if pr.Title != "" {
+		for _, tpr := range targetPRs {
+			if tpr.Title == pr.Title {
+				slog.Info("findTargetPR: matched by title fallback",
+					"target", targetPlatform, "pr", tpr.PRNumber, "title", pr.Title)
+				return tpr, nil
+			}
+		}
+	}
 	return nil, nil
 }
 
@@ -94,7 +104,7 @@ func (s *Syncer) syncPRState(ctx context.Context, pr *models.PRRecord, group *mo
 }
 
 func (s *Syncer) syncTargetPR(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup, targetPlatform string) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
 	targetPR, err := s.findTargetPR(ctx, pr, group, targetPlatform)
@@ -116,23 +126,40 @@ func (s *Syncer) syncTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 		return
 	}
 
-	if err := client.MergePR(ctx, owner, repo, targetPR.PRNumber, "merge"); err != nil {
-		slog.Warn("syncPRState: merge failed on target, trying close",
-			"target", targetPlatform, "pr", targetPR.PRNumber, "error", err)
-		if closeErr := client.ClosePR(ctx, owner, repo, targetPR.PRNumber); closeErr != nil {
-			slog.Error("syncPRState: close also failed on target",
-				"target", targetPlatform, "pr", targetPR.PRNumber, "error", closeErr)
-			s.notifySyncFailure(pr, targetPlatform,
-				fmt.Sprintf("failed to sync PR state for #%d on %s: merge err=%v, close err=%v",
-					targetPR.PRNumber, targetPlatform, err, closeErr))
+	var lastErr error
+	for attempt := 1; attempt <= syncMaxRetries; attempt++ {
+		select {
+		case <-ctx.Done():
+			slog.Warn("syncPRState: context cancelled during retry", "target", targetPlatform, "attempt", attempt)
 			return
+		default:
 		}
+
+		if err := client.MergePR(ctx, owner, repo, targetPR.PRNumber, "merge"); err != nil {
+			slog.Warn("syncPRState: merge failed on target, trying close",
+				"target", targetPlatform, "pr", targetPR.PRNumber, "attempt", attempt, "error", err)
+			if closeErr := client.ClosePR(ctx, owner, repo, targetPR.PRNumber); closeErr != nil {
+				lastErr = fmt.Errorf("merge=%v, close=%v", err, closeErr)
+				if attempt < syncMaxRetries {
+					delay := syncRetryBaseDelay * time.Duration(1<<uint(attempt-1))
+					slog.Info("syncPRState: retrying after delay", "target", targetPlatform, "delay", delay, "attempt", attempt)
+					time.Sleep(delay)
+					continue
+				}
+				slog.Error("syncPRState: all retries exhausted",
+					"target", targetPlatform, "pr", targetPR.PRNumber, "error", lastErr)
+				s.notifySyncFailure(pr, targetPlatform,
+					fmt.Sprintf("failed to sync PR state for #%d on %s after %d attempts: %v",
+						targetPR.PRNumber, targetPlatform, syncMaxRetries, lastErr))
+				return
+			}
+		}
+
+		go s.verifyPRState(targetPR, group, targetPlatform, pr)
+		slog.Info("syncPRState: synced PR state on target",
+			"target", targetPlatform, "pr", targetPR.PRNumber, "source_pr", pr.PRNumber, "attempt", attempt)
+		return
 	}
-
-	go s.verifyPRState(targetPR, group, targetPlatform, pr)
-
-	slog.Info("syncPRState: synced PR state on target",
-		"target", targetPlatform, "pr", targetPR.PRNumber, "source_pr", pr.PRNumber)
 }
 
 // verifyPRState polls the target platform to confirm the PR is actually closed.

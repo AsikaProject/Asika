@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -293,4 +294,54 @@ func PutWebhookDedup(deliveryID string, ts []byte) error {
 }
 func GetWebhookDedup(deliveryID string) ([]byte, error) {
 	return mustStorage().GetWebhookDedup(deliveryID)
+}
+
+// AcquireSyncLock attempts to acquire a sync lock for the given repo group.
+// Returns true if acquired, false if already locked by another process.
+// The lock entry contains the holder ID and timestamp.
+func AcquireSyncLock(repoGroup, holderID string, ttl time.Duration) (bool, error) {
+	key := "lock:" + repoGroup
+	existing, err := Get(BucketSyncLocks, key)
+	if err == nil && existing != nil {
+		var lock struct {
+			Holder    string    `json:"holder"`
+			LockedAt  time.Time `json:"locked_at"`
+			ExpiresAt time.Time `json:"expires_at"`
+		}
+		if json.Unmarshal(existing, &lock) == nil {
+			if lock.Holder != holderID && time.Now().Before(lock.ExpiresAt) {
+				return false, nil
+			}
+		}
+	}
+	entry := struct {
+		Holder    string    `json:"holder"`
+		LockedAt  time.Time `json:"locked_at"`
+		ExpiresAt time.Time `json:"expires_at"`
+	}{
+		Holder:    holderID,
+		LockedAt:  time.Now(),
+		ExpiresAt: time.Now().Add(ttl),
+	}
+	data, _ := json.Marshal(entry)
+	if err := Put(BucketSyncLocks, key, data); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// ReleaseSyncLock releases the sync lock for the given repo group if held by the given holder.
+func ReleaseSyncLock(repoGroup, holderID string) error {
+	key := "lock:" + repoGroup
+	existing, err := Get(BucketSyncLocks, key)
+	if err != nil || existing == nil {
+		return nil
+	}
+	var lock struct {
+		Holder string `json:"holder"`
+	}
+	if json.Unmarshal(existing, &lock) == nil && lock.Holder == holderID {
+		return Delete(BucketSyncLocks, key)
+	}
+	return nil
 }

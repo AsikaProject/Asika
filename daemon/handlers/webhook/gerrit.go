@@ -43,6 +43,10 @@ func parseGerritWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		Platform:  "gerrit",
 		PRNumber:  event.Change.Number,
 		Title:     event.Change.Subject,
+		BranchInfo: &models.PRBranchInfo{
+			BaseBranch: event.Change.Branch,
+			HeadBranch: event.PatchSet.Ref,
+		},
 	}
 	if event.Change.Owner.Name != "" {
 		pr.Author = event.Change.Owner.Name

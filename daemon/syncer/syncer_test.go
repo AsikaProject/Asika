@@ -1,6 +1,7 @@
 package syncer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -211,27 +212,44 @@ func TestSyncBranchDeletion_GroupNotFound(t *testing.T) {
 	s.SyncBranchDeletion("nonexistent", "github", "feature-branch")
 }
 
-func TestGetOrCreateLock(t *testing.T) {
+func TestAcquireReleaseLock(t *testing.T) {
 	s, _, cleanup := setupSyncerTest(t)
 	defer cleanup()
 
-	mu1 := s.getOrCreateLock("group-a")
-	mu2 := s.getOrCreateLock("group-a")
-	mu3 := s.getOrCreateLock("group-b")
-
-	if mu1 == nil || mu2 == nil || mu3 == nil {
-		t.Fatal("getOrCreateLock should never return nil")
+	// First acquisition should succeed
+	if !s.acquireLock("group-a") {
+		t.Fatal("first acquireLock should succeed")
 	}
 
-	// Same group should return same lock
-	if mu1 != mu2 {
-		t.Error("same group should return same lock")
+	// Same holder should be able to re-acquire
+	if !s.acquireLock("group-a") {
+		t.Fatal("same holder re-acquire should succeed")
 	}
 
-	// Different groups should return different locks
-	if mu1 == mu3 {
-		t.Error("different groups should return different locks")
+	// Release
+	s.releaseLock("group-a")
+
+	// Different group should succeed
+	if !s.acquireLock("group-b") {
+		t.Fatal("different group acquireLock should succeed")
 	}
+	s.releaseLock("group-b")
+}
+
+func TestConcurrentLockDifferentGroups(t *testing.T) {
+	s, _, cleanup := setupSyncerTest(t)
+	defer cleanup()
+
+	if !s.acquireLock("group-x") {
+		t.Fatal("group-x lock should succeed")
+	}
+	defer s.releaseLock("group-x")
+
+	// Different group should not be blocked
+	if !s.acquireLock("group-y") {
+		t.Fatal("group-y lock should succeed (different group)")
+	}
+	s.releaseLock("group-y")
 }
 
 func TestRecordSync(t *testing.T) {
@@ -680,4 +698,121 @@ func TestSetRecordWriter_Concurrent(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestFindTargetPR_TitleFallback(t *testing.T) {
+	s, mock, cleanup := setupSyncerTest(t)
+	defer cleanup()
+
+	pr := &models.PRRecord{
+		ID:        "source-pr",
+		RepoGroup: "test-group",
+		Platform:  "gitlab",
+		PRNumber:  1,
+		Title:     "Fix critical bug in auth module",
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: "feature-auth-fix",
+			BaseBranch: "main",
+			HeadSHA:    "abc123",
+		},
+	}
+
+	mock.PRs["org/repo#10"] = &models.PRRecord{
+		ID:        "target-pr",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  10,
+		Title:     "Fix critical bug in auth module",
+		State:     "open",
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: "user/feature-auth-fix",
+			BaseBranch: "master",
+			HeadSHA:    "def456",
+		},
+	}
+
+	result, err := s.findTargetPR(context.Background(), pr, &models.RepoGroup{GitHub: "org/repo"}, "github")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected match by title fallback, got nil")
+	}
+	if result.PRNumber != 10 {
+		t.Errorf("PRNumber = %d, want 10", result.PRNumber)
+	}
+}
+
+func TestFindTargetPR_NoMatch(t *testing.T) {
+	s, mock, cleanup := setupSyncerTest(t)
+	defer cleanup()
+
+	pr := &models.PRRecord{
+		ID:        "source-pr",
+		RepoGroup: "test-group",
+		Platform:  "gitlab",
+		PRNumber:  1,
+		Title:     "Unique title A",
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: "feature-x",
+			BaseBranch: "main",
+			HeadSHA:    "sha-a",
+		},
+	}
+
+	mock.PRs["org/repo#10"] = &models.PRRecord{
+		ID:        "target-pr",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  10,
+		Title:     "Unique title B",
+		State:     "open",
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: "feature-y",
+			BaseBranch: "main",
+			HeadSHA:    "sha-b",
+		},
+	}
+
+	result, err := s.findTargetPR(context.Background(), pr, &models.RepoGroup{GitHub: "org/repo"}, "github")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Errorf("expected no match, got PR #%d", result.PRNumber)
+	}
+}
+
+func TestSyncTargetPR_RetryOnFailure(t *testing.T) {
+	s, mock, cleanup := setupSyncerTest(t)
+	defer cleanup()
+
+	pr := &models.PRRecord{
+		ID:        "retry-source",
+		RepoGroup: "test-group",
+		Platform:  "gitlab",
+		PRNumber:  1,
+		Title:     "Test retry",
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: "feature-retry",
+			BaseBranch: "main",
+		},
+	}
+
+	mock.PRs["org/repo#2"] = &models.PRRecord{
+		ID:        "retry-target",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  2,
+		Title:     "Test retry",
+		State:     "open",
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: "feature-retry",
+			BaseBranch: "main",
+		},
+	}
+
+	mock.Err = fmt.Errorf("merge conflict")
+	group := &models.RepoGroup{GitHub: "org/repo", SyncPRState: true}
+	s.syncTargetPR(context.Background(), pr, group, "github")
 }

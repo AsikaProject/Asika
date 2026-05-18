@@ -34,6 +34,13 @@ func parseGiteaWebhook(body []byte, repoGroup string, platform string) (string, 
 			Poster struct {
 				Login string `json:"login"`
 			} `json:"poster"`
+			Head struct {
+				Ref string `json:"ref"`
+				Sha string `json:"sha"`
+			} `json:"head"`
+			Base struct {
+				Ref string `json:"ref"`
+			} `json:"base"`
 		} `json:"pull_request"`
 		Repository struct {
 			FullName string `json:"full_name"`
@@ -65,6 +72,14 @@ func parseGiteaWebhook(body []byte, repoGroup string, platform string) (string, 
 		State:     payload.PullRequest.State,
 		RepoGroup: repoGroup,
 		IsDraft:   payload.PullRequest.Draft,
+	}
+
+	if payload.PullRequest.Head.Ref != "" || payload.PullRequest.Base.Ref != "" {
+		pr.BranchInfo = &models.PRBranchInfo{
+			HeadBranch: payload.PullRequest.Head.Ref,
+			BaseBranch: payload.PullRequest.Base.Ref,
+			HeadSHA:    payload.PullRequest.Head.Sha,
+		}
 	}
 
 	if payload.PullRequest.Merged {

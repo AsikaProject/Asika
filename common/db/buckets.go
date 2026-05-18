@@ -33,4 +33,5 @@ const (
 	BucketPRStacks          = "pr_stacks"
 	BucketAuditLogIndex     = "audit_log_index"
 	BucketWebhookDedup      = "webhook_dedup"
+	BucketSyncLocks         = "sync_locks"
 )

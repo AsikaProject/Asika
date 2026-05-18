@@ -1,11 +1,15 @@
 package syncer
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"asika/common/db"
 	"asika/common/models"
 	"asika/common/platforms"
 )
@@ -24,7 +28,7 @@ type SyncRecordWriter interface {
 type Syncer struct {
 	cfg          *models.Config
 	clients      map[platforms.PlatformType]platforms.PlatformClient
-	syncLocks    sync.Map
+	holderID     string
 	notifyFn     func(title, body string)
 	notifyFnMu   sync.RWMutex
 	recordWriter SyncRecordWriter
@@ -33,9 +37,12 @@ type Syncer struct {
 
 // NewSyncer creates a new syncer
 func NewSyncer(cfg *models.Config, clients map[platforms.PlatformType]platforms.PlatformClient) *Syncer {
+	b := make([]byte, 8)
+	rand.Read(b)
 	return &Syncer{
-		cfg:     cfg,
-		clients: clients,
+		cfg:      cfg,
+		clients:  clients,
+		holderID: hex.EncodeToString(b),
 	}
 }
 
@@ -128,7 +135,17 @@ func (s *Syncer) getRepoURL(platform, repo string) (string, error) {
 	return "", fmt.Errorf("unsupported platform: %s", platform)
 }
 
-func (s *Syncer) getOrCreateLock(repoGroup string) *sync.Mutex {
-	actual, _ := s.syncLocks.LoadOrStore(repoGroup, &sync.Mutex{})
-	return actual.(*sync.Mutex)
+func (s *Syncer) acquireLock(repoGroup string) bool {
+	acquired, err := db.AcquireSyncLock(repoGroup, s.holderID, 10*time.Minute)
+	if err != nil {
+		slog.Warn("sync lock: acquire failed, proceeding without lock", "repo_group", repoGroup, "error", err)
+		return true
+	}
+	return acquired
+}
+
+func (s *Syncer) releaseLock(repoGroup string) {
+	if err := db.ReleaseSyncLock(repoGroup, s.holderID); err != nil {
+		slog.Warn("sync lock: release failed", "repo_group", repoGroup, "error", err)
+	}
 }

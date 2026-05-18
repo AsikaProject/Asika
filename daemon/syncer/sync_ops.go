@@ -32,9 +32,11 @@ func (s *Syncer) SyncOnMerge(ctx context.Context, pr *models.PRRecord) error {
 		return nil
 	}
 
-	mu := s.getOrCreateLock(pr.RepoGroup)
-	mu.Lock()
-	defer mu.Unlock()
+	if !s.acquireLock(pr.RepoGroup) {
+		slog.Warn("sync skipped: another instance holds the lock", "repo_group", pr.RepoGroup)
+		return fmt.Errorf("sync lock held by another instance for %s", pr.RepoGroup)
+	}
+	defer s.releaseLock(pr.RepoGroup)
 
 	repoDir, cleanup, err := s.prepareRepoDir(pr, group)
 	if err != nil {
