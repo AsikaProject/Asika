@@ -123,3 +123,7 @@
 
 - **Refactor**: Split `common/config/config.go` (682 lines) into `config.go` (512 lines, Load/SaveToFile/validate), `config_snapshot.go` (151 lines, SaveConfigSnapshot/RollbackConfig/ListConfigVersions), `config_mask.go` (83 lines, maskConfig/maskToken/maskSecret).
 
+### Features
+
+- **Settings UI**: Expanded HTML settings page with comprehensive configuration options. Added collapsible sections for Server, Events/Webhook, Updates, Worker Pool, Quiet Hours, Feed, Reports, and Close Reasons. Enhanced Spam Detection with similar title trigger and threshold. Enhanced Stale PR with custom comment templates. All new settings support hot-reload via config API.
+

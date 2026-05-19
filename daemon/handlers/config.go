@@ -154,6 +154,21 @@ func UpdateConfig(c *gin.Context) {
 	if quietHours, ok := patch["quiet_hours"]; ok {
 		existing["quiet_hours"] = quietHours
 	}
+	if events, ok := patch["events"]; ok {
+		existing["events"] = events
+	}
+	if updates, ok := patch["updates"]; ok {
+		existing["updates"] = updates
+	}
+	if feed, ok := patch["feed"]; ok {
+		existing["feed"] = feed
+	}
+	if reports, ok := patch["reports"]; ok {
+		existing["reports"] = reports
+	}
+	if stale, ok := patch["stale"]; ok {
+		existing["stale"] = stale
+	}
 	if hookpath, ok := patch["hookpath"]; ok {
 		hp, ok := hookpath.(string)
 		if !ok {

@@ -6,6 +6,15 @@
     {{template "pwa"}}
     {{template "styles"}}
     <title>{{t "settings.title"}} - Asika</title>
+    <style>
+        .collapsible-header { display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0; }
+        .collapsible-header h2 { margin:0; }
+        .collapsible-header .toggle-icon { font-size:12px; transition:transform 0.2s; }
+        .collapsible-header .toggle-icon.collapsed { transform:rotate(-90deg); }
+        .collapsible-body { overflow:hidden; transition:max-height 0.3s ease; }
+        .collapsible-body.collapsed { max-height:0 !important; }
+        .restart-warning { background:#fff3cd; color:#856404; padding:8px 12px; border-radius:4px; font-size:12px; margin-top:4px; }
+    </style>
 </head>
 <body>
 {{template "header" .}}
@@ -14,20 +23,287 @@
 <div id="errorMsg" class="error" style="display:none;"></div>
 <div id="successMsg" class="success" style="display:none;"></div>
 
-<!-- CPU Threads Settings -->
+<!-- Server Settings -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>{{t "settings.cpu_threads"}}</h2>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.min_procs"}}</label>
-            <input id="serverMinProcs" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-            <span style="font-size:12px; color:#999;">0 = Go default (1)</span>
+    <div class="collapsible-header" onclick="toggleSection('serverSection')">
+        <h2>{{t "settings.server"}}</h2>
+        <span class="toggle-icon">▼</span>
+    </div>
+    <div id="serverSection" class="collapsible-body" style="max-height:1000px; margin-top:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.min_procs"}}</label>
+                <input id="serverMinProcs" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <span style="font-size:12px; color:#999;">0 = Go default (1)</span>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.max_procs"}}</label>
+                <input id="serverMaxProcs" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <span style="font-size:12px; color:#999;">0 = use all CPUs</span>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.listen"}}</label>
+                <input id="serverListen" type="text" value=":8080" placeholder=":8080" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.mode"}}</label>
+                <select id="serverMode" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="release">release</option>
+                    <option value="debug">debug</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enable_web_update"}}</label>
+                <select id="serverEnableWebUpdate" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.rate_limit_enabled"}}</label>
+                <select id="serverRateLimitEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="false">Disabled</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.rate_limit_rps"}}</label>
+                <input id="serverRateLimitRPS" type="number" min="1" value="10" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.rate_limit_burst"}}</label>
+                <input id="serverRateLimitBurst" type="number" min="1" value="20" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.read_timeout"}}</label>
+                <input id="serverReadTimeout" type="number" min="1" value="30" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.write_timeout"}}</label>
+                <input id="serverWriteTimeout" type="number" min="1" value="30" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.shutdown_timeout"}}</label>
+                <input id="serverShutdownTimeout" type="number" min="1" value="30" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.metrics_interval"}}</label>
+                <input id="serverMetricsInterval" type="text" value="5m" placeholder="5m" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
         </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.max_procs"}}</label>
-            <input id="serverMaxProcs" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-            <span style="font-size:12px; color:#999;">0 = use all CPUs</span>
+    </div>
+</div>
+
+<!-- Events/Webhook Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="collapsible-header" onclick="toggleSection('eventsSection')">
+        <h2>{{t "settings.events"}}</h2>
+        <span class="toggle-icon collapsed">▼</span>
+    </div>
+    <div id="eventsSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.events_mode"}}</label>
+                <select id="eventsMode" onchange="showRestartWarning(this, 'eventsMode')" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="webhook">webhook</option>
+                    <option value="polling">polling</option>
+                </select>
+                <div id="eventsModeWarning" class="restart-warning" style="display:none;">{{t "settings.restart_warning"}}</div>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.polling_interval"}}</label>
+                <input id="eventsPollingInterval" type="text" value="5m" placeholder="5m" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.health_check_interval"}}</label>
+                <input id="eventsHealthCheckInterval" type="text" value="2m" placeholder="2m" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.health_check_threshold"}}</label>
+                <input id="eventsHealthCheckThreshold" type="text" value="5m" placeholder="5m" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
         </div>
+    </div>
+</div>
+
+<!-- Updates Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="collapsible-header" onclick="toggleSection('updatesSection')">
+        <h2>{{t "settings.updates"}}</h2>
+        <span class="toggle-icon collapsed">▼</span>
+    </div>
+    <div id="updatesSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.auto_check"}}</label>
+                <select id="updatesCheck" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.update_interval"}}</label>
+                <input id="updatesInterval" type="text" value="24h" placeholder="24h" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.notify_on_new"}}</label>
+                <select id="updatesNotifyOnNew" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Worker Pool Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="collapsible-header" onclick="toggleSection('workerPoolSection')">
+        <h2>{{t "settings.worker_pool"}}</h2>
+        <span class="toggle-icon collapsed">▼</span>
+    </div>
+    <div id="workerPoolSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.min_workers"}}</label>
+                <input id="wpMinWorkers" type="number" min="1" value="2" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.max_workers"}}</label>
+                <input id="wpMaxWorkers" type="number" min="1" value="8" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.scale_up_pct"}}</label>
+                <input id="wpScaleUpPct" type="number" min="1" max="100" value="75" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.scale_down_pct"}}</label>
+                <input id="wpScaleDownPct" type="number" min="1" max="100" value="25" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.cooldown_secs"}}</label>
+                <input id="wpCooldownSecs" type="number" min="1" value="30" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.stats_interval"}}</label>
+                <input id="wpStatsInterval" type="text" value="30s" placeholder="30s" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quiet Hours Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="collapsible-header" onclick="toggleSection('quietHoursSection')">
+        <h2>{{t "settings.quiet_hours"}}</h2>
+        <span class="toggle-icon collapsed">▼</span>
+    </div>
+    <div id="quietHoursSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
+                <select id="qhEnabled" onchange="toggleQuietHours(this.value==='true')" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.timezone"}}</label>
+                <input id="qhTimezone" type="text" value="Asia/Shanghai" placeholder="Asia/Shanghai" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div id="qhStartTimeGroup">
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.start_time"}}</label>
+                <input id="qhStartTime" type="text" value="22:00" placeholder="22:00" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div id="qhEndTimeGroup">
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.end_time"}}</label>
+                <input id="qhEndTime" type="text" value="08:00" placeholder="08:00" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div id="qhEscalationGroup">
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.escalation_role"}}</label>
+                <select id="qhEscalationRole" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="admin">admin</option>
+                    <option value="operator">operator</option>
+                </select>
+            </div>
+        </div>
+        <div style="margin-top:12px;" id="qhBypassGroup">
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.bypass_urgent"}}</label>
+            <textarea id="qhBypassUrgent" rows="2" placeholder="spam_detected&#10;sync_failed" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
+        </div>
+    </div>
+</div>
+
+<!-- Feed Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="collapsible-header" onclick="toggleSection('feedSection')">
+        <h2>{{t "settings.feed"}}</h2>
+        <span class="toggle-icon collapsed">▼</span>
+    </div>
+    <div id="feedSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.feed_enabled"}}</label>
+                <select id="feedEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.feed_title"}}</label>
+                <input id="feedTitle" type="text" value="Asika PR Feed" placeholder="Asika PR Feed" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.max_items"}}</label>
+                <input id="feedMaxItems" type="number" min="1" value="50" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.public_feed"}}</label>
+                <select id="feedPublicFeed" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reports Settings -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="collapsible-header" onclick="toggleSection('reportsSection')">
+        <h2>{{t "settings.reports"}}</h2>
+        <span class="toggle-icon collapsed">▼</span>
+    </div>
+    <div id="reportsSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.reports_enabled"}}</label>
+                <select id="reportsEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.cron"}}</label>
+                <input id="reportsCron" type="text" value="weekly" placeholder="weekly" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <span style="font-size:12px; color:#999;">hourly/daily/weekly/monthly</span>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.period_days"}}</label>
+                <input id="reportsPeriodDays" type="number" min="1" value="7" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Close Reasons -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="collapsible-header" onclick="toggleSection('closeReasonsSection')">
+        <h2>{{t "settings.close_reasons"}}</h2>
+        <span class="toggle-icon collapsed">▼</span>
+    </div>
+    <div id="closeReasonsSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
+        <textarea id="closeReasons" rows="4" placeholder="no longer needed&#10;duplicate&#10;invalid&#10;won't fix" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
     </div>
 </div>
 
@@ -66,118 +342,148 @@
 
 <!-- Spam Detection Settings -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>{{t "settings.spam_detection"}}</h2>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
-            <select id="spamEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                <option value="false">Disabled</option>
-                <option value="true">{{t "settings.enabled"}}</option>
-            </select>
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.time_window"}}</label>
-            <input id="spamTimeWindow" type="text" value="1h" placeholder="1h, 30m, etc." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.threshold"}}</label>
-            <input id="spamThreshold" type="number" min="1" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.trigger_on_author"}}</label>
-            <select id="spamAuthor" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-            </select>
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.auto_clean"}}</label>
-            <select id="spamAutoCleanEnabled" onchange="toggleSpamAutoClean(this.value==='true')" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                <option value="false">Disabled</option>
-                <option value="true">{{t "settings.enabled"}}</option>
-            </select>
-        </div>
-        <div id="spamAutoCleanIntervalGroup" style="display:none;">
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.auto_clean_interval"}}</label>
-            <select id="spamAutoCleanInterval" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                <option value="1h">Every hour</option>
-                <option value="6h">Every 6 hours</option>
-                <option value="24h" selected>Every 24 hours</option>
-                <option value="72h">Every 3 days</option>
-                <option value="168h">Weekly</option>
-            </select>
-        </div>
+    <div class="collapsible-header" onclick="toggleSection('spamSection')">
+        <h2>{{t "settings.spam_detection"}}</h2>
+        <span class="toggle-icon">▼</span>
     </div>
-    <div style="margin-top:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-            <label style="font-weight:600; margin:0;">{{t "settings.title_keywords"}}</label>
-            <div style="display:flex; gap:6px; align-items:center;">
-                <input type="checkbox" id="selectAllSpamKw" onchange="toggleAllSpamKw(this.checked)" style="cursor:pointer;">
-                <label for="selectAllSpamKw" style="font-size:13px; color:#666; cursor:pointer; margin:0;">{{t "common.select_all"}}</label>
-                <button class="btn btn-danger btn-sm" onclick="deleteSelectedSpamKw()" style="padding:2px 8px; font-size:12px;">{{t "common.delete_selected"}}</button>
+    <div id="spamSection" class="collapsible-body" style="max-height:1500px; margin-top:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
+                <select id="spamEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.time_window"}}</label>
+                <input id="spamTimeWindow" type="text" value="1h" placeholder="1h, 30m, etc." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.threshold"}}</label>
+                <input id="spamThreshold" type="number" min="1" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.trigger_on_author"}}</label>
+                <select id="spamAuthor" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.similar_title"}}</label>
+                <select id="spamSimilarTitle" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.similarity_threshold"}}</label>
+                <input id="spamSimilarityThreshold" type="number" min="0" max="1" step="0.1" value="0.6" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <span style="font-size:12px; color:#999;">0.0 - 1.0</span>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.auto_clean"}}</label>
+                <select id="spamAutoCleanEnabled" onchange="toggleSpamAutoClean(this.value==='true')" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+            <div id="spamAutoCleanIntervalGroup" style="display:none;">
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.auto_clean_interval"}}</label>
+                <select id="spamAutoCleanInterval" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="1h">Every hour</option>
+                    <option value="6h">Every 6 hours</option>
+                    <option value="24h" selected>Every 24 hours</option>
+                    <option value="72h">Every 3 days</option>
+                    <option value="168h">Weekly</option>
+                </select>
             </div>
         </div>
-        <div id="spamKeywordsContainer" style="display:flex; flex-wrap:wrap; gap:6px; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:40px; align-items:center;">
-        </div>
-        <div style="display:flex; gap:6px; margin-top:6px;">
-            <input id="spamKeywordInput" type="text" placeholder="{{t "settings.add_keyword"}}" onkeydown="if(event.key==='Enter'){event.preventDefault();addSpamKeyword();}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
-            <button class="btn btn-secondary btn-sm" onclick="addSpamKeyword()">{{t "users.add"}}</button>
+        <div style="margin-top:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <label style="font-weight:600; margin:0;">{{t "settings.title_keywords"}}</label>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input type="checkbox" id="selectAllSpamKw" onchange="toggleAllSpamKw(this.checked)" style="cursor:pointer;">
+                    <label for="selectAllSpamKw" style="font-size:13px; color:#666; cursor:pointer; margin:0;">{{t "common.select_all"}}</label>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedSpamKw()" style="padding:2px 8px; font-size:12px;">{{t "common.delete_selected"}}</button>
+                </div>
+            </div>
+            <div id="spamKeywordsContainer" style="display:flex; flex-wrap:wrap; gap:6px; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:40px; align-items:center;">
+            </div>
+            <div style="display:flex; gap:6px; margin-top:6px;">
+                <input id="spamKeywordInput" type="text" placeholder="{{t "settings.add_keyword"}}" onkeydown="if(event.key==='Enter'){event.preventDefault();addSpamKeyword();}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+                <button class="btn btn-secondary btn-sm" onclick="addSpamKeyword()">{{t "users.add"}}</button>
+            </div>
         </div>
     </div>
 </div>
 
 <!-- Stale PR Settings -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>{{t "settings.stale_pr"}}</h2>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
-            <select id="staleEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                <option value="false">Disabled</option>
-                <option value="true">{{t "settings.enabled"}}</option>
-            </select>
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.check_interval"}}</label>
-            <input id="staleInterval" type="text" value="6h" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.days_until_stale"}}</label>
-            <input id="staleDaysStale" type="number" min="1" value="21" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.days_until_close"}}</label>
-            <input id="staleDaysClose" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.stale_label"}}</label>
-            <input id="staleLabel" type="text" value="stale" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.notify_on_stale"}}</label>
-            <select id="staleNotify" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-            </select>
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.skip_draft"}}</label>
-            <select id="staleSkipDraft" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-            </select>
-        </div>
-        <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.remove_on_activity"}}</label>
-            <select id="staleRemoveActivity" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-            </select>
-        </div>
+    <div class="collapsible-header" onclick="toggleSection('staleSection')">
+        <h2>{{t "settings.stale_pr"}}</h2>
+        <span class="toggle-icon">▼</span>
     </div>
-    <div style="margin-top:12px;">
-        <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.exempt_labels"}}</label>
-        <textarea id="staleExemptLabels" rows="2" placeholder="long-term&#10;pinned" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
+    <div id="staleSection" class="collapsible-body" style="max-height:1500px; margin-top:12px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
+                <select id="staleEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="false">Disabled</option>
+                    <option value="true">{{t "settings.enabled"}}</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.check_interval"}}</label>
+                <input id="staleInterval" type="text" value="6h" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.days_until_stale"}}</label>
+                <input id="staleDaysStale" type="number" min="1" value="21" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.days_until_close"}}</label>
+                <input id="staleDaysClose" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.stale_label"}}</label>
+                <input id="staleLabel" type="text" value="stale" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.notify_on_stale"}}</label>
+                <select id="staleNotify" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.skip_draft"}}</label>
+                <select id="staleSkipDraft" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.remove_on_activity"}}</label>
+                <select id="staleRemoveActivity" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                </select>
+            </div>
+        </div>
+        <div style="margin-top:12px;">
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.exempt_labels"}}</label>
+            <textarea id="staleExemptLabels" rows="2" placeholder="long-term&#10;pinned" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
+        </div>
+        <div style="margin-top:12px;">
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.comment_on_stale"}}</label>
+            <textarea id="staleCommentOnStale" rows="3" placeholder="This PR has been marked as stale due to {{.Days}} days of inactivity." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
+        </div>
+        <div style="margin-top:12px;">
+            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.comment_on_close"}}</label>
+            <input id="staleCommentOnClose" type="text" value="" placeholder="Automatically closed due to inactivity." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
+        </div>
     </div>
 </div>
 
@@ -234,6 +540,35 @@
 {{template "scripts"}}
 <script>
     let currentConfig = {};
+    let originalEventsMode = '';
+
+    function toggleSection(sectionId) {
+        const section = document.getElementById(sectionId);
+        const icon = section.previousElementSibling.querySelector('.toggle-icon');
+        if (section.classList.contains('collapsed')) {
+            section.classList.remove('collapsed');
+            section.style.maxHeight = section.scrollHeight + 'px';
+            icon.classList.remove('collapsed');
+        } else {
+            section.classList.add('collapsed');
+            section.style.maxHeight = '0';
+            icon.classList.add('collapsed');
+        }
+    }
+
+    function showRestartWarning(selectEl, warningId) {
+        const warning = document.getElementById(warningId + 'Warning');
+        if (warning) {
+            warning.style.display = selectEl.value !== originalEventsMode ? 'block' : 'none';
+        }
+    }
+
+    function toggleQuietHours(enabled) {
+        const ids = ['qhStartTimeGroup', 'qhEndTimeGroup', 'qhEscalationGroup', 'qhBypassGroup'];
+        ids.forEach(id => {
+            document.getElementById(id).style.display = enabled ? 'block' : 'none';
+        });
+    }
 
     function loadSettings() {
         apiRequest('/api/v1/config')
@@ -244,6 +579,66 @@
                 const srv = c.server || {};
                 document.getElementById('serverMinProcs').value = srv.min_procs || 0;
                 document.getElementById('serverMaxProcs').value = srv.max_procs || 0;
+                document.getElementById('serverListen').value = srv.listen || ':8080';
+                document.getElementById('serverMode').value = srv.mode || 'release';
+                document.getElementById('serverEnableWebUpdate').value = srv.enable_web_update ? 'true' : 'false';
+                document.getElementById('serverRateLimitEnabled').value = srv.rate_limit_enabled !== false ? 'true' : 'false';
+                document.getElementById('serverRateLimitRPS').value = srv.rate_limit_rps || 10;
+                document.getElementById('serverRateLimitBurst').value = srv.rate_limit_burst || 20;
+                document.getElementById('serverReadTimeout').value = srv.read_timeout_seconds || 30;
+                document.getElementById('serverWriteTimeout').value = srv.write_timeout_seconds || 30;
+                document.getElementById('serverShutdownTimeout').value = srv.shutdown_timeout_seconds || 30;
+                document.getElementById('serverMetricsInterval').value = srv.metrics_log_interval || '5m';
+
+                // Events
+                const events = c.events || {};
+                document.getElementById('eventsMode').value = events.mode || 'webhook';
+                originalEventsMode = events.mode || 'webhook';
+                document.getElementById('eventsPollingInterval').value = events.polling_interval || '5m';
+                document.getElementById('eventsHealthCheckInterval').value = events.health_check_interval || '2m';
+                document.getElementById('eventsHealthCheckThreshold').value = events.health_check_threshold || '5m';
+
+                // Updates
+                const updates = c.updates || {};
+                document.getElementById('updatesCheck').value = updates.check ? 'true' : 'false';
+                document.getElementById('updatesInterval').value = updates.interval || '24h';
+                document.getElementById('updatesNotifyOnNew').value = updates.notify_on_new ? 'true' : 'false';
+
+                // Worker Pool
+                const wp = c.worker_pool || {};
+                document.getElementById('wpMinWorkers').value = wp.min_workers || 2;
+                document.getElementById('wpMaxWorkers').value = wp.max_workers || 8;
+                document.getElementById('wpScaleUpPct').value = wp.scale_up_pct || 75;
+                document.getElementById('wpScaleDownPct').value = wp.scale_down_pct || 25;
+                document.getElementById('wpCooldownSecs').value = wp.cooldown_secs || 30;
+                document.getElementById('wpStatsInterval').value = wp.stats_interval || '30s';
+
+                // Quiet Hours
+                const qh = c.quiet_hours || {};
+                document.getElementById('qhEnabled').value = qh.enabled ? 'true' : 'false';
+                document.getElementById('qhTimezone').value = qh.timezone || 'Asia/Shanghai';
+                document.getElementById('qhStartTime').value = qh.start_time || '22:00';
+                document.getElementById('qhEndTime').value = qh.end_time || '08:00';
+                document.getElementById('qhEscalationRole').value = qh.escalation_role || 'admin';
+                document.getElementById('qhBypassUrgent').value = (qh.bypass_for_urgent || ['spam_detected', 'sync_failed']).join('\n');
+                toggleQuietHours(qh.enabled);
+
+                // Feed
+                const feed = c.feed || {};
+                document.getElementById('feedEnabled').value = feed.enabled ? 'true' : 'false';
+                document.getElementById('feedTitle').value = feed.title || 'Asika PR Feed';
+                document.getElementById('feedMaxItems').value = feed.max_items || 50;
+                document.getElementById('feedPublicFeed').value = feed.public_feed ? 'true' : 'false';
+
+                // Reports
+                const reports = c.reports || {};
+                document.getElementById('reportsEnabled').value = reports.enabled ? 'true' : 'false';
+                document.getElementById('reportsCron').value = reports.cron || 'weekly';
+                document.getElementById('reportsPeriodDays').value = reports.period_days || 7;
+
+                // Close Reasons
+                const cr = c.close_reasons || {};
+                document.getElementById('closeReasons').value = (cr.reasons || ['no longer needed', 'duplicate', 'invalid', "won't fix"]).join('\n');
 
                 // Merge Queue
                 const mq = c.merge_queue || {};
@@ -259,6 +654,8 @@
                 document.getElementById('spamTimeWindow').value = spam.time_window || '1h';
                 document.getElementById('spamThreshold').value = spam.threshold || 5;
                 document.getElementById('spamAuthor').value = spam.trigger_on_author ? 'true' : 'false';
+                document.getElementById('spamSimilarTitle').value = spam.trigger_on_similar_title ? 'true' : 'false';
+                document.getElementById('spamSimilarityThreshold').value = spam.title_similarity_threshold || 0.6;
                 renderSpamKeywords(spam.trigger_on_title_kw || []);
                 document.getElementById('spamAutoCleanEnabled').value = spam.auto_clean_enabled ? 'true' : 'false';
                 document.getElementById('spamAutoCleanInterval').value = spam.auto_clean_interval || '24h';
@@ -275,6 +672,8 @@
                 document.getElementById('staleSkipDraft').value = stale.skip_draft_prs !== false ? 'true' : 'false';
                 document.getElementById('staleRemoveActivity').value = stale.remove_stale_on_activity !== false ? 'true' : 'false';
                 document.getElementById('staleExemptLabels').value = (stale.exempt_labels || ['long-term']).join('\n');
+                document.getElementById('staleCommentOnStale').value = stale.comment_on_stale || '';
+                document.getElementById('staleCommentOnClose').value = stale.comment_on_close || '';
 
                 // Label Rules
                 renderLabelRules(c.label_rules || []);
@@ -449,9 +848,81 @@
 
         // Server
         lines.push('[server]');
+        lines.push('listen = "' + document.getElementById('serverListen').value.trim() + '"');
+        lines.push('mode = "' + document.getElementById('serverMode').value + '"');
         lines.push('min_procs = ' + parseInt(document.getElementById('serverMinProcs').value || 0));
         lines.push('max_procs = ' + parseInt(document.getElementById('serverMaxProcs').value || 0));
+        lines.push('enable_web_update = ' + (document.getElementById('serverEnableWebUpdate').value === 'true' ? 'true' : 'false'));
+        lines.push('rate_limit_enabled = ' + (document.getElementById('serverRateLimitEnabled').value === 'true' ? 'true' : 'false'));
+        lines.push('rate_limit_rps = ' + parseInt(document.getElementById('serverRateLimitRPS').value || 10));
+        lines.push('rate_limit_burst = ' + parseInt(document.getElementById('serverRateLimitBurst').value || 20));
+        lines.push('read_timeout_seconds = ' + parseInt(document.getElementById('serverReadTimeout').value || 30));
+        lines.push('write_timeout_seconds = ' + parseInt(document.getElementById('serverWriteTimeout').value || 30));
+        lines.push('shutdown_timeout_seconds = ' + parseInt(document.getElementById('serverShutdownTimeout').value || 30));
+        lines.push('metrics_log_interval = "' + document.getElementById('serverMetricsInterval').value.trim() + '"');
         lines.push('');
+
+        // Events
+        lines.push('[events]');
+        lines.push('mode = "' + document.getElementById('eventsMode').value + '"');
+        lines.push('polling_interval = "' + document.getElementById('eventsPollingInterval').value.trim() + '"');
+        lines.push('health_check_interval = "' + document.getElementById('eventsHealthCheckInterval').value.trim() + '"');
+        lines.push('health_check_threshold = "' + document.getElementById('eventsHealthCheckThreshold').value.trim() + '"');
+        lines.push('');
+
+        // Updates
+        lines.push('[updates]');
+        lines.push('check = ' + (document.getElementById('updatesCheck').value === 'true' ? 'true' : 'false'));
+        lines.push('interval = "' + document.getElementById('updatesInterval').value.trim() + '"');
+        lines.push('notify_on_new = ' + (document.getElementById('updatesNotifyOnNew').value === 'true' ? 'true' : 'false'));
+        lines.push('');
+
+        // Worker Pool
+        lines.push('[worker_pool]');
+        lines.push('min_workers = ' + parseInt(document.getElementById('wpMinWorkers').value || 2));
+        lines.push('max_workers = ' + parseInt(document.getElementById('wpMaxWorkers').value || 8));
+        lines.push('scale_up_pct = ' + parseInt(document.getElementById('wpScaleUpPct').value || 75));
+        lines.push('scale_down_pct = ' + parseInt(document.getElementById('wpScaleDownPct').value || 25));
+        lines.push('cooldown_secs = ' + parseInt(document.getElementById('wpCooldownSecs').value || 30));
+        lines.push('stats_interval = "' + document.getElementById('wpStatsInterval').value.trim() + '"');
+        lines.push('');
+
+        // Quiet Hours
+        const qhEnabled = document.getElementById('qhEnabled').value === 'true';
+        if (qhEnabled) {
+            lines.push('[quiet_hours]');
+            lines.push('enabled = true');
+            lines.push('start_time = "' + document.getElementById('qhStartTime').value.trim() + '"');
+            lines.push('end_time = "' + document.getElementById('qhEndTime').value.trim() + '"');
+            lines.push('timezone = "' + document.getElementById('qhTimezone').value.trim() + '"');
+            lines.push('escalation_role = "' + document.getElementById('qhEscalationRole').value + '"');
+            const bypassLines = document.getElementById('qhBypassUrgent').value.split('\n').map(s => s.trim()).filter(Boolean);
+            if (bypassLines.length > 0) lines.push('bypass_for_urgent = ["' + bypassLines.join('", "') + '"]');
+            lines.push('');
+        }
+
+        // Feed
+        lines.push('[feed]');
+        lines.push('enabled = ' + (document.getElementById('feedEnabled').value === 'true' ? 'true' : 'false'));
+        lines.push('title = "' + document.getElementById('feedTitle').value.trim() + '"');
+        lines.push('max_items = ' + parseInt(document.getElementById('feedMaxItems').value || 50));
+        lines.push('public_feed = ' + (document.getElementById('feedPublicFeed').value === 'true' ? 'true' : 'false'));
+        lines.push('');
+
+        // Reports
+        lines.push('[reports]');
+        lines.push('enabled = ' + (document.getElementById('reportsEnabled').value === 'true' ? 'true' : 'false'));
+        lines.push('cron = "' + document.getElementById('reportsCron').value.trim() + '"');
+        lines.push('period_days = ' + parseInt(document.getElementById('reportsPeriodDays').value || 7));
+        lines.push('');
+
+        // Close Reasons
+        const crLines = document.getElementById('closeReasons').value.split('\n').map(s => s.trim()).filter(Boolean);
+        if (crLines.length > 0) {
+            lines.push('[close_reasons]');
+            lines.push('reasons = ["' + crLines.join('", "') + '"]');
+            lines.push('');
+        }
 
         // Merge Queue
         lines.push('[merge_queue]');
@@ -470,6 +941,8 @@
         lines.push('time_window = "' + document.getElementById('spamTimeWindow').value.trim() + '"');
         lines.push('threshold = ' + parseInt(document.getElementById('spamThreshold').value || 5));
         lines.push('trigger_on_author = ' + (document.getElementById('spamAuthor').value === 'true' ? 'true' : 'false'));
+        lines.push('trigger_on_similar_title = ' + (document.getElementById('spamSimilarTitle').value === 'true' ? 'true' : 'false'));
+        lines.push('title_similarity_threshold = ' + parseFloat(document.getElementById('spamSimilarityThreshold').value || 0.6));
         const kwLines = collectSpamKeywords();
         if (kwLines.length > 0) lines.push('trigger_on_title_kw = ["' + kwLines.join('", "') + '"]');
         lines.push('auto_clean_enabled = ' + (document.getElementById('spamAutoCleanEnabled').value === 'true' ? 'true' : 'false'));
@@ -488,6 +961,10 @@
         lines.push('remove_stale_on_activity = ' + (document.getElementById('staleRemoveActivity').value === 'true' ? 'true' : 'false'));
         const exemptLines = document.getElementById('staleExemptLabels').value.split('\n').map(s => s.trim()).filter(Boolean);
         if (exemptLines.length > 0) lines.push('exempt_labels = ["' + exemptLines.join('", "') + '"]');
+        const commentOnStale = document.getElementById('staleCommentOnStale').value.trim();
+        if (commentOnStale) lines.push('comment_on_stale = """\n' + commentOnStale + '\n"""');
+        const commentOnClose = document.getElementById('staleCommentOnClose').value.trim();
+        if (commentOnClose) lines.push('comment_on_close = "' + commentOnClose.replace(/"/g, '\\"') + '"');
         lines.push('');
 
         // Label Rules
