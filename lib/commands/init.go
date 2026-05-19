@@ -152,10 +152,28 @@ func runInteractiveWizard(reader *bufio.Reader) map[string]interface{} {
 	githubToken := prompt(reader, "GitHub Token (leave empty to skip)", "")
 	gitlabToken := prompt(reader, "GitLab Token (leave empty to skip)", "")
 	giteaToken := prompt(reader, "Gitea Token (leave empty to skip)", "")
-	cfg["tokens"] = map[string]string{
-		"github": githubToken,
-		"gitlab": gitlabToken,
-		"gitea":  giteaToken,
+	forgejoToken := prompt(reader, "Forgejo Token (leave empty to skip)", "")
+	codebergToken := prompt(reader, "Codeberg Token (leave empty to skip)", "")
+	bitbucketToken := prompt(reader, "Bitbucket Token (leave empty to skip)", "")
+	gerritURL := prompt(reader, "Gerrit URL (leave empty to skip)", "")
+	gerritUser := ""
+	gerritPass := ""
+	if gerritURL != "" {
+		gerritUser = prompt(reader, "Gerrit Username", "")
+		gerritPass = promptSecret(reader, "Gerrit Password")
+	}
+	cfg["tokens"] = map[string]interface{}{
+		"github":    githubToken,
+		"gitlab":    gitlabToken,
+		"gitea":     giteaToken,
+		"forgejo":   forgejoToken,
+		"codeberg":  codebergToken,
+		"bitbucket": bitbucketToken,
+		"gerrit": map[string]string{
+			"url":      gerritURL,
+			"username": gerritUser,
+			"password": gerritPass,
+		},
 	}
 
 	// Step 4: Repository Group
@@ -165,9 +183,13 @@ func runInteractiveWizard(reader *bufio.Reader) map[string]interface{} {
 	githubRepo := prompt(reader, "GitHub Repository (owner/repo)", "")
 	gitlabRepo := prompt(reader, "GitLab Repository (owner/repo)", "")
 	giteaRepo := prompt(reader, "Gitea Repository (owner/repo)", "")
+	forgejoRepo := prompt(reader, "Forgejo Repository (owner/repo)", "")
+	codebergRepo := prompt(reader, "Codeberg Repository (owner/repo)", "")
+	bitbucketRepo := prompt(reader, "Bitbucket Repository (owner/repo)", "")
+	gerritRepo := prompt(reader, "Gerrit Repository (project~number)", "")
 	mirrorPlatform := ""
 	if mode == "single" {
-		mirrorPlatform = prompt(reader, "Mirror Platform (github/gitlab/gitea)", "github")
+		mirrorPlatform = prompt(reader, "Mirror Platform (github/gitlab/gitea/forgejo/codeberg/bitbucket/gerrit)", "github")
 	}
 	cfg["repo_groups"] = []map[string]interface{}{
 		{
@@ -177,6 +199,10 @@ func runInteractiveWizard(reader *bufio.Reader) map[string]interface{} {
 			"github":          githubRepo,
 			"gitlab":          gitlabRepo,
 			"gitea":           giteaRepo,
+			"forgejo":         forgejoRepo,
+			"codeberg":        codebergRepo,
+			"bitbucket":       bitbucketRepo,
+			"gerrit":          gerritRepo,
 			"default_branch":  defaultBranch,
 			"merge_queue": map[string]interface{}{
 				"required_approvals": 1,
@@ -190,18 +216,115 @@ func runInteractiveWizard(reader *bufio.Reader) map[string]interface{} {
 	fmt.Println("\n--- Step 5: Notification Channels ---")
 	notifyChannels := []map[string]interface{}{}
 
+	// Telegram
 	tgToken := prompt(reader, "Telegram Bot Token (leave empty to skip)", "")
 	if tgToken != "" {
 		tgChatIDs := splitAndTrim(prompt(reader, "Telegram Chat IDs (comma-separated)", ""))
 		tgAdminIDs := splitAndTrim(prompt(reader, "Telegram Admin IDs (comma-separated)", ""))
 		notifyChannels = append(notifyChannels, map[string]interface{}{
-			"type":   "telegram",
-			"config": map[string]interface{}{},
+			"type": "telegram",
+			"config": map[string]interface{}{
+				"token":     tgToken,
+				"chat_ids":  tgChatIDs,
+				"admin_ids": tgAdminIDs,
+			},
 		})
-		_ = tgChatIDs
-		_ = tgAdminIDs
 	}
 
+	// Feishu / Lark
+	feishuAppID := prompt(reader, "Feishu App ID (leave empty to skip)", "")
+	if feishuAppID != "" {
+		feishuAppSecret := promptSecret(reader, "Feishu App Secret")
+		feishuWebhook := prompt(reader, "Feishu Webhook URL (optional)", "")
+		feishuAdminIDs := splitAndTrim(prompt(reader, "Feishu Admin IDs (comma-separated)", ""))
+		notifyChannels = append(notifyChannels, map[string]interface{}{
+			"type": "feishu",
+			"config": map[string]interface{}{
+				"app_id":      feishuAppID,
+				"app_secret":  feishuAppSecret,
+				"webhook_url": feishuWebhook,
+				"admin_ids":   feishuAdminIDs,
+			},
+		})
+	}
+
+	// Discord
+	discordToken := prompt(reader, "Discord Bot Token (leave empty to skip)", "")
+	if discordToken != "" {
+		discordChannel := prompt(reader, "Discord Channel ID", "")
+		discordAdminIDs := splitAndTrim(prompt(reader, "Discord Admin IDs (comma-separated)", ""))
+		notifyChannels = append(notifyChannels, map[string]interface{}{
+			"type": "discord",
+			"config": map[string]interface{}{
+				"token":      discordToken,
+				"channel_id": discordChannel,
+				"admin_ids":  discordAdminIDs,
+			},
+		})
+	}
+
+	// Slack
+	slackToken := prompt(reader, "Slack Bot Token (xoxb-...) (leave empty to skip)", "")
+	if slackToken != "" {
+		slackAppToken := prompt(reader, "Slack App Token (xapp-...) (optional, for Socket Mode)", "")
+		slackAdminIDs := splitAndTrim(prompt(reader, "Slack Admin IDs (comma-separated)", ""))
+		notifyChannels = append(notifyChannels, map[string]interface{}{
+			"type": "slack_bot",
+			"config": map[string]interface{}{
+				"token":     slackToken,
+				"app_token": slackAppToken,
+				"admin_ids": slackAdminIDs,
+			},
+		})
+	}
+
+	// DingTalk
+	dingtalkToken := prompt(reader, "DingTalk Access Token (leave empty to skip)", "")
+	if dingtalkToken != "" {
+		dingtalkSecret := promptSecret(reader, "DingTalk App Secret (optional)")
+		notifyChannels = append(notifyChannels, map[string]interface{}{
+			"type": "dingtalk",
+			"config": map[string]interface{}{
+				"token":  dingtalkToken,
+				"secret": dingtalkSecret,
+			},
+		})
+	}
+
+	// WeCom (WeChat Work)
+	wecomWebhook := prompt(reader, "WeCom Webhook Key (leave empty to skip)", "")
+	if wecomWebhook != "" {
+		notifyChannels = append(notifyChannels, map[string]interface{}{
+			"type": "wecom",
+			"config": map[string]interface{}{
+				"webhook_key": wecomWebhook,
+			},
+		})
+	}
+
+	// MS Teams
+	msteamsWebhook := prompt(reader, "MS Teams Webhook URL (leave empty to skip)", "")
+	if msteamsWebhook != "" {
+		notifyChannels = append(notifyChannels, map[string]interface{}{
+			"type": "msteams",
+			"config": map[string]interface{}{
+				"webhook_url": msteamsWebhook,
+			},
+		})
+	}
+
+	// Generic Webhook
+	customWebhook := prompt(reader, "Custom Webhook URL (leave empty to skip)", "")
+	if customWebhook != "" {
+		notifyChannels = append(notifyChannels, map[string]interface{}{
+			"type": "webhook",
+			"config": map[string]interface{}{
+				"url": customWebhook,
+			},
+		})
+	}
+
+	// SMTP
 	smtpHost := prompt(reader, "SMTP Host (leave empty to skip)", "")
 	if smtpHost != "" {
 		smtpPort := prompt(reader, "SMTP Port", "587")
@@ -219,6 +342,7 @@ func runInteractiveWizard(reader *bufio.Reader) map[string]interface{} {
 			},
 		})
 	}
+
 	cfg["notify"] = notifyChannels
 
 	// Step 6: Server & Auth

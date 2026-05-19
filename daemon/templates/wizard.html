@@ -70,7 +70,7 @@
                 </select>
                 <div class="info">
                     <strong>Single Repo:</strong> Manage PRs for one platform only. No code sync.<br>
-                    <strong>Multi Platform:</strong> Sync PRs and code across GitHub, GitLab, and Gitea.
+                    <strong>Multi Platform:</strong> Sync PRs and code across GitHub, GitLab, Gitea, Forgejo, Codeberg, Bitbucket, and Gerrit.
                 </div>
             </div>
             <div class="nav-buttons">
@@ -126,6 +126,32 @@
                 <label>Gitea Token (optional):</label>
                 <input type="password" id="gitea_token" placeholder="gitea_xxxx or leave empty">
             </div>
+            <div class="form-group">
+                <label>Forgejo Token (optional):</label>
+                <input type="password" id="forgejo_token" placeholder="forgejo_xxxx or leave empty">
+            </div>
+            <div class="form-group">
+                <label>Codeberg Token (optional):</label>
+                <input type="password" id="codeberg_token" placeholder="codeberg_xxxx or leave empty">
+            </div>
+            <div class="form-group">
+                <label>Bitbucket Token (optional):</label>
+                <input type="password" id="bitbucket_token" placeholder="bitbucket_xxxx or leave empty">
+            </div>
+            <div class="form-group">
+                <label>Gerrit URL (optional):</label>
+                <input type="text" id="gerrit_url" placeholder="https://gerrit.example.com or leave empty">
+            </div>
+            <div id="gerritAuthFields" style="display:none;">
+                <div class="form-group">
+                    <label>Gerrit Username:</label>
+                    <input type="text" id="gerrit_username" placeholder="username">
+                </div>
+                <div class="form-group">
+                    <label>Gerrit Password:</label>
+                    <input type="password" id="gerrit_password" placeholder="password">
+                </div>
+            </div>
             <div class="nav-buttons">
                 <button class="btn btn-secondary" onclick="prevStep(3)">{{t "common.back"}}</button>
                 <button class="btn btn-primary" onclick="nextStep(3)">{{t "wizard.next"}}</button>
@@ -145,6 +171,10 @@
                     <option value="github">GitHub</option>
                     <option value="gitlab">GitLab</option>
                     <option value="gitea">Gitea</option>
+                    <option value="forgejo">Forgejo</option>
+                    <option value="codeberg">Codeberg</option>
+                    <option value="bitbucket">Bitbucket</option>
+                    <option value="gerrit">Gerrit</option>
                 </select>
             </div>
             <div id="githubRepoGroup" class="form-group">
@@ -158,6 +188,22 @@
             <div id="giteaRepoGroup" class="form-group">
                 <label>Gitea Repository (owner/repo):</label>
                 <input type="text" id="gitea_repo" placeholder="e.g., octocat/hello-world">
+            </div>
+            <div id="forgejoRepoGroup" class="form-group">
+                <label>Forgejo Repository (owner/repo):</label>
+                <input type="text" id="forgejo_repo" placeholder="e.g., octocat/hello-world">
+            </div>
+            <div id="codebergRepoGroup" class="form-group">
+                <label>Codeberg Repository (owner/repo):</label>
+                <input type="text" id="codeberg_repo" placeholder="e.g., octocat/hello-world">
+            </div>
+            <div id="bitbucketRepoGroup" class="form-group">
+                <label>Bitbucket Repository (owner/repo):</label>
+                <input type="text" id="bitbucket_repo" placeholder="e.g., octocat/hello-world">
+            </div>
+            <div id="gerritRepoGroup" class="form-group">
+                <label>Gerrit Repository (project~number):</label>
+                <input type="text" id="gerrit_repo" placeholder="e.g., myproject~123">
             </div>
             <div class="form-group">
                 <label>Default Branch:</label>
@@ -179,9 +225,13 @@
                 <select id="notifyChannelSelect" onchange="onNotifyChannelChange()">
                     <option value="telegram">Telegram Bot</option>
                     <option value="feishu">Feishu / Lark Bot</option>
-                    <option value="smtp">SMTP Email</option>
                     <option value="discord">Discord Bot</option>
                     <option value="slack">Slack Bot</option>
+                    <option value="dingtalk">DingTalk</option>
+                    <option value="wecom">WeCom (WeChat Work)</option>
+                    <option value="msteams">MS Teams</option>
+                    <option value="webhook">Generic Webhook</option>
+                    <option value="smtp">SMTP Email</option>
                 </select>
             </div>
 
@@ -221,6 +271,70 @@
                 </div>
             </div>
 
+            <!-- Discord -->
+            <div id="notifyFields_discord" style="display:none;">
+                <div class="form-group">
+                    <label>Bot Token:</label>
+                    <input type="text" id="discord_token" placeholder="e.g., MTAxxxxxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label>Channel IDs (comma-separated):</label>
+                    <input type="text" id="discord_channel_ids" placeholder="e.g., 123456789, 987654321">
+                </div>
+            </div>
+
+            <!-- Slack -->
+            <div id="notifyFields_slack" style="display:none;">
+                <div class="form-group">
+                    <label>Bot Token (xoxb-...):</label>
+                    <input type="text" id="slack_token" placeholder="e.g., xoxb-xxxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label>App Token (xapp-...):</label>
+                    <input type="text" id="slack_app_token" placeholder="e.g., xapp-xxxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label>Channel IDs (comma-separated):</label>
+                    <input type="text" id="slack_channel_ids" placeholder="e.g., C01XXXXXX, C02XXXXXX">
+                </div>
+            </div>
+
+            <!-- DingTalk -->
+            <div id="notifyFields_dingtalk" style="display:none;">
+                <div class="form-group">
+                    <label>Access Token:</label>
+                    <input type="text" id="dingtalk_token" placeholder="e.g., dingtalk access token">
+                </div>
+                <div class="form-group">
+                    <label>App Secret (optional):</label>
+                    <input type="password" id="dingtalk_secret" placeholder="app secret for signature">
+                </div>
+            </div>
+
+            <!-- WeCom -->
+            <div id="notifyFields_wecom" style="display:none;">
+                <div class="form-group">
+                    <label>Webhook Key:</label>
+                    <input type="text" id="wecom_webhook_key" placeholder="e.g., xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                </div>
+            </div>
+
+            <!-- MS Teams -->
+            <div id="notifyFields_msteams" style="display:none;">
+                <div class="form-group">
+                    <label>Webhook URL:</label>
+                    <input type="text" id="msteams_webhook_url" placeholder="e.g., https://outlook.office.com/webhook/...">
+                </div>
+            </div>
+
+            <!-- Generic Webhook -->
+            <div id="notifyFields_webhook" style="display:none;">
+                <div class="form-group">
+                    <label>Webhook URL:</label>
+                    <input type="text" id="custom_webhook_url" placeholder="e.g., https://example.com/webhook">
+                </div>
+            </div>
+
             <!-- SMTP -->
             <div id="notifyFields_smtp" style="display:none;">
                 <div class="form-group">
@@ -242,34 +356,6 @@
                 <div class="form-group">
                     <label>Recipients (comma-separated):</label>
                     <input type="text" id="smtp_to" placeholder="admin@example.com">
-                </div>
-            </div>
-
-            <!-- Slack -->
-            <div id="notifyFields_slack" style="display:none;">
-                <div class="form-group">
-                    <label>Bot Token (xoxb-...):</label>
-                    <input type="text" id="slack_token" placeholder="e.g., xoxb-xxxxxxxx">
-                </div>
-                <div class="form-group">
-                    <label>App Token (xapp-...):</label>
-                    <input type="text" id="slack_app_token" placeholder="e.g., xapp-xxxxxxxx">
-                </div>
-                <div class="form-group">
-                    <label>Channel IDs (comma-separated):</label>
-                    <input type="text" id="slack_channel_ids" placeholder="e.g., C01XXXXXX, C02XXXXXX">
-                </div>
-            </div>
-
-            <!-- Discord -->
-            <div id="notifyFields_discord" style="display:none;">
-                <div class="form-group">
-                    <label>Bot Token:</label>
-                    <input type="text" id="discord_token" placeholder="e.g., MTAxxxxxxxxxx">
-                </div>
-                <div class="form-group">
-                    <label>Channel IDs (comma-separated):</label>
-                    <input type="text" id="discord_channel_ids" placeholder="e.g., 123456789, 987654321">
                 </div>
             </div>
 
@@ -374,18 +460,17 @@
             document.getElementById('updatesNotifyGroup').style.display = checked ? 'block' : 'none';
         });
 
+        // Show/hide Gerrit auth fields when URL is entered
+        document.getElementById('gerrit_url').addEventListener('input', function() {
+            document.getElementById('gerritAuthFields').style.display = this.value.trim() ? 'block' : 'none';
+        });
+
         function onModeChange() {
             const mode = document.getElementById('mode').value;
-            const gitlabGroup = document.getElementById('gitlabRepoGroup');
-            const giteaGroup = document.getElementById('giteaRepoGroup');
             const mirrorGroup = document.getElementById('mirrorPlatformGroup');
             if (mode === 'single') {
-                gitlabGroup.style.display = 'none';
-                giteaGroup.style.display = 'none';
                 mirrorGroup.style.display = 'block';
             } else {
-                gitlabGroup.style.display = 'block';
-                giteaGroup.style.display = 'block';
                 mirrorGroup.style.display = 'none';
             }
         }
@@ -398,7 +483,7 @@
 
         function onNotifyChannelChange() {
             const ch = document.getElementById('notifyChannelSelect').value;
-            ['telegram', 'feishu', 'smtp', 'discord', 'slack'].forEach(function(c) {
+            ['telegram', 'feishu', 'discord', 'slack', 'dingtalk', 'wecom', 'msteams', 'webhook', 'smtp'].forEach(function(c) {
                 var el = document.getElementById('notifyFields_' + c);
                 if (el) el.style.display = (c === ch) ? 'block' : 'none';
             });
@@ -479,6 +564,12 @@
             const smtpToRaw = document.getElementById('smtp_to').value;
             const smtpTo = smtpToRaw ? smtpToRaw.split(',').map(s => s.trim()).filter(s => s) : [];
 
+            // Parse Discord channel IDs
+            const discordChannelIdsRaw = document.getElementById('discord_channel_ids').value;
+            const discordChannelIds = discordChannelIdsRaw ? discordChannelIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
+            const slackChannelIdsRaw = document.getElementById('slack_channel_ids').value;
+            const slackChannelIds = slackChannelIdsRaw ? slackChannelIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
+
             // Build database config
             const dbtype = document.getElementById('dbtype').value;
             const database = { type: dbtype };
@@ -488,12 +579,6 @@
             } else {
                 database.path = document.getElementById('dbpath').value;
             }
-
-            // Parse Discord channel IDs
-            const discordChannelIdsRaw = document.getElementById('discord_channel_ids').value;
-            const discordChannelIds = discordChannelIdsRaw ? discordChannelIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
-            const slackChannelIdsRaw = document.getElementById('slack_channel_ids').value;
-            const slackChannelIds = slackChannelIdsRaw ? slackChannelIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
 
             // Build notify channels
             const notifyChannels = [];
@@ -509,6 +594,42 @@
                     config: {}
                 });
             }
+            if (document.getElementById('discord_token').value) {
+                notifyChannels.push({
+                    type: 'discord',
+                    config: {}
+                });
+            }
+            if (document.getElementById('slack_token').value) {
+                notifyChannels.push({
+                    type: 'slack_bot',
+                    config: {}
+                });
+            }
+            if (document.getElementById('dingtalk_token').value) {
+                notifyChannels.push({
+                    type: 'dingtalk',
+                    config: {}
+                });
+            }
+            if (document.getElementById('wecom_webhook_key').value) {
+                notifyChannels.push({
+                    type: 'wecom',
+                    config: {}
+                });
+            }
+            if (document.getElementById('msteams_webhook_url').value) {
+                notifyChannels.push({
+                    type: 'msteams',
+                    config: {}
+                });
+            }
+            if (document.getElementById('custom_webhook_url').value) {
+                notifyChannels.push({
+                    type: 'webhook',
+                    config: {}
+                });
+            }
             if (document.getElementById('smtp_host').value) {
                 notifyChannels.push({
                     type: 'smtp',
@@ -521,18 +642,8 @@
                     }
                 });
             }
-            if (document.getElementById('discord_token').value) {
-                notifyChannels.push({
-                    type: 'discord',
-                    config: {}
-                });
-            }
-            if (document.getElementById('slack_token').value) {
-                notifyChannels.push({
-                    type: 'slack',
-                    config: {}
-                });
-            }
+
+            const gerritUrl = document.getElementById('gerrit_url').value;
 
             const config = {
                 mode: mode,
@@ -540,7 +651,15 @@
                 tokens: {
                     github: document.getElementById('github_token').value,
                     gitlab: document.getElementById('gitlab_token').value,
-                    gitea: document.getElementById('gitea_token').value
+                    gitea: document.getElementById('gitea_token').value,
+                    forgejo: document.getElementById('forgejo_token').value,
+                    codeberg: document.getElementById('codeberg_token').value,
+                    bitbucket: document.getElementById('bitbucket_token').value,
+                    gerrit: gerritUrl ? {
+                        url: gerritUrl,
+                        username: document.getElementById('gerrit_username').value,
+                        password: document.getElementById('gerrit_password').value
+                    } : { url: '', username: '', password: '' }
                 },
                 auth: {
                     jwt_secret: jwtSecret,
@@ -557,6 +676,10 @@
                     github: document.getElementById('github_repo').value,
                     gitlab: document.getElementById('gitlab_repo').value,
                     gitea: document.getElementById('gitea_repo').value,
+                    forgejo: document.getElementById('forgejo_repo').value,
+                    codeberg: document.getElementById('codeberg_repo').value,
+                    bitbucket: document.getElementById('bitbucket_repo').value,
+                    gerrit: document.getElementById('gerrit_repo').value,
                     default_branch: document.getElementById('default_branch').value,
                     merge_queue: {
                         required_approvals: 1,
@@ -589,6 +712,23 @@
                     app_token: document.getElementById('slack_app_token').value,
                     channel_ids: slackChannelIds
                 },
+                dingtalk: {
+                    enabled: !!document.getElementById('dingtalk_token').value,
+                    token: document.getElementById('dingtalk_token').value,
+                    secret: document.getElementById('dingtalk_secret').value
+                },
+                wecom: {
+                    enabled: !!document.getElementById('wecom_webhook_key').value,
+                    webhook_key: document.getElementById('wecom_webhook_key').value
+                },
+                msteams: {
+                    enabled: !!document.getElementById('msteams_webhook_url').value,
+                    webhook_url: document.getElementById('msteams_webhook_url').value
+                },
+                webhook: {
+                    enabled: !!document.getElementById('custom_webhook_url').value,
+                    url: document.getElementById('custom_webhook_url').value
+                },
                 users: [{
                     username: document.getElementById('admin_user').value,
                     password: document.getElementById('admin_pass').value,
@@ -613,16 +753,13 @@
                 const data = await resp.json();
                 if (data.error) {
                     if (data.error.indexOf('already initialized') >= 0) {
-                        // 已经初始化，直接跳转登录
                         window.location = '/login';
                         return;
                     }
                     showError('Error: ' + data.error);
                 } else {
-                    // 隐藏所有步骤，显示完成页面
                     document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
                     document.getElementById('stepComplete').classList.add('active');
-                    // 更新 dots 显示全部完成
                     for (let i = 1; i <= 7; i++) {
                         const dot = document.getElementById('dot' + i);
                         if (dot) {
@@ -630,7 +767,6 @@
                             dot.classList.add('done');
                         }
                     }
-                    // 3秒后自动跳转登录
                     setTimeout(() => { window.location = '/login'; }, 3000);
                 }
             } catch (e) {

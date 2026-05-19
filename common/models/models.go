@@ -310,9 +310,9 @@ type WebhookFilter struct {
 
 // NotifyRule defines notification routing based on PR labels
 type NotifyRule struct {
-	Labels    []string `toml:"labels" json:"labels"`         // PR labels to match
-	Notifiers []string `toml:"notifiers" json:"notifiers"`   // Notifier types to use (e.g., ["smtp", "telegram"])
-	Always    bool     `toml:"always" json:"always"`         // If true, always notify regardless of other settings
+	Labels    []string `toml:"labels" json:"labels"`       // PR labels to match
+	Notifiers []string `toml:"notifiers" json:"notifiers"` // Notifier types to use (e.g., ["smtp", "telegram"])
+	Always    bool     `toml:"always" json:"always"`       // If true, always notify regardless of other settings
 }
 
 // NotifyRulesConfig defines label-based notification routing
@@ -322,8 +322,8 @@ type NotifyRulesConfig struct {
 
 // AutoRebaseConfig defines automatic rebase settings
 type AutoRebaseConfig struct {
-	Enabled       bool     `toml:"enabled" json:"enabled"`               // Enable auto-rebase
-	ExcludeLabels []string `toml:"exclude_labels" json:"exclude_labels"` // PRs with these labels will not be auto-rebased
+	Enabled        bool     `toml:"enabled" json:"enabled"`                 // Enable auto-rebase
+	ExcludeLabels  []string `toml:"exclude_labels" json:"exclude_labels"`   // PRs with these labels will not be auto-rebased
 	ExcludeAuthors []string `toml:"exclude_authors" json:"exclude_authors"` // PRs from these authors will not be auto-rebased
 }
 

@@ -44,7 +44,15 @@ func GetWizardSteps() []WizardStep {
 			Step:        2,
 			Title:       "Platform Tokens",
 			Description: "Enter platform access tokens",
-			Fields:      map[string]string{"github": "token", "gitlab": "token", "gitea": "token"},
+			Fields: map[string]string{
+				"github":    "token",
+				"gitlab":    "token",
+				"gitea":     "token",
+				"forgejo":   "token",
+				"codeberg":  "token",
+				"bitbucket": "token",
+				"gerrit":    "url|username|password",
+			},
 		},
 		{
 			Step:        3,
