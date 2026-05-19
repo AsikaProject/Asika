@@ -107,6 +107,7 @@ func LocaleMiddleware() gin.HandlerFunc {
 		} else {
 			locale = i18n.ParseAcceptLanguage(c.GetHeader("Accept-Language"))
 		}
+		i18n.SetLocale(locale)
 		c.Set("locale", locale)
 		c.Next()
 	}
