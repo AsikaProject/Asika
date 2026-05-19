@@ -498,3 +498,62 @@ func (s *bboltStorage) ListPRStacks() ([]*models.PRStack, error) {
 func (s *bboltStorage) DeletePRStack(id string) error {
 	return s.Delete(BucketPRStacks, id)
 }
+
+func (s *bboltStorage) AcquireSyncLock(repoGroup, holderID string, ttl time.Duration) (bool, error) {
+	key := "lock:" + repoGroup
+	now := time.Now()
+	expiresAt := now.Add(ttl)
+	var acquired bool
+	err := s.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(BucketSyncLocks))
+		if b == nil {
+			return fmt.Errorf("bucket %s not found", BucketSyncLocks)
+		}
+		existing := b.Get([]byte(key))
+		if existing != nil {
+			var lock struct {
+				Holder    string    `json:"holder"`
+				ExpiresAt time.Time `json:"expires_at"`
+			}
+			if json.Unmarshal(existing, &lock) == nil {
+				if lock.Holder != holderID && now.Before(lock.ExpiresAt) {
+					return nil
+				}
+			}
+		}
+		entry := struct {
+			Holder    string    `json:"holder"`
+			LockedAt  time.Time `json:"locked_at"`
+			ExpiresAt time.Time `json:"expires_at"`
+		}{
+			Holder:    holderID,
+			LockedAt:  now,
+			ExpiresAt: expiresAt,
+		}
+		data, _ := json.Marshal(entry)
+		acquired = true
+		return b.Put([]byte(key), data)
+	})
+	return acquired, err
+}
+
+func (s *bboltStorage) ReleaseSyncLock(repoGroup, holderID string) error {
+	key := "lock:" + repoGroup
+	return s.db.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(BucketSyncLocks))
+		if b == nil {
+			return nil
+		}
+		existing := b.Get([]byte(key))
+		if existing == nil {
+			return nil
+		}
+		var lock struct {
+			Holder string `json:"holder"`
+		}
+		if json.Unmarshal(existing, &lock) == nil && lock.Holder == holderID {
+			return b.Delete([]byte(key))
+		}
+		return nil
+	})
+}

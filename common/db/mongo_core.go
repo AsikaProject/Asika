@@ -69,6 +69,10 @@ func (s *mongoStorage) ensureIndexes(ctx context.Context) error {
 			Keys:    bson.D{{Key: "_id", Value: 1}},
 			Options: options.Index().SetUnique(true),
 		}, "idx_wh_dedup_id"},
+		{BucketSyncLocks, mongo.IndexModel{
+			Keys:    bson.D{{Key: "expires_at", Value: 1}},
+			Options: options.Index().SetExpireAfterSeconds(0),
+		}, "idx_sync_lock_ttl"},
 		{BucketIssuePRLinks, mongo.IndexModel{
 			Keys: bson.D{{Key: "pr_id", Value: 1}},
 		}, "idx_ipl_pr_id"},
