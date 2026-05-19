@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"asika/common/config"
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
@@ -97,6 +98,66 @@ func sendNotifications(title, body string) {
 			slog.Warn("notification send failed", "type", n.Type(), "error", err)
 		}
 	}
+}
+
+// sendNotificationsWithLabels sends notifications based on PR labels and notify rules
+func sendNotificationsWithLabels(title, body string, labels []string) {
+	cfg := config.Current()
+	if cfg == nil || len(cfg.NotifyRules.Rules) == 0 {
+		// No rules configured, use default behavior
+		sendNotifications(title, body)
+		return
+	}
+
+	// Find matching notifiers based on labels
+	matchedNotifiers := make(map[string]bool)
+	matched := false
+
+	for _, rule := range cfg.NotifyRules.Rules {
+		// Check if any PR label matches this rule
+		for _, ruleLabel := range rule.Labels {
+			for _, prLabel := range labels {
+				if ruleLabel == prLabel {
+					// Mark these notifiers as matched
+					for _, nType := range rule.Notifiers {
+						matchedNotifiers[nType] = true
+					}
+					matched = true
+					break
+				}
+			}
+			if matched {
+				break
+			}
+		}
+	}
+
+	if !matched {
+		// No labels matched, use default behavior
+		sendNotifications(title, body)
+		return
+	}
+
+	// Send to matched notifiers
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	globalNotifiersMu.RLock()
+	notifiers := make([]notifier.Notifier, len(globalNotifiers))
+	copy(notifiers, globalNotifiers)
+	globalNotifiersMu.RUnlock()
+
+	for _, n := range notifiers {
+		if matchedNotifiers[n.Type()] {
+			if err := n.Send(ctx, title, body); err != nil {
+				slog.Warn("notification send failed", "type", n.Type(), "error", err)
+			}
+		}
+	}
+}
+
+// SendNotificationsWithLabels sends notifications based on PR labels (exported)
+func SendNotificationsWithLabels(title, body string, labels []string) {
+	sendNotificationsWithLabels(title, body, labels)
 }
 
 func createNotifierFromNotifyConfig(nc models.NotifyConfig) notifier.Notifier {

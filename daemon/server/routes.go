@@ -79,10 +79,13 @@ func (s *Server) setupRoutes() {
 			prs.GET("", handlers.ListPRs)
 			prs.POST("/sync", handlers.ListPRs)
 			prs.GET("/:pr_id", handlers.GetPR)
+			prs.GET("/:pr_id/diff", handlers.GetPRDiff)
+
 			prsComment := prs.Group("")
 			prsComment.Use(RequirePermission("comment"))
 			{
 				prsComment.POST("/:pr_id/comment", handlers.CommentPR)
+				prsComment.POST("/:pr_id/comment-line", handlers.CommentPRLine)
 			}
 
 			prsApprove := prs.Group("")
@@ -117,6 +120,7 @@ func (s *Server) setupRoutes() {
 				prsMerge.POST("/:pr_id/rebase", handlers.RebaseSinglePR)
 				prsMerge.POST("/:pr_id/cherry-pick", handlers.CherryPickSinglePR)
 				prsMerge.POST("/:pr_id/schedule-merge", handlers.ScheduleMerge)
+				prsMerge.POST("/batch/rebase", handlers.BatchRebasePR)
 			}
 
 			prsRevert := prs.Group("")
@@ -206,6 +210,16 @@ func (s *Server) setupRoutes() {
 
 		protected.GET("/webhooks/health", webhook.WebhookHealthHandler)
 		cfgGroup.POST("/dry-run", handlers.DryRunConfig)
+
+		// Webhook configuration API
+		webhooksAdmin := protected.Group("/webhooks")
+		webhooksAdmin.Use(RequireRole("admin"))
+		{
+			webhooksAdmin.GET("", handlers.ListWebhooks)
+			webhooksAdmin.POST("", handlers.CreateWebhook)
+			webhooksAdmin.DELETE("/:index", handlers.DeleteWebhook)
+			webhooksAdmin.POST("/:index/test", handlers.TestWebhook)
+		}
 
 		protected.GET("/feed.xml", handlers.GetFeed)
 		feedAdmin := protected.Group("/feed")

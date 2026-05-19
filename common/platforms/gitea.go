@@ -536,6 +536,77 @@ func parseDiffFiles(diff string) []string {
 	return files
 }
 
+// parseDiffFileContents extracts file diffs with patch content from a raw diff
+func parseDiffFileContents(diff string) []models.DiffFile {
+	files := make([]models.DiffFile, 0)
+	lines := strings.Split(diff, "\n")
+	var currentFile *models.DiffFile
+	var patchLines []string
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "diff --git a/") {
+			// Save previous file
+			if currentFile != nil {
+				currentFile.Patch = strings.Join(patchLines, "\n")
+				files = append(files, *currentFile)
+			}
+			// Start new file
+			parts := strings.SplitN(line, " b/", 2)
+			if len(parts) == 2 {
+				filePath := strings.TrimPrefix(parts[0], "diff --git a/")
+				currentFile = &models.DiffFile{
+					Filename: filePath,
+					Status:   "modified",
+				}
+				patchLines = make([]string, 0)
+			}
+		} else if currentFile != nil {
+			if strings.HasPrefix(line, "new file") {
+				currentFile.Status = "added"
+			} else if strings.HasPrefix(line, "deleted file") {
+				currentFile.Status = "removed"
+			} else if strings.HasPrefix(line, "rename from") {
+				currentFile.Status = "renamed"
+			}
+			patchLines = append(patchLines, line)
+			if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+				currentFile.Additions++
+			} else if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
+				currentFile.Deletions++
+			}
+		}
+	}
+	// Save last file
+	if currentFile != nil {
+		currentFile.Patch = strings.Join(patchLines, "\n")
+		files = append(files, *currentFile)
+	}
+	return files
+}
+
+// GetPRDiff gets the diff content for each file in a PR
+func (c *GiteaClient) GetPRDiff(ctx context.Context, owner, repo string, number int) ([]models.DiffFile, error) {
+	diff, _, err := c.client.GetPullRequestDiff(owner, repo, int64(number))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR diff: %w", err)
+	}
+	return parseDiffFileContents(string(diff)), nil
+}
+
+// CommentPRLine posts an inline comment on a specific line of a PR diff
+func (c *GiteaClient) CommentPRLine(ctx context.Context, owner, repo string, number int, comment models.InlineComment) error {
+	// Gitea doesn't have a direct inline comment API like GitHub/GitLab
+	// We'll post a regular comment with file/line context
+	body := fmt.Sprintf("**%s:%d**\n\n%s", comment.FilePath, comment.Line, comment.Body)
+	_, _, err := c.client.CreateIssueComment(owner, repo, int64(number), gitea.CreateIssueCommentOption{
+		Body: body,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create comment: %w", err)
+	}
+	return nil
+}
+
 // NewForgejoClient creates a Forgejo client (reuses GiteaClient since Forgejo is a Gitea fork).
 func NewForgejoClient(baseURL, token string, webhookSecret string) *GiteaClient {
 	return NewGiteaClient(baseURL, token, webhookSecret)

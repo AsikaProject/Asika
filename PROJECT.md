@@ -209,6 +209,7 @@ Fingerprint tokens provide a lightweight HMAC-based device identity mechanism, s
 - **Escalation Worker** — Hourly scans open PRs, calculates priority from labels + file paths, sends tiered notifications: reviewer → team → tech_lead based on priority and time open.
 - **Feed Subscriber** — Subscribes to the event bus, feeds PR events (opened/merged/closed/approved/reopened) into the in-memory ring buffer for RSS generation.
 - **Cross-Platform Syncer** — On PR merge, syncs the merge commit to all configured target platforms (GitHub/GitLab/Gitea/Forgejo/Codeberg/Bitbucket/Gerrit). Uses cherry-pick strategy with retry (3 attempts, exponential backoff). Publishes `sync_completed`/`sync_failed` events. Sync failure triggers notifier alert.
+- **Auto-Rebase Worker** — Periodically checks for open PRs with conflicts and rebases them automatically. Configurable via `[auto_rebase]` section: `enabled`, `exclude_labels`, `exclude_authors`.
 
 ### Reviewer Auto-Assignment
 
@@ -390,6 +391,13 @@ All platform implementations live in `common/platforms/` and satisfy `PlatformCl
 | Bitbucket | `bitbucket.go` | **Pure HTTP, no SDK** |
 | Gerrit | `gerrit.go` | `andygrunwald/go-gerrit` — uses `context.Context` on all calls |
 
+PlatformClient interface methods:
+- PR operations: `GetPR`, `ListPRs`, `ApprovePR`, `MergePR`, `ClosePR`, `ReopenPR`, `CommentPR`, `AddLabel`, `RemoveLabel`, `CreateLabel`
+- Branch operations: `GetBranch`, `ListBranches`, `DeleteBranch`, `GetDefaultBranch`
+- CI/merge: `GetCIStatus`, `GetDefaultMergeMethod`, `HasMultipleMergeMethods`, `GetApprovals`
+- Diff/commits: `GetPRCommits`, `GetDiffFiles`, `GetPRDiff`, `CommentPRLine`
+- Other: `GetPRBranchInfo`, `RequestReview`, `RevertPR`, `GetPRBody`, `GetFileContent`, `VerifyWebhookSignature`
+
 ### Webhook Package
 
 `daemon/handlers/webhook/` is a sub-package:
@@ -408,13 +416,15 @@ All platform implementations live in `common/platforms/` and satisfy `PlatformCl
 ### PR Handlers
 
 `daemon/handlers/pr/` is a sub-package for PR operation handlers:
-- `pr.go` — Shared vars, `ListPRs`, `GetPR`, exported helpers
+- `pr.go` — Shared vars, `ListPRs`, `GetPR`, exported helpers; supports `search`, `has_conflict`, `sort_by`, `order` query params
 - `approve.go` — `ApprovePR`, `BatchApprovePR`
 - `close.go` — `ClosePR`, `MarkSpam`, `BatchClosePR`
 - `reopen.go` — `ReopenPR`
 - `comment.go` — `CommentPR`
+- `diff.go` — `GetPRDiff`, `CommentPRLine` (inline comments)
 - `label.go` — `BatchLabelPR`
 - `logs.go` — `GetLogs`, `ExportLogs`; uses `audit_log_index` bucket for indexed lookups by actor/repo_group/action/category; falls back to full scan when no filter specified
+- `batch_rebase.go` — `BatchRebasePR` for batch rebase operations
 
 ### Reviewer Package
 

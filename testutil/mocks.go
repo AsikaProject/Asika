@@ -135,6 +135,27 @@ func (m *MockPlatformClient) GetDiffFiles(ctx context.Context, owner, repo strin
 	return m.DiffFiles, m.Err
 }
 
+func (m *MockPlatformClient) GetPRDiff(ctx context.Context, owner, repo string, number int) ([]models.DiffFile, error) {
+	if m.Err != nil {
+		return nil, m.Err
+	}
+	diffFiles := make([]models.DiffFile, 0, len(m.DiffFiles))
+	for _, f := range m.DiffFiles {
+		diffFiles = append(diffFiles, models.DiffFile{
+			Filename:  f,
+			Status:    "modified",
+			Additions: 10,
+			Deletions: 5,
+			Patch:     "@@ -1,3 +1,3 @@\n-old\n+new",
+		})
+	}
+	return diffFiles, nil
+}
+
+func (m *MockPlatformClient) CommentPRLine(ctx context.Context, owner, repo string, number int, comment models.InlineComment) error {
+	return m.Err
+}
+
 func (m *MockPlatformClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
 	return m.Err
 }

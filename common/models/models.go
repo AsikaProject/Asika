@@ -277,11 +277,54 @@ type PRTemplate struct {
 	HasChecklist bool   `json:"has_checklist"`
 }
 
+// DiffFile represents a single file's diff in a PR
+type DiffFile struct {
+	Filename  string `json:"filename"`
+	Status    string `json:"status"` // added, removed, modified, renamed
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Patch     string `json:"patch"` // unified diff format
+}
+
+// InlineComment represents a comment on a specific line of a diff
+type InlineComment struct {
+	Body      string `json:"body" binding:"required"`
+	CommitSHA string `json:"commit_sha" binding:"required"`
+	FilePath  string `json:"file_path" binding:"required"`
+	Line      int    `json:"line" binding:"required"`
+}
+
 type FeedConfig struct {
 	Enabled    bool   `json:"enabled" toml:"enabled"`
 	Title      string `json:"title" toml:"title"`
 	MaxItems   int    `json:"max_items" toml:"max_items"`
 	PublicFeed bool   `json:"public_feed" toml:"public_feed"`
+}
+
+// WebhookFilter defines filters for webhook events
+type WebhookFilter struct {
+	IgnoreEvents  []string `toml:"ignore_events" json:"ignore_events"`   // Event types to ignore (e.g., "label_added", "milestone_changed")
+	IgnoreAuthors []string `toml:"ignore_authors" json:"ignore_authors"` // Bot authors to ignore (e.g., "renovate[bot]", "dependabot[bot]")
+	IgnoreLabels  []string `toml:"ignore_labels" json:"ignore_labels"`   // PRs with these labels will be ignored
+}
+
+// NotifyRule defines notification routing based on PR labels
+type NotifyRule struct {
+	Labels    []string `toml:"labels" json:"labels"`         // PR labels to match
+	Notifiers []string `toml:"notifiers" json:"notifiers"`   // Notifier types to use (e.g., ["smtp", "telegram"])
+	Always    bool     `toml:"always" json:"always"`         // If true, always notify regardless of other settings
+}
+
+// NotifyRulesConfig defines label-based notification routing
+type NotifyRulesConfig struct {
+	Rules []NotifyRule `toml:"rules" json:"rules"`
+}
+
+// AutoRebaseConfig defines automatic rebase settings
+type AutoRebaseConfig struct {
+	Enabled       bool     `toml:"enabled" json:"enabled"`               // Enable auto-rebase
+	ExcludeLabels []string `toml:"exclude_labels" json:"exclude_labels"` // PRs with these labels will not be auto-rebased
+	ExcludeAuthors []string `toml:"exclude_authors" json:"exclude_authors"` // PRs from these authors will not be auto-rebased
 }
 
 type Config struct {
@@ -314,6 +357,9 @@ type Config struct {
 	CloseReasons   CloseReasonsConfig `toml:"close_reasons" json:"close_reasons"`
 	QuietHours     QuietHoursConfig   `toml:"quiet_hours" json:"quiet_hours"`
 	Feed           FeedConfig         `toml:"feed" json:"feed"`
+	WebhookFilter  WebhookFilter      `toml:"webhook_filter" json:"webhook_filter"`
+	NotifyRules    NotifyRulesConfig  `toml:"notify_rules" json:"notify_rules"`
+	AutoRebase     AutoRebaseConfig   `toml:"auto_rebase" json:"auto_rebase"`
 }
 
 type ScheduleConfig struct {

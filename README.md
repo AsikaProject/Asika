@@ -201,8 +201,9 @@ asika login                    # Login and save token
 asika wizard                   # Interactive setup wizard
 
 # PR operations
-asika pr list [group]          # --state open|closed|merged, --platform github|gitlab|gitea|forgejo|codeberg|bitbucket
+asika pr list [group]          # --state open|closed|merged, --platform github|gitlab|gitea|forgejo|codeberg|bitbucket --search <keyword> --sort_by <field> --order asc|desc
 asika pr show [group] [id]     # PR details
+asika pr review [group] [id]   # Interactive PR review with diff viewing and inline comments
 asika pr approve [group] [id]  # Approve PR
 asika pr close [group] [id]    # Close PR
 asika pr reopen [group] [id]   # Reopen PR
@@ -215,6 +216,7 @@ asika pr cherry-pick [group] [id] <target-branch>  # Cherry-pick merged PR
 asika pr batch-approve [group] [id1,id2,...]  # Batch approve PRs
 asika pr batch-close [group] [id1,id2,...]    # Batch close PRs
 asika pr batch-label [group] [id1,id2,...] --label <name> [--color <hex>]
+asika pr batch-rebase [group] [id1,id2,...]   # Batch rebase PRs
 
 # Merge queue
 asika queue list [group]       # Show queue
@@ -255,6 +257,10 @@ asika sync retry [sync_id]     # Retry failed sync
 
 # Stats
 asika stats                    # Show DORA metrics and overview
+
+# Logs
+asika logs list                # List audit logs (--level, --category, --actor, --repo-group, --action, --since, --limit)
+asika logs export              # Export audit logs (--format json|csv, -o <file>)
 
 # Self-update
 asika self-update              # Update to latest version

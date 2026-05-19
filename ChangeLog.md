@@ -127,3 +127,23 @@
 
 - **Settings UI**: Expanded HTML settings page with comprehensive configuration options. Added collapsible sections for Server, Events/Webhook, Updates, Worker Pool, Quiet Hours, Feed, Reports, and Close Reasons. Enhanced Spam Detection with similar title trigger and threshold. Enhanced Stale PR with custom comment templates. All new settings support hot-reload via config API.
 
+- **CLI Interactive Review**: New `asika pr review <group> <id>` command for interactive PR review with diff viewing and inline comments. Supports file navigation, colored diff output, and line-specific comments.
+
+- **Webhook Event Filter**: New `[webhook_filter]` configuration section to ignore specific events, authors, or labels. Reduces notification noise from bots and dependency updates.
+
+- **Label-based Notification Routing**: New `[notify_rules]` configuration section to route notifications to specific channels based on PR labels. Supports priority-based notification for critical/security PRs.
+
+- **Auto-Rebase Worker**: New `[auto_rebase]` configuration section to automatically rebase open PRs with conflicts. Supports excluding specific labels and authors.
+
+- **Audit Log Export CLI**: New `asika logs list` and `asika logs export` commands for listing and exporting audit logs in JSON/CSV format with various filters.
+
+- **Enhanced PR List API**: Added `search`, `has_conflict`, `sort_by`, `order` query parameters to `GET /api/v1/repos/:repo_group/prs` endpoint.
+
+- **Webhook Configuration API**: New `GET/POST/DELETE /api/v1/webhooks` endpoints for managing webhook configurations via API.
+
+- **Batch Rebase API**: New `POST /api/v1/repos/:repo_group/prs/batch/rebase` endpoint for batch rebase operations.
+
+- **PR Diff API**: New `GET /api/v1/repos/:repo_group/prs/:pr_id/diff` endpoint for retrieving PR diff content.
+
+- **Inline Comment API**: New `POST /api/v1/repos/:repo_group/prs/:pr_id/comment-line` endpoint for posting inline comments on specific lines.
+

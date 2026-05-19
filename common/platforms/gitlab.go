@@ -543,6 +543,60 @@ func (c *GitLabClient) GetDiffFiles(ctx context.Context, owner, repo string, num
 	return result, nil
 }
 
+// GetPRDiff gets the diff content for each file in a MR
+func (c *GitLabClient) GetPRDiff(ctx context.Context, owner, repo string, number int) ([]models.DiffFile, error) {
+	project := owner + "/" + repo
+	diffs, _, err := c.client.MergeRequests.ListMergeRequestDiffs(project, int64(number), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get MR diffs: %w", err)
+	}
+
+	diffFiles := make([]models.DiffFile, 0, len(diffs))
+	for _, d := range diffs {
+		status := "modified"
+		if d.NewFile {
+			status = "added"
+		} else if d.DeletedFile {
+			status = "removed"
+		} else if d.RenamedFile {
+			status = "renamed"
+		}
+		diffFiles = append(diffFiles, models.DiffFile{
+			Filename:  d.NewPath,
+			Status:    status,
+			Additions: 0, // GitLab doesn't provide per-file stats in diff API
+			Deletions: 0,
+			Patch:     d.Diff,
+		})
+	}
+	return diffFiles, nil
+}
+
+// CommentPRLine posts an inline comment on a specific line of a MR diff
+func (c *GitLabClient) CommentPRLine(ctx context.Context, owner, repo string, number int, comment models.InlineComment) error {
+	project := owner + "/" + repo
+	lineNum := int64(comment.Line)
+	position := &gitlab.PositionOptions{
+		BaseSHA:      &comment.CommitSHA,
+		HeadSHA:      &comment.CommitSHA,
+		StartSHA:     &comment.CommitSHA,
+		NewPath:      &comment.FilePath,
+		OldPath:      &comment.FilePath,
+		PositionType: gitlab.Ptr("text"),
+		NewLine:      &lineNum,
+	}
+	opts := &gitlab.CreateMergeRequestDiscussionOptions{
+		Body:     &comment.Body,
+		CommitID: &comment.CommitSHA,
+		Position: position,
+	}
+	_, _, err := c.client.Discussions.CreateMergeRequestDiscussion(project, int64(number), opts)
+	if err != nil {
+		return fmt.Errorf("failed to create inline comment: %w", err)
+	}
+	return nil
+}
+
 // RequestReview requests reviewers for a PR on GitLab using a discussion note.
 func (c *GitLabClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
 	note := fmt.Sprintf("🔍 Review requested from: %s", strings.Join(reviewers, ", "))

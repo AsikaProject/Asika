@@ -401,6 +401,49 @@ func (c *GerritClient) GetDiffFiles(ctx context.Context, owner, repo string, num
 	return result, nil
 }
 
+// GetPRDiff gets the diff content for each file in a change
+func (c *GerritClient) GetPRDiff(ctx context.Context, owner, repo string, number int) ([]models.DiffFile, error) {
+	changeID := fmt.Sprintf("%s~%d", owner, number)
+	files, _, err := c.client.Changes.ListFiles(ctx, changeID, "current", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list gerrit diff files: %w", err)
+	}
+	var diffFiles []models.DiffFile
+	for name, info := range files {
+		if name == "/COMMIT_MSG" {
+			continue
+		}
+		diffFiles = append(diffFiles, models.DiffFile{
+			Filename:  name,
+			Status:    "modified",
+			Additions: info.LinesInserted,
+			Deletions: info.LinesDeleted,
+			Patch:     "", // Gerrit SDK doesn't provide patch content directly
+		})
+	}
+	return diffFiles, nil
+}
+
+// CommentPRLine posts an inline comment on a specific line of a change
+func (c *GerritClient) CommentPRLine(ctx context.Context, owner, repo string, number int, comment models.InlineComment) error {
+	changeID := fmt.Sprintf("%s~%d", owner, number)
+	reviewInput := &gerrit.ReviewInput{
+		Comments: map[string][]gerrit.CommentInput{
+			comment.FilePath: {
+				{
+					Line:    comment.Line,
+					Message: comment.Body,
+				},
+			},
+		},
+	}
+	_, _, err := c.client.Changes.SetReview(ctx, changeID, "current", reviewInput)
+	if err != nil {
+		return fmt.Errorf("failed to create inline comment: %w", err)
+	}
+	return nil
+}
+
 func (c *GerritClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
 	changeID := fmt.Sprintf("%s~%d", owner, number)
 	change, _, err := c.client.Changes.GetChange(ctx, changeID, nil)

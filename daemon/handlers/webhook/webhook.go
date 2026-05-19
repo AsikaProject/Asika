@@ -170,6 +170,39 @@ func ProcessWebhook(platform, repoGroup string, body []byte) (eventType string, 
 	if err != nil {
 		return
 	}
+
+	// Apply webhook filters
+	cfg := config.Current()
+	if cfg != nil && pr != nil {
+		filter := cfg.WebhookFilter
+
+		// Check if event type should be ignored
+		for _, ignoreEvent := range filter.IgnoreEvents {
+			if eventType == ignoreEvent {
+				slog.Info("webhook event filtered by ignore_events", "event", eventType, "repo_group", repoGroup)
+				return "", nil, nil
+			}
+		}
+
+		// Check if author should be ignored
+		for _, ignoreAuthor := range filter.IgnoreAuthors {
+			if pr.Author == ignoreAuthor {
+				slog.Info("webhook event filtered by ignore_authors", "author", pr.Author, "repo_group", repoGroup)
+				return "", nil, nil
+			}
+		}
+
+		// Check if PR has an ignored label
+		for _, ignoreLabel := range filter.IgnoreLabels {
+			for _, label := range pr.Labels {
+				if label == ignoreLabel {
+					slog.Info("webhook event filtered by ignore_labels", "label", label, "repo_group", repoGroup)
+					return "", nil, nil
+				}
+			}
+		}
+	}
+
 	if eventType != "" && pr != nil {
 		var payload interface{}
 		if events.EventType(eventType) == events.EventPRComment {

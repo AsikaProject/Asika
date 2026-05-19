@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -125,6 +126,10 @@ func ListPRs(c *gin.Context) {
 	label := c.Query("label")
 	createdAfter := c.Query("created_after")
 	updatedAfter := c.Query("updated_after")
+	search := c.Query("search")
+	hasConflictStr := c.Query("has_conflict")
+	sortBy := c.Query("sort_by")
+	order := c.Query("order")
 	pageStr := c.Query("page")
 	perPageStr := c.Query("per_page")
 	refresh := c.Query("refresh")
@@ -194,12 +199,50 @@ func ListPRs(c *gin.Context) {
 				}
 			}
 		}
+		if search != "" {
+			searchLower := strings.ToLower(search)
+			if !strings.Contains(strings.ToLower(pr.Title), searchLower) &&
+				!strings.Contains(strings.ToLower(pr.Author), searchLower) &&
+				!strings.Contains(strings.ToLower(pr.Body), searchLower) {
+				return nil
+			}
+		}
+		if hasConflictStr != "" {
+			hasConflict := hasConflictStr == "true"
+			if pr.HasConflict != hasConflict {
+				return nil
+			}
+		}
 		records = append(records, pr)
 		return nil
 	})
 
+	// Sort records
+	if sortBy == "" {
+		sortBy = "pr_number"
+	}
+	if order == "" {
+		order = "desc"
+	}
+
 	sort.Slice(records, func(i, j int) bool {
-		return records[i].PRNumber > records[j].PRNumber
+		var less bool
+		switch sortBy {
+		case "created_at":
+			less = records[i].CreatedAt.Before(records[j].CreatedAt)
+		case "updated_at":
+			less = records[i].UpdatedAt.Before(records[j].UpdatedAt)
+		case "author":
+			less = records[i].Author < records[j].Author
+		case "title":
+			less = records[i].Title < records[j].Title
+		default: // pr_number
+			less = records[i].PRNumber < records[j].PRNumber
+		}
+		if order == "desc" {
+			return !less
+		}
+		return less
 	})
 
 	page := 1

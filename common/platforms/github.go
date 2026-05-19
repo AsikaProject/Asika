@@ -481,6 +481,47 @@ func (c *GitHubClient) GetDiffFiles(ctx context.Context, owner, repo string, num
 	return files, nil
 }
 
+// GetPRDiff gets the diff content for each file in a PR
+func (c *GitHubClient) GetPRDiff(ctx context.Context, owner, repo string, number int) ([]models.DiffFile, error) {
+	opts := &github.ListOptions{PerPage: 100}
+	var diffFiles []models.DiffFile
+	for {
+		commitFiles, resp, err := c.client.PullRequests.ListFiles(ctx, owner, repo, number, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list PR files: %w", err)
+		}
+		for _, f := range commitFiles {
+			diffFiles = append(diffFiles, models.DiffFile{
+				Filename:  f.GetFilename(),
+				Status:    f.GetStatus(),
+				Additions: f.GetAdditions(),
+				Deletions: f.GetDeletions(),
+				Patch:     f.GetPatch(),
+			})
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return diffFiles, nil
+}
+
+// CommentPRLine posts an inline comment on a specific line of a PR diff
+func (c *GitHubClient) CommentPRLine(ctx context.Context, owner, repo string, number int, comment models.InlineComment) error {
+	reviewComment := &github.PullRequestComment{
+		Body:     github.Ptr(comment.Body),
+		CommitID: github.Ptr(comment.CommitSHA),
+		Path:     github.Ptr(comment.FilePath),
+		Line:     github.Ptr(comment.Line),
+	}
+	_, _, err := c.client.PullRequests.CreateComment(ctx, owner, repo, number, reviewComment)
+	if err != nil {
+		return fmt.Errorf("failed to create inline comment: %w", err)
+	}
+	return nil
+}
+
 // RequestReview requests reviewers for a PR on GitHub.
 func (c *GitHubClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
 	_, _, err := c.client.PullRequests.RequestReviewers(ctx, owner, repo, number, github.ReviewersRequest{

@@ -55,6 +55,10 @@ type PlatformClient interface {
 	// PR commits & diff files
 	GetPRCommits(ctx context.Context, owner, repo string, number int) ([]string, error)
 	GetDiffFiles(ctx context.Context, owner, repo string, number int) ([]string, error)
+	GetPRDiff(ctx context.Context, owner, repo string, number int) ([]models.DiffFile, error)
+
+	// Inline comments
+	CommentPRLine(ctx context.Context, owner, repo string, number int, comment models.InlineComment) error
 
 	// PR branch info for rebase
 	GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error)

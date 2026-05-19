@@ -86,6 +86,36 @@ trigger_on_title_kw        = ["spam", "fix typo", "readme update"]
 [close_reasons]
 reasons = ["no longer needed", "duplicate", "invalid", "won't fix"]
 
+# Webhook event filters (optional)
+# Filter out specific webhook events to reduce noise
+# [webhook_filter]
+# ignore_events  = ["label_added", "milestone_changed"]
+# ignore_authors = ["renovate[bot]", "dependabot[bot]"]
+# ignore_labels  = ["dependencies"]
+
+# Notification rules by label (optional)
+# Route notifications to specific channels based on PR labels
+# [notify_rules]
+# [[notify_rules.rules]]
+# labels    = ["critical", "security"]
+# notifiers = ["smtp", "telegram", "feishu"]
+# always    = true
+#
+# [[notify_rules.rules]]
+# labels    = ["documentation"]
+# notifiers = ["smtp"]
+#
+# [[notify_rules.rules]]
+# labels    = ["dependencies"]
+# notifiers = []  # Suppress notifications
+
+# Auto-rebase (optional)
+# Automatically rebase open PRs with conflicts
+# [auto_rebase]
+# enabled        = false
+# exclude_labels = ["long-term", "do-not-rebase"]
+# exclude_authors = ["renovate[bot]"]
+
 # Quiet hours (optional)
 # During quiet hours, notifications are suppressed or routed to escalation contacts.
 # [quiet_hours]

@@ -465,6 +465,48 @@ func (c *BitbucketClient) GetDiffFiles(ctx context.Context, owner, repo string, 
 	return files, nil
 }
 
+// GetPRDiff gets the diff content for each file in a PR
+// Bitbucket SDK doesn't expose a direct patch API, so we return file stats only
+func (c *BitbucketClient) GetPRDiff(ctx context.Context, owner, repo string, number int) ([]models.DiffFile, error) {
+	opts := &bitbucket.DiffStatOptions{
+		Owner:             owner,
+		RepoSlug:          repo,
+		Spec:              fmt.Sprintf("..%d", number),
+		FromPullRequestID: number,
+	}
+	result, err := c.client.Repositories.Diff.GetDiffStat(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR diff: %w", err)
+	}
+	var diffFiles []models.DiffFile
+	for _, ds := range result.DiffStats {
+		filename := ""
+		if nw, ok := ds.New["path"].(string); ok && nw != "" {
+			filename = nw
+		} else if old, ok := ds.Old["path"].(string); ok {
+			filename = old
+		}
+		if filename == "" {
+			continue
+		}
+		diffFiles = append(diffFiles, models.DiffFile{
+			Filename:  filename,
+			Status:    ds.Status,
+			Additions: ds.LinedAdded, // Note: SDK has typo "LinedAdded" not "LinesAdded"
+			Deletions: ds.LinesRemoved,
+			Patch:     "", // Bitbucket SDK doesn't provide patch content directly
+		})
+	}
+	return diffFiles, nil
+}
+
+// CommentPRLine posts an inline comment on a specific line of a PR diff
+// Bitbucket doesn't support inline comments via SDK, so we post a regular comment with context
+func (c *BitbucketClient) CommentPRLine(ctx context.Context, owner, repo string, number int, comment models.InlineComment) error {
+	body := fmt.Sprintf("**%s:%d**\n\n%s", comment.FilePath, comment.Line, comment.Body)
+	return c.CommentPR(ctx, owner, repo, number, body)
+}
+
 func (c *BitbucketClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
 	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
 	result, err := c.client.Repositories.PullRequests.Get(opts)
