@@ -2,6 +2,10 @@
 
 ## v20260517DEV > v20260617DEV
 
+### UX Improvements
+
+- **Feat**: Rewrote `asika wizard` with grouped selection, visible options, and config summary. Platforms and notification channels now use numbered multi-select instead of prompting every option. Added server address confirmation, initialization status check, risk disclaimer, and pre-write summary review.
+
 ### Bug Fixes & Stability
 
 - **Fix**: GitHub/Bitbucket `GetCIStatus` swallowed API errors, returning `"none", nil` — PRs could merge without CI verification when the CI API was temporarily unavailable.
