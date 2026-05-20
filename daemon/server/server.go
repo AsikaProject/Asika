@@ -76,7 +76,7 @@ func initCheckMiddleware() gin.HandlerFunc {
 		path := c.Request.URL.Path
 
 		skip := false
-		skipPaths := []string{"/api/v1/auth", "/api/v1/wizard", "/api/v1/feishu", "/login", "/wizard", "/health", "/metrics"}
+		skipPaths := []string{"/api/v1/auth", "/api/v1/wizard", "/api/v1/locale", "/api/v1/i18n", "/api/v1/feishu", "/login", "/wizard", "/health", "/metrics"}
 		for _, p := range skipPaths {
 			if strings.HasPrefix(path, p) {
 				skip = true

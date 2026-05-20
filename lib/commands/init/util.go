@@ -7,8 +7,13 @@ import (
 	"strings"
 )
 
+func clearScreen() {
+	fmt.Print("\033[2J\033[H")
+}
+
 func StepHeader(num int, title string) {
-	fmt.Printf("\n─── Step %d: %s ───\n\n", num, title)
+	clearScreen()
+	fmt.Printf("─── Step %d: %s ───\n\n", num, title)
 }
 
 func Prompt(reader *bufio.Reader, label, defaultVal string) string {

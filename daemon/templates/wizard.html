@@ -5,46 +5,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0066cc">
-    <title><span data-i18n="wizard.title">{{t "wizard.title"}}</span> - Asika</title>
+    <title>{{t "wizard.title"}} - Asika</title>
     <style>
+        :root { --bg:#f5f5f5; --card-bg:#fff; --text:#333; --text-secondary:#666; --primary:#0066cc; --primary-hover:#0052a3; --success:#28a745; --success-hover:#218838; --danger:#dc3545; --secondary:#6c757d; --secondary-hover:#545b62; --border:#ddd; --info-bg:#d1ecf1; --info-text:#0c5460; --error-bg:#f8d7da; --success-bg:#d4edda; --success-text:#155724; --dot-bg:#ddd; --dot-text:#666; }
+        [data-theme="dark"] { --bg:#0d1117; --card-bg:#161b22; --text:#e6edf3; --text-secondary:#8b949e; --primary:#4da3ff; --primary-hover:#6db3ff; --success:#3dd75c; --success-hover:#2ea043; --danger:#ff6b6b; --secondary:#6e7681; --secondary-hover:#484f58; --border:#30363d; --info-bg:#1a3a5c; --info-text:#79c0ff; --error-bg:#3d1a1a; --success-bg:#1a3d1a; --success-text:#3dd75c; --dot-bg:#30363d; --dot-text:#8b949e; }
         * { box-sizing: border-box; margin:0; padding:0; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #f5f5f5; }
-        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { margin-bottom: 10px; color: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: var(--bg); color: var(--text); transition: background 0.2s, color 0.2s; }
+        .card { background: var(--card-bg); padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { margin-bottom: 10px; color: var(--text); }
+        h3 { margin: 20px 0 10px 0; font-size: 16px; color: var(--text); }
         .step-indicator { display: flex; justify-content: space-between; margin-bottom: 30px; }
-        .step-dot { width: 30px; height: 30px; border-radius: 50%; background: #ddd; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #666; }
-        .step-dot.active { background: #0066cc; color: white; }
-        .step-dot.done { background: #28a745; color: white; }
+        .step-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--dot-bg); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--dot-text); }
+        .step-dot.active { background: var(--primary); color: white; }
+        .step-dot.done { background: var(--success); color: white; }
         .step-content { display: none; }
         .step-content.active { display: block; }
-        label { display: block; margin: 15px 0 5px; font-weight: 500; color: #333; font-size: 14px; }
-        input, select { display: block; width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
-        input:focus, select:focus { outline: none; border-color: #0066cc; }
-        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
-        .btn-primary { background: #0066cc; color: white; }
-        .btn-primary:hover { background: #0052a3; }
-        .btn-secondary { background: #6c757d; color: white; }
-        .btn-secondary:hover { background: #545b62; }
-        .btn-success { background: #28a745; color: white; }
-        .btn-success:hover { background: #218838; }
+        label { display: block; margin: 15px 0 5px; font-weight: 500; color: var(--text); font-size: 14px; }
+        input, select { display: block; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--card-bg); color: var(--text); font-family: inherit; }
+        input:focus, select:focus { outline: none; border-color: var(--primary); }
+        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-family: inherit; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--secondary); color: white; }
+        .btn-secondary:hover { background: var(--secondary-hover); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: var(--success-hover); }
         .nav-buttons { display: flex; justify-content: space-between; margin-top: 30px; }
-        .error { color: #dc3545; padding: 10px; background: #f8d7da; border-radius: 4px; margin-top: 15px; display: none; }
-        .success { color: #155724; padding: 10px; background: #d4edda; border-radius: 4px; margin-top: 15px; display: none; }
-        .info { color: #0c5460; padding: 10px; background: #d1ecf1; border-radius: 4px; margin: 15px 0; font-size: 13px; }
-        h3 { margin: 20px 0 10px 0; font-size: 16px; color: #333; }
+        .error { color: var(--danger); padding: 10px; background: var(--error-bg); border-radius: 4px; margin-top: 15px; display: none; }
+        .success { color: var(--success-text); padding: 10px; background: var(--success-bg); border-radius: 4px; margin-top: 15px; display: none; }
+        .info { color: var(--info-text); padding: 10px; background: var(--info-bg); border-radius: 4px; margin: 15px 0; font-size: 13px; }
         .form-group { margin-bottom: 15px; }
+        .header-actions { display:flex; justify-content:flex-end; align-items:center; gap:8px; margin-bottom:8px; }
+        .theme-toggle { background:none; border:none; cursor:pointer; padding:4px 8px; font-size:16px; color:var(--text); border-radius:4px; line-height:1; }
+        .theme-toggle:hover { background:var(--border); }
     </style>
 </head>
 <body>
     <div class="card">
-        <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
-            <select id="langSelect" onchange="setLocale(this.value)" style="padding:4px 8px; font-size:13px; border:1px solid #ddd; border-radius:4px; background:#fff; cursor:pointer;">
+        <div class="header-actions">
+            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme" title="Toggle dark mode"><span id="themeIcon">🌙</span></button>
+            <select id="langSelect" onchange="setLocale(this.value)" style="padding:4px 8px; font-size:13px; border:1px solid var(--border); border-radius:4px; background:var(--card-bg); color:var(--text); cursor:pointer;">
                 <option value="en">English</option>
                 <option value="zh">中文</option>
             </select>
         </div>
-        <h1><span data-i18n="wizard.title">{{t "wizard.title"}}</span></h1>
-        <p style="color: #666; margin-bottom: 20px;"><span data-i18n="wizard.subtitle">{{t "wizard.subtitle"}}</span></p>
+        <h1>{{t "wizard.title"}}</h1>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">{{t "wizard.subtitle"}}</p>
 
         <div class="step-indicator">
             <div class="step-dot active" id="dot1">1</div>
@@ -61,7 +67,7 @@
 
         <!-- Step 1: Mode Selection -->
         <div class="step-content active" id="step1">
-            <h3><span data-i18n="wizard.step">{{t "wizard.step"}}</span> 1: Operation Mode</h3>
+            <h3>{{t "wizard.step"}} 1: Operation Mode</h3>
             <div class="form-group">
                 <label>Select mode:</label>
                 <select id="mode" onchange="onModeChange()">
@@ -75,13 +81,13 @@
             </div>
             <div class="nav-buttons">
                 <div></div>
-                <button class="btn btn-primary" onclick="nextStep(1)"><span data-i18n="wizard.next">{{t "wizard.next"}}</span></button>
+                <button class="btn btn-primary" onclick="nextStep(1)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 2: Database -->
         <div class="step-content" id="step2">
-            <h3><span data-i18n="wizard.step">{{t "wizard.step"}}</span> 2: Database Configuration</h3>
+            <h3>{{t "wizard.step"}} 2: Database Configuration</h3>
             <div class="form-group">
                 <label>Database Type:</label>
                 <select id="dbtype" onchange="onDbTypeChange()">
@@ -106,14 +112,14 @@
                 </div>
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(2)"><span data-i18n="common.back">{{t "common.back"}}</span></button>
-                <button class="btn btn-primary" onclick="nextStep(2)"><span data-i18n="wizard.next">{{t "wizard.next"}}</span></button>
+                <button class="btn btn-secondary" onclick="prevStep(2)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="nextStep(2)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 3: Platform Tokens -->
         <div class="step-content" id="step3">
-            <h3><span data-i18n="wizard.step">{{t "wizard.step"}}</span> 3: Platform Tokens</h3>
+            <h3>{{t "wizard.step"}} 3: Platform Tokens</h3>
             <div class="form-group">
                 <label>GitHub Token (optional):</label>
                 <input type="password" id="github_token" placeholder="ghp_xxxx or leave empty">
@@ -153,14 +159,14 @@
                 </div>
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(3)"><span data-i18n="common.back">{{t "common.back"}}</span></button>
-                <button class="btn btn-primary" onclick="nextStep(3)"><span data-i18n="wizard.next">{{t "wizard.next"}}</span></button>
+                <button class="btn btn-secondary" onclick="prevStep(3)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="nextStep(3)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 4: Repository Groups -->
         <div class="step-content" id="step4">
-            <h3><span data-i18n="wizard.step">{{t "wizard.step"}}</span> 4: Repository Group</h3>
+            <h3>{{t "wizard.step"}} 4: Repository Group</h3>
             <div class="form-group">
                 <label>Group Name:</label>
                 <input type="text" id="group_name" value="default">
@@ -210,14 +216,14 @@
                 <input type="text" id="default_branch" value="main">
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(4)"><span data-i18n="common.back">{{t "common.back"}}</span></button>
-                <button class="btn btn-primary" onclick="nextStep(4)"><span data-i18n="wizard.next">{{t "wizard.next"}}</span></button>
+                <button class="btn btn-secondary" onclick="prevStep(4)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="nextStep(4)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 5: Notification Channels -->
         <div class="step-content" id="step5">
-            <h3><span data-i18n="wizard.step">{{t "wizard.step"}}</span> 5: Notification Channels</h3>
+            <h3>{{t "wizard.step"}} 5: Notification Channels</h3>
             <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Configure how Asika sends alerts. All fields optional.</p>
 
             <div class="form-group">
@@ -360,14 +366,14 @@
             </div>
 
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(5)"><span data-i18n="common.back">{{t "common.back"}}</span></button>
-                <button class="btn btn-primary" onclick="nextStep(5)"><span data-i18n="wizard.next">{{t "wizard.next"}}</span></button>
+                <button class="btn btn-secondary" onclick="prevStep(5)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="nextStep(5)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 6: Admin Account -->
         <div class="step-content" id="step6">
-            <h3><span data-i18n="wizard.step">{{t "wizard.step"}}</span> 6: Admin Account & Server</h3>
+            <h3>{{t "wizard.step"}} 6: Admin Account & Server</h3>
             <div class="form-group">
                 <label>JWT Secret (leave empty to auto-generate):</label>
                 <input type="text" id="jwt_secret" placeholder="auto-generated if empty">
@@ -386,14 +392,14 @@
                 <input type="password" id="admin_pass" placeholder="set a strong password">
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(6)"><span data-i18n="common.back">{{t "common.back"}}</span></button>
-                <button class="btn btn-success" onclick="nextStep(6)"><span data-i18n="wizard.next">{{t "wizard.next"}}</span></button>
+                <button class="btn btn-secondary" onclick="prevStep(6)">{{t "common.back"}}</button>
+                <button class="btn btn-success" onclick="nextStep(6)">{{t "wizard.next"}}</button>
             </div>
         </div>
 
         <!-- Step 7: Self-Updates -->
         <div class="step-content" id="step7">
-            <h3><span data-i18n="wizard.step">{{t "wizard.step"}}</span> 7: Self-Update Settings</h3>
+            <h3>{{t "wizard.step"}} 7: Self-Update Settings</h3>
             <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Configure automatic version checking.</p>
 
             <div class="form-group">
@@ -420,23 +426,45 @@
                 </label>
             </div>
             <div class="nav-buttons">
-                <button class="btn btn-secondary" onclick="prevStep(7)"><span data-i18n="common.back">{{t "common.back"}}</span></button>
-                <button class="btn btn-primary" onclick="submitWizard()"><span data-i18n="wizard.complete">{{t "wizard.complete"}}</span></button>
+                <button class="btn btn-secondary" onclick="prevStep(7)">{{t "common.back"}}</button>
+                <button class="btn btn-primary" onclick="submitWizard()">{{t "wizard.complete"}}</button>
             </div>
         </div>
 
         <!-- Complete -->
         <div class="step-content" id="stepComplete">
-            <h3><span data-i18n="wizard.setup_complete">{{t "wizard.setup_complete"}}</span></h3>
-            <div class="success"><span data-i18n="wizard.setup_complete_desc">{{t "wizard.setup_complete_desc"}}</span></div>
-            <p style="margin-top: 15px;">You can now <a href="/login" style="color: #0066cc;"><span data-i18n="wizard.go_to_login">{{t "wizard.go_to_login"}}</span></a> with your admin credentials.</p>
+            <h3>{{t "wizard.setup_complete"}}</h3>
+            <div class="success">{{t "wizard.setup_complete_desc"}}</div>
+            <p style="margin-top: 15px;">You can now <a href="/login" style="color: #0066cc;">{{t "wizard.go_to_login"}}</a> with your admin credentials.</p>
             <div class="nav-buttons">
-                <button class="btn btn-primary" onclick="window.location='/login'"><span data-i18n="wizard.go_to_login">{{t "wizard.go_to_login"}}</span></button>
+                <button class="btn btn-primary" onclick="window.location='/login'">{{t "wizard.go_to_login"}}</button>
             </div>
         </div>
     </div>
 
     <script>
+        function initTheme() {
+            var saved = localStorage.getItem('asika_theme');
+            if (saved) {
+                document.documentElement.setAttribute('data-theme', saved);
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+            updateThemeIcon();
+        }
+        function toggleTheme() {
+            var current = document.documentElement.getAttribute('data-theme');
+            var next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('asika_theme', next);
+            updateThemeIcon();
+        }
+        function updateThemeIcon() {
+            var el = document.getElementById('themeIcon');
+            if (el) el.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+        }
+        initTheme();
+
         function setLocale(locale) {
             document.cookie = 'asika_lang=' + encodeURIComponent(locale) + ';path=/;max-age=' + (86400*365);
             fetch('/api/v1/locale', {

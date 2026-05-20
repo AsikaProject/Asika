@@ -390,6 +390,6 @@ func SetLocale(c *gin.Context) {
 		return
 	}
 	i18n.SetLocale(req.Locale)
-	c.SetCookie("asika_lang", req.Locale, 86400*365, "/", "", true, true)
+	c.SetCookie("asika_lang", req.Locale, 86400*365, "/", "", false, false)
 	c.JSON(http.StatusOK, gin.H{"message": "locale set", "locale": req.Locale})
 }
