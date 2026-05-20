@@ -147,10 +147,11 @@ Route-specific middleware:
 
 - `RequireRole(role)` — Checks role hierarchy (admin > operator > viewer)
 - `RequireAnyRole(roles...)` — Checks if user has any of the listed roles
-- `RequirePermission(field)` — Checks granular permission (can_approve, can_merge, can_close, can_reopen, can_spam, can_manage_queue, can_revert)
+- `RequirePermission(field)` — Checks granular permission (can_approve, can_merge, can_close, can_reopen, can_spam, can_manage_queue, can_revert, can_comment, can_label)
 - `RequireRepoGroupAccess()` — Checks user's allowed repo groups against URL parameter; also supports API key `AllowedRepoGroups`
 - `RequireRepoAccess()` — Finer-grained check: resolves the actual `owner/repo` from the PR record and checks against user's `AllowedRepos` list
-- `RequireSpaceAccess()` — Checks if the user is a member of the team space that owns the requested repo group; resolves space ownership via `TeamSpace.RepoGroups`
+- `RequireSpaceAccess()` — Checks if the user is a member of the team space that owns the requested repo group; resolves space ownership via `TeamSpace.RepoGroups`. DB errors return 500 (fail-closed).
+- `RequireSelfOrAdmin()` — Ensures the current user matches the `:username` path param or is admin. Used on notification prefs and similar user-scoped routes.
 
 ### Permission Model
 
@@ -166,6 +167,8 @@ Three-tier role hierarchy with six granular permissions:
 | Mark Spam | ❌ | Configurable | ✅ |
 | Manage Queue | ❌ | Configurable | ✅ |
 | Revert PRs | ❌ | Configurable | ✅ |
+| Comment PRs | ❌ | Configurable | ✅ |
+| Label PRs | ❌ | Configurable | ✅ |
 | User Management | ❌ | ❌ | ✅ |
 | Config Management | ❌ | ❌ | ✅ |
 
@@ -238,7 +241,7 @@ Per-user notification preferences are stored in `notification_prefs` bucket (key
 The `sendNotificationInternal` function checks `isNotifierEnabledForAnyUser()` before sending, which iterates all user preferences to determine if at least one user wants the notification.
 
 Management endpoints:
-- `GET/PUT /api/v1/users/:username/notifications` — Get/update preferences
+- `GET/PUT /api/v1/users/:username/notifications` — Get/update preferences (requires self or admin)
 - `GET /notifications` — WebUI preference management page
 
 ### RSS Feed
@@ -331,9 +334,9 @@ Buckets (33 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
 | `prs` | `{repoGroup}#{prID}` | PRRecord (JSON) |
-| `pr_index_by_id` | `{prID}` → index | → `prs` bucket key |
+| `pr_index_by_id` | `{repoGroup}:{prID}` → index | → `prs` bucket key |
 | `pr_index_by_rg_num` | `{repoGroup}:{prNumber}` → index | → `prs` bucket key |
-| `queue_items` | `{repoGroup}#{prID}` | QueueItem (JSON) |
+| `queue_items` | `{repoGroup}#{prID}` | QueueItem (JSON); includes `RetryCount`, `NextRetryAt` for backoff |
 | `serial_queue` | `{repoGroup}#{prID}` | QueueItem (JSON); serial validation queue with `ValidationStatus` field |
 | `users` | `{username}` | User (JSON) |
 | `api_keys` | `{keyID}` | APIKey (JSON) |
@@ -341,7 +344,7 @@ Buckets (33 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `audit_log_index` | `actor:{actor}:{logKey}`, `repo_group:{rg}:{logKey}`, `action:{action}:{logKey}`, `category:{cat}:{logKey}`, `pr:{rg}:{prNumber}:{logKey}` | Secondary index (JSON); enables efficient audit log filtering by actor, repo group, action, category, and PR number |
 | `sync_history` | `{syncRecordID}` | SyncRecord (JSON) |
 | `config` | `{key}` | Config value (JSON); also stores `__migration_version__`, `__config_version__`, label rules |
-| `config_history` | `{zeroPadded6DigitVersion}` | ConfigSnapshot (JSON); max 20 snapshots, rollback-capable |
+| `config_history` | `{zeroPadded6DigitVersion}` | ConfigSnapshot (JSON); max 20 snapshots, rollback-capable; stores `{config, created_at}` wrapper |
 | `webhook_retries` | `{retryID}` | WebhookRetry (JSON) |
 | `webhook_dedup` | `{deliveryID}` | Processed timestamp (RFC3339); prevents duplicate webhook processing |
 | `repos` | — | Repository records (used only during cross-engine migration) |

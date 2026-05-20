@@ -27,6 +27,8 @@ func TestGetNotificationPrefs_Authenticated(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Request, _ = http.NewRequest("GET", "/api/v1/users/alice/notifications", nil)
 	setParam(c, "username", "alice")
+	c.Set("username", "alice")
+	c.Set("role", "admin")
 
 	GetNotificationPrefs(c)
 

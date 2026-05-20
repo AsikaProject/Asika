@@ -138,8 +138,8 @@ func (s *Syncer) getRepoURL(platform, repo string) (string, error) {
 func (s *Syncer) acquireLock(repoGroup string) bool {
 	acquired, err := db.AcquireSyncLock(repoGroup, s.holderID, 10*time.Minute)
 	if err != nil {
-		slog.Warn("sync lock: acquire failed, proceeding without lock", "repo_group", repoGroup, "error", err)
-		return true
+		slog.Error("sync lock: acquire failed, aborting sync", "repo_group", repoGroup, "error", err)
+		return false
 	}
 	return acquired
 }

@@ -67,6 +67,8 @@ func CreateAPIKey(c *gin.Context) {
 			CanSpam        *bool `json:"can_spam"`
 			CanManageQueue *bool `json:"can_manage_queue"`
 			CanRevert      *bool `json:"can_revert"`
+			CanComment     *bool `json:"can_comment"`
+			CanLabel       *bool `json:"can_label"`
 		} `json:"permissions"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -119,6 +121,12 @@ func CreateAPIKey(c *gin.Context) {
 		}
 		if p.CanRevert != nil {
 			perms.CanRevert = *p.CanRevert
+		}
+		if p.CanComment != nil {
+			perms.CanComment = *p.CanComment
+		}
+		if p.CanLabel != nil {
+			perms.CanLabel = *p.CanLabel
 		}
 	}
 
@@ -251,5 +259,4 @@ func generateAPIKeyID() string {
 
 func init() {
 	_ = auth.HasPermission
-	SetHMACSecret("asika-apikey-hmac-v1")
 }

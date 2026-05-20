@@ -28,8 +28,8 @@ func TestWebhookHealthUpdate(t *testing.T) {
 	}
 
 	_, err = db.GetWebhookHealth("nonexistent", "github")
-	if err != nil {
-		t.Fatalf("GetWebhookHealth for nonexistent should not error: %v", err)
+	if err != nil && err != db.ErrNotFound {
+		t.Fatalf("GetWebhookHealth for nonexistent should return ErrNotFound or nil, got: %v", err)
 	}
 }
 

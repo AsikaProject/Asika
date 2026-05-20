@@ -34,7 +34,7 @@ func DetectStackLinks(pr *models.PRRecord) []models.StackMember {
 	seen := make(map[string]bool)
 
 	for _, m := range matches {
-		url := m[1]
+		url := m[0]
 		prNum := 0
 		fmt.Sscanf(m[1], "%d", &prNum)
 

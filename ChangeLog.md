@@ -1,5 +1,82 @@
 # ChangeLog for Asika
 
+## v20260617DEV > v20260621DEV
+
+### Security Fixes
+
+- **Security**: Telegram/Slack/Discord bots returned `admin=true` for any user when allowlists were empty. Now defaults to reject-all with warning log, consistent with Feishu.
+- **Security**: Feishu event handler skipped token verification on malformed JSON. Now returns 400 on parse failure.
+- **Security**: API key HMAC used hardcoded secret `"asika-apikey-hmac-v1"`. Now uses JWT secret from config.
+- **Security**: Config hot-reload wrote unencrypted tokens to disk. Now uses `SaveToFile` with encryption.
+- **Security**: Config rollback wrote masked secrets (`"***"`) over real secrets. Now preserves secrets from current config.
+- **Security**: `SaveToFile` temp file used default umask permissions. Now explicitly sets 0600.
+- **Security**: `RequireSpaceAccess()` failed open on DB errors. Now returns 500.
+- **Security**: `RequireRepoAccess()` failed open when repo could not be resolved. Now returns 403.
+- **Security**: API key scope and user scope combination was undefined. Now intersects both scopes.
+- **Security**: `SetLocale` cookie lacked `Secure` flag. Now sets `Secure=true`.
+- **Security (XSS)**: `team.html` used `innerHTML` with user data. Now uses DOM API with `textContent`.
+- **Security (XSS)**: `apikeys.html` used HTML escaping in JS string context. Added `escapeJs()` function.
+- **Security (XSS)**: `pr_list.html` inserted `body.error` into `innerHTML` without escaping and didn't validate `html_url` scheme. Fixed both.
+- **Security (XSS)**: `pr_detail.html` `D(m)` function used `innerHTML` with error message. Now uses `textContent`.
+
+### Bug Fixes
+
+- **Bug fix**: `db.Get` returned `nil, nil` for missing keys, causing callers to misinterpret as 500. Now returns `ErrNotFound`.
+- **Bug fix**: PR ID global index (`pr_index_by_id`) used bare `prID` as key, causing cross-platform collisions. Now uses `repoGroup:prID`.
+- **Bug fix**: Queue checker, rebase handler, and sync handler used global PR ID without repo_group binding. Now pass repo_group for scoped lookups.
+- **Bug fix**: Mongo `Get` returned wrapped `{"_id":..., "data":...}` document instead of raw value. Now extracts `data` field.
+- **Bug fix**: Mongo `Put`/`Get` semantic mismatch broke config version, label rules, and other raw-value buckets. Fixed by aligning Put wrapper with Get extraction.
+- **Bug fix**: Config snapshot timestamp always returned `time.Now()`. Now persists `created_at` in snapshot.
+- **Bug fix**: `PutPRWithIndex` silently ignored index write errors. Now checks and returns errors.
+- **Bug fix**: `GetPRByIndex` fallback scan didn't filter by repo_group. Now enforces repo_group constraint.
+- **Bug fix**: `GetPRByIndex` fallback only repaired ID index, not RG index. Now repairs both.
+- **Bug fix**: Gerrit `GetOwnerRepoFromGroup` split single-segment project into `("", project)`, producing empty owner. Now returns `(project, "")` for Gerrit.
+- **Bug fix**: Gerrit `GetCloneURL` and `GetToken` had no gerrit case. Now returns proper URL and password.
+- **Bug fix**: Bitbucket `GetApprovals` deleted all reviewers from approver set, including approved ones. Now only counts approved participants.
+- **Bug fix**: Bitbucket `RequestReview` called `RequestChanges` (wrong API). Now uses `Update`.
+- **Bug fix**: Bitbucket `GetPRBody`/`GetFileContent` didn't check HTTP status codes. Now returns error on non-2xx.
+- **Bug fix**: Gerrit `GetFileContent` didn't handle XSSI prefix or base64 encoding. Now strips prefix and decodes.
+- **Bug fix**: `merge_checker.go` called `os.Exit(1)` on check failure. Now logs error and continues.
+- **Bug fix**: Syncer `acquireLock` failed open on DB error. Now returns false (fail closed).
+- **Bug fix**: Syncer `AddRemote` didn't update URL when remote already existed. Now checks and updates.
+- **Bug fix**: `RebaseAndPush` didn't detect missing base commit. Now returns explicit error.
+- **Bug fix**: Hook runner used `time.AfterFunc` + `Process.Kill()` (nil-panic risk). Now uses `exec.CommandContext`.
+- **Bug fix**: Hook runner swallowed hook failures. Now returns structured errors.
+- **Bug fix**: Hook path validation only on hot-reload, not initial config. Added `ValidateHookPath()`.
+- **Bug fix**: `RestoreBackup` closed DB before validating backup, leaving service broken on failure. Now validates first, then atomically replaces.
+- **Bug fix**: `RestoreBackup` didn't check DB type. Now rejects non-bbolt databases.
+- **Bug fix**: `downloadWithProgress` ignored `f.Write` errors and had no size limit. Now checks errors and limits to 100MiB.
+- **Bug fix**: Self-update SSE used hand-written JSON with unescaped error messages. Now uses `json.Marshal`.
+- **Bug fix**: Self-update binary replacement wasn't atomic. Now writes to temp file, fsyncs, then renames.
+- **Bug fix**: `verifyWebChecksum` read entire binary into memory. Now uses streaming hash.
+- **Bug fix**: Poller used `context.Background()` with no timeout. Now uses 60s timeout.
+- **Bug fix**: Self-update GitHub API calls used `context.Background()`. Now uses 30s timeout.
+- **Bug fix**: Failed queue items retried indefinitely with no backoff. Now tracks `RetryCount`/`NextRetryAt` with max 5 retries.
+- **Bug fix**: Merge expression could bypass CI/conflict hard gates. Now conflicts always block; CI requires `AllowExpressionOverrideCI`.
+- **Bug fix**: Serial worker `markMergeable` only updated `serial_queue`, not main queue. Now updates both.
+- **Bug fix**: Cross-space cache invalidated on space CRUD. Now properly calls `invalidateSpaceCache()`.
+- **Bug fix**: `ListPRs` by ID could cross repo_group. Now enforces repo_group constraint.
+- **Bug fix**: API key `last_used_at` update error silently ignored. Now logs warning.
+- **Bug fix**: `merge_checker.go` imported unused `os` package. Removed.
+- **Bug fix**: `RequireRepoGroupAccess` with API key used key scope exclusively, ignoring user scope. Now intersects both.
+
+### Features
+
+- **Feature**: Added `CanComment`/`CanLabel` permissions to API key creation.
+- **Feature**: Added `/rules/labels` API route for label rules management.
+- **Feature**: Added `RequireSelfOrAdmin()` middleware for user-scoped routes.
+- **Feature**: Added `AllowExpressionOverrideCI` config option for merge queue.
+- **Feature**: Added `RetryCount`/`NextRetryAt` fields to QueueItem for backoff support.
+- **Feature**: Added `publicFeed` field to Feed struct and `GetConfig()` response.
+- **Feature**: Moved `/feed.xml` to unprotected route with handler-level auth check for `PublicFeed`.
+
+### Refactoring
+
+- **Refactor**: Added `ErrNotFound` sentinel error to `db` package for consistent missing-key handling.
+- **Refactor**: Updated `pr_index_by_id` bucket key format from `{prID}` to `{repoGroup}:{prID}`.
+- **Refactor**: Config snapshots now store `{config, created_at}` wrapper for accurate timestamps.
+- **Refactor**: Bot `isAdmin()` in Telegram/Slack/Discord now defaults to reject-all (was allow-all).
+
 ## v20260517DEV > v20260617DEV
 
 ### UX Improvements

@@ -160,6 +160,8 @@ type QueueItem struct {
 	AddedAt           time.Time     `json:"added_at"`
 	LastChecked       time.Time     `json:"last_checked"`
 	FailureReason     string        `json:"failure_reason,omitempty"`
+	RetryCount        int           `json:"retry_count,omitempty"`
+	NextRetryAt       time.Time     `json:"next_retry_at,omitempty"`
 	Criteria          MergeCriteria `json:"criteria"`
 	ScheduleAt        time.Time     `json:"schedule_at,omitempty"`
 	ValidationStatus  string        `json:"validation_status,omitempty"`
@@ -205,12 +207,13 @@ type SyncRecord struct {
 }
 
 type MergeQueueConfig struct {
-	RequiredApprovals int      `json:"required_approvals" toml:"required_approvals"`
-	CICheckRequired   bool     `json:"ci_check_required" toml:"ci_check_required"`
-	CoreContributors  []string `json:"core_contributors" toml:"core_contributors"`
-	CIProvider        string   `json:"ci_provider" toml:"ci_provider"`
-	FastForwardOnly   bool     `json:"fast_forward_only" toml:"fast_forward_only"`
-	Expression        string   `json:"expression" toml:"expression"`
+	RequiredApprovals         int      `json:"required_approvals" toml:"required_approvals"`
+	CICheckRequired           bool     `json:"ci_check_required" toml:"ci_check_required"`
+	CoreContributors          []string `json:"core_contributors" toml:"core_contributors"`
+	CIProvider                string   `json:"ci_provider" toml:"ci_provider"`
+	FastForwardOnly           bool     `json:"fast_forward_only" toml:"fast_forward_only"`
+	Expression                string   `json:"expression" toml:"expression"`
+	AllowExpressionOverrideCI bool     `json:"allow_expression_override_ci" toml:"allow_expression_override_ci"`
 }
 
 type WebhookRetry struct {

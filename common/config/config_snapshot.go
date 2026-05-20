@@ -38,11 +38,22 @@ func SaveConfigSnapshot() error {
 		return fmt.Errorf("no config loaded")
 	}
 	masked := maskConfigForStorage(cfg)
-	data, err := json.Marshal(masked)
+	maskedData, err := json.Marshal(masked)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 	v := incrementConfigVersion()
+	snapshot := struct {
+		Config    json.RawMessage `json:"config"`
+		CreatedAt time.Time       `json:"created_at"`
+	}{
+		Config:    json.RawMessage(maskedData),
+		CreatedAt: time.Now(),
+	}
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		return fmt.Errorf("failed to marshal snapshot: %w", err)
+	}
 	if err := db.PutConfigSnapshot(v, data); err != nil {
 		return fmt.Errorf("failed to store snapshot: %w", err)
 	}
@@ -106,25 +117,33 @@ func ListConfigVersions(limit int) ([]ConfigSnapshot, error) {
 	}
 	result := make([]ConfigSnapshot, 0, len(raw))
 	for _, r := range raw {
+		var wrapper struct {
+			Config    json.RawMessage `json:"config"`
+			CreatedAt time.Time       `json:"created_at"`
+		}
+		if err := json.Unmarshal(r.Data, &wrapper); err != nil {
+			var cfg models.Config
+			if err := json.Unmarshal(r.Data, &cfg); err != nil {
+				continue
+			}
+			result = append(result, ConfigSnapshot{
+				Version:   r.Version,
+				Config:    &cfg,
+				Timestamp: time.Time{},
+			})
+			continue
+		}
 		var cfg models.Config
-		if err := json.Unmarshal(r.Data, &cfg); err != nil {
+		if err := json.Unmarshal(wrapper.Config, &cfg); err != nil {
 			continue
 		}
 		result = append(result, ConfigSnapshot{
 			Version:   r.Version,
 			Config:    &cfg,
-			Timestamp: cfgTime(r.Data),
+			Timestamp: wrapper.CreatedAt,
 		})
 	}
 	return result, nil
-}
-
-func cfgTime(data []byte) time.Time {
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return time.Time{}
-	}
-	return time.Now()
 }
 
 func RollbackConfig(version int) error {
@@ -133,15 +152,101 @@ func RollbackConfig(version int) error {
 		return fmt.Errorf("snapshot %d not found: %w", version, err)
 	}
 	var cfg models.Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	var wrapper struct {
+		Config json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(data, &wrapper); err == nil && wrapper.Config != nil {
+		if err := json.Unmarshal(wrapper.Config, &cfg); err != nil {
+			return fmt.Errorf("failed to unmarshal snapshot config: %w", err)
+		}
+	} else if err := json.Unmarshal(data, &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal snapshot: %w", err)
 	}
+
+	current := Current()
+	if current != nil {
+		if cfg.Auth.JWTSecret == "***" || cfg.Auth.JWTSecret == "" {
+			cfg.Auth.JWTSecret = current.Auth.JWTSecret
+		}
+		if cfg.Auth.FingerprintSecret == "***" || cfg.Auth.FingerprintSecret == "" {
+			cfg.Auth.FingerprintSecret = current.Auth.FingerprintSecret
+		}
+		if cfg.Events.WebhookSecret == "***" || cfg.Events.WebhookSecret == "" {
+			cfg.Events.WebhookSecret = current.Events.WebhookSecret
+		}
+		if cfg.Feishu.AppSecret == "***" || cfg.Feishu.AppSecret == "" {
+			cfg.Feishu.AppSecret = current.Feishu.AppSecret
+		}
+		if cfg.Feishu.EncryptKey == "***" || cfg.Feishu.EncryptKey == "" {
+			cfg.Feishu.EncryptKey = current.Feishu.EncryptKey
+		}
+		if cfg.Telegram.Token == "***" || cfg.Telegram.Token == "" {
+			cfg.Telegram.Token = current.Telegram.Token
+		}
+		if cfg.Discord.Token == "***" || cfg.Discord.Token == "" {
+			cfg.Discord.Token = current.Discord.Token
+		}
+		if cfg.Slack.Token == "***" || cfg.Slack.Token == "" {
+			cfg.Slack.Token = current.Slack.Token
+		}
+		if cfg.Slack.AppToken == "***" || cfg.Slack.AppToken == "" {
+			cfg.Slack.AppToken = current.Slack.AppToken
+		}
+		if cfg.Database.Type == "mongo" && (cfg.Database.Path == "***" || cfg.Database.Path == "") {
+			cfg.Database.Path = current.Database.Path
+		}
+		mergeMaskedTokens(&cfg.Tokens, &current.Tokens)
+		mergeMaskedNotify(&cfg.Notify, &current.Notify)
+	}
+
 	if err := SaveToFile(cfg); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 	Store(&cfg)
 	slog.Info("config rolled back", "version", version)
 	return nil
+}
+
+func mergeMaskedTokens(cfg, current *models.TokensConfig) {
+	if cfg.GitHub == "***" || cfg.GitHub == "" {
+		cfg.GitHub = current.GitHub
+	}
+	if cfg.GitLab == "***" || cfg.GitLab == "" {
+		cfg.GitLab = current.GitLab
+	}
+	if cfg.Gitea == "***" || cfg.Gitea == "" {
+		cfg.Gitea = current.Gitea
+	}
+	if cfg.Forgejo == "***" || cfg.Forgejo == "" {
+		cfg.Forgejo = current.Forgejo
+	}
+	if cfg.Codeberg == "***" || cfg.Codeberg == "" {
+		cfg.Codeberg = current.Codeberg
+	}
+	if cfg.Bitbucket == "***" || cfg.Bitbucket == "" {
+		cfg.Bitbucket = current.Bitbucket
+	}
+	if cfg.Gerrit.Password == "***" || cfg.Gerrit.Password == "" {
+		cfg.Gerrit.Password = current.Gerrit.Password
+	}
+}
+
+func mergeMaskedNotify(cfg, current *[]models.NotifyConfig) {
+	if len(*cfg) != len(*current) {
+		return
+	}
+	for i := range *cfg {
+		if (*cfg)[i].Config == nil || (*current)[i].Config == nil {
+			continue
+		}
+		for k := range (*cfg)[i].Config {
+			if v, ok := (*cfg)[i].Config[k].(string); ok && (v == "***" || v == "") {
+				if cv, exists := (*current)[i].Config[k]; exists {
+					(*cfg)[i].Config[k] = cv
+				}
+			}
+		}
+	}
 }
 
 type ConfigSnapshot struct {

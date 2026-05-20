@@ -158,6 +158,14 @@ func (p *Poller) pollRepoGroup(rg models.RepoGroupConfig) (success, failed int) 
 			repo = rg.GitLab
 		case "gitea":
 			repo = rg.Gitea
+		case "forgejo":
+			repo = rg.Forgejo
+		case "codeberg":
+			repo = rg.Codeberg
+		case "bitbucket":
+			repo = rg.Bitbucket
+		case "gerrit":
+			repo = rg.Gerrit
 		}
 		if repo == "" {
 			return
@@ -170,7 +178,6 @@ func (p *Poller) pollRepoGroup(rg models.RepoGroupConfig) (success, failed int) 
 		return s, f
 	}
 
-	// Multi mode: poll all configured platforms
 	platforms := []struct {
 		ptype platforms.PlatformType
 		repo  string
@@ -178,6 +185,10 @@ func (p *Poller) pollRepoGroup(rg models.RepoGroupConfig) (success, failed int) 
 		{platforms.PlatformGitHub, rg.GitHub},
 		{platforms.PlatformGitLab, rg.GitLab},
 		{platforms.PlatformGitea, rg.Gitea},
+		{platforms.PlatformForgejo, rg.Forgejo},
+		{platforms.PlatformCodeberg, rg.Codeberg},
+		{platforms.PlatformBitbucket, rg.Bitbucket},
+		{platforms.PlatformGerrit, rg.Gerrit},
 	}
 
 	for _, pinfo := range platforms {
@@ -197,7 +208,8 @@ func (p *Poller) pollRepoGroup(rg models.RepoGroupConfig) (success, failed int) 
 }
 
 func (p *Poller) pollPlatform(client platforms.PlatformClient, repoGroup, platform, repo string) (success, failed int) {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
 	// Parse owner/repo using the same logic as config.GetOwnerRepoFromGroup
 	idx := strings.LastIndex(repo, "/")

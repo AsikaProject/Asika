@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -386,18 +387,6 @@ func (c *BitbucketClient) GetApprovals(ctx context.Context, owner, repo string, 
 			}
 		}
 	}
-	reviewers, ok := m["reviewers"].([]interface{})
-	if ok {
-		for _, r := range reviewers {
-			rm, ok := r.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			if dn, ok := rm["display_name"].(string); ok {
-				delete(approverSet, dn)
-			}
-		}
-	}
 	approvers := make([]string, 0, len(approverSet))
 	for a := range approverSet {
 		approvers = append(approvers, a)
@@ -541,13 +530,14 @@ func (c *BitbucketClient) GetPRBranchInfo(ctx context.Context, owner, repo strin
 }
 
 func (c *BitbucketClient) RequestReview(ctx context.Context, owner, repo string, number int, reviewers []string) error {
-	for _, reviewer := range reviewers {
-		opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
-		opts.Reviewers = []string{reviewer}
-		_, err := c.client.Repositories.PullRequests.RequestChanges(opts)
-		if err != nil {
-			return fmt.Errorf("failed to request review from %s: %w", reviewer, err)
-		}
+	if len(reviewers) == 0 {
+		return nil
+	}
+	opts := prOptions(owner, repo, fmt.Sprintf("%d", number))
+	opts.Reviewers = reviewers
+	_, err := c.client.Repositories.PullRequests.Update(opts)
+	if err != nil {
+		return fmt.Errorf("failed to request review from %s: %w", strings.Join(reviewers, ", "), err)
 	}
 	return nil
 }
@@ -565,10 +555,11 @@ func (c *BitbucketClient) RevertPR(ctx context.Context, owner, repo string, numb
 		return nil, fmt.Errorf("failed to send revert request to bitbucket: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("bitbucket revert failed (status %d): %s", resp.StatusCode, string(body))
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("bitbucket revert failed (status %d): %s", resp.StatusCode, string(errBody))
 	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	var result struct {
 		Type  string `json:"type"`
 		Links struct {
@@ -601,7 +592,13 @@ func (c *BitbucketClient) GetPRBody(ctx context.Context, owner, repo string, num
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("bitbucket GetPRBody: unexpected status %d for %s", resp.StatusCode, endpoint)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
 	var result struct {
 		Description string `json:"description"`
 	}
@@ -612,7 +609,7 @@ func (c *BitbucketClient) GetPRBody(ctx context.Context, owner, repo string, num
 }
 
 func (c *BitbucketClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
-	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/src/HEAD/%s", owner, repo, path)
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/src/HEAD/%s", owner, repo, url.PathEscape(path))
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return "", err
@@ -623,6 +620,12 @@ func (c *BitbucketClient) GetFileContent(ctx context.Context, owner, repo, path 
 		return "", err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("bitbucket GetFileContent: unexpected status %d for %s", resp.StatusCode, endpoint)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
 	return string(body), nil
 }

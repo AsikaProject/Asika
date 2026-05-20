@@ -160,6 +160,10 @@
             });
         };
     })();
+    function escapeJs(str) {
+        if (str == null) return '';
+        return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+    }
     function apiRequest(url, options) {
         const token = localStorage.getItem('token');
         const headers = {

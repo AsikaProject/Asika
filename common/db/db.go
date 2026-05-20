@@ -8,6 +8,9 @@ import (
 	"asika/common/models"
 )
 
+// ErrNotFound is returned when a key is not found in the database.
+var ErrNotFound = fmt.Errorf("not found")
+
 // Storage defines the database operations used by asika.
 // The default implementation is bboltStorage (wrapping go.etcd.io/bbolt).
 // External implementations (e.g. MongoDB, PostgreSQL) can satisfy this

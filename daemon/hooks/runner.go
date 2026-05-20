@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -41,7 +42,9 @@ func (r *Runner) Run(hookName, gitDir, oldRev, newRev, refName string) error {
 
 	slog.Info("running hook", "hook", hookName, "script", hookScript)
 
-	cmd := exec.Command(hookScript)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, hookScript)
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env,
 		fmt.Sprintf("GIT_DIR=%s", gitDir),
@@ -52,17 +55,29 @@ func (r *Runner) Run(hookName, gitDir, oldRev, newRev, refName string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Set timeout
-	timer := time.AfterFunc(30*time.Second, func() {
-		cmd.Process.Kill()
-	})
-	defer timer.Stop()
-
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			slog.Error("hook timed out", "hook", hookName, "timeout", "30s")
+			return fmt.Errorf("hook %s timed out after 30s", hookName)
+		}
 		slog.Warn("hook failed", "hook", hookName, "error", err)
-		return nil
+		return fmt.Errorf("hook %s failed: %w", hookName, err)
 	}
 
+	return nil
+}
+
+// ValidateHookPath checks that the hook path is absolute and contains no .. components.
+func ValidateHookPath(hookPath string) error {
+	if hookPath == "" {
+		return nil
+	}
+	if !filepath.IsAbs(hookPath) {
+		return fmt.Errorf("hook path must be an absolute path: %s", hookPath)
+	}
+	if strings.Contains(hookPath, "..") {
+		return fmt.Errorf("hook path must not contain .. components: %s", hookPath)
+	}
 	return nil
 }
 

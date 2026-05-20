@@ -216,7 +216,7 @@ func TestRestoreBackup_FileNotFound(t *testing.T) {
 
 	cfg := &models.Config{
 		Server:   models.ServerConfig{Listen: ":8080"},
-		Database: models.DatabaseConfig{Path: dbFile},
+		Database: models.DatabaseConfig{Type: "bbolt", Path: dbFile},
 	}
 	config.Store(cfg)
 

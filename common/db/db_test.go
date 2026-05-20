@@ -73,7 +73,7 @@ func TestGet_NonExistent(t *testing.T) {
 	initTestDB(t)
 
 	val, err := Get("prs", "non-existent")
-	if err != nil {
+	if err != nil && err != ErrNotFound {
 		t.Fatalf("Get failed: %v", err)
 	}
 	if val != nil {

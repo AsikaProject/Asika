@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -110,6 +111,15 @@ func PerformWebUpdate(c *gin.Context) {
 		flusher.Flush()
 	}
 
+	sendJSONEvent := func(event string, payload interface{}) {
+		jsonData, err := json.Marshal(payload)
+		if err != nil {
+			slog.Error("failed to marshal SSE payload", "error", err)
+			return
+		}
+		sendEvent(event, string(jsonData))
+	}
+
 	// Create GitHub client with optional authentication
 	var httpClient *http.Client
 	if cfg.Tokens.GitHub != "" {
@@ -120,10 +130,11 @@ func PerformWebUpdate(c *gin.Context) {
 	}
 	client := github.NewClient(httpClient)
 
-	// Get latest release
-	release, _, err := client.Repositories.GetLatestRelease(context.Background(), githubOwner, githubRepo)
+	releaseCtx, releaseCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer releaseCancel()
+	release, _, err := client.Repositories.GetLatestRelease(releaseCtx, githubOwner, githubRepo)
 	if err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"failed to fetch release: %s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to fetch release: %s", err.Error())})
 		return
 	}
 
@@ -141,45 +152,45 @@ func PerformWebUpdate(c *gin.Context) {
 		}
 	}
 	if downloadURL == "" {
-		sendEvent("error", fmt.Sprintf(`{"error":"no asset found for %s"}`, assetName))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("no asset found for %s", assetName)})
 		return
 	}
 	if !isValidGitHubDownloadURL(downloadURL) {
-		sendEvent("error", fmt.Sprintf(`{"error":"invalid download URL: %s"}`, downloadURL))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("invalid download URL: %s", downloadURL)})
 		return
 	}
 
-	sendEvent("progress", `{"status":"downloading","progress":0,"message":"Starting download..."}`)
+	sendJSONEvent("progress", gin.H{"status": "downloading", "progress": 0, "message": "Starting download..."})
 
 	tmpDir, err := os.MkdirTemp("", "asika_update")
 	if err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"failed to create temp dir: %s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to create temp dir: %s", err.Error())})
 		return
 	}
 	defer os.RemoveAll(tmpDir)
 
 	binaryPath := filepath.Join(tmpDir, assetName)
 	if err := downloadWithProgress(downloadURL, binaryPath, sendEvent); err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"download failed: %s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("download failed: %s", err.Error())})
 		return
 	}
 
 	if checksumURL == "" {
-		sendEvent("error", `{"error":"checksum file not available, refusing to install unverified binary"}`)
+		sendJSONEvent("error", gin.H{"error": "checksum file not available, refusing to install unverified binary"})
 		return
 	}
 
-	sendEvent("progress", `{"status":"verifying","progress":100,"message":"Verifying checksum..."}`)
+	sendJSONEvent("progress", gin.H{"status": "verifying", "progress": 100, "message": "Verifying checksum..."})
 
 	checksumPath := filepath.Join(tmpDir, assetName+".sha256sum")
 	resp, err := httpUpdateClient.Get(checksumURL)
 	if err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"failed to download checksum: %s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to download checksum: %s", err.Error())})
 		return
 	}
 	f, err := os.Create(checksumPath)
 	if err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"%s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": err.Error()})
 		resp.Body.Close()
 		return
 	}
@@ -187,69 +198,81 @@ func PerformWebUpdate(c *gin.Context) {
 	f.Close()
 	resp.Body.Close()
 	if err != nil || written == 0 {
-		sendEvent("error", `{"error":"failed to download checksum file"}`)
+		sendJSONEvent("error", gin.H{"error": "failed to download checksum file"})
 		return
 	}
 
 	if err := verifyWebChecksum(binaryPath, checksumPath); err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"checksum verification failed: %s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("checksum verification failed: %s", err.Error())})
 		return
 	}
 
-	sendEvent("progress", `{"status":"installing","progress":100,"message":"Installing update..."}`)
+	sendJSONEvent("progress", gin.H{"status": "installing", "progress": 100, "message": "Installing update..."})
 
 	currentPath, err := os.Executable()
 	if err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"%s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": err.Error()})
 		return
 	}
 	currentPath, err = filepath.EvalSymlinks(currentPath)
 	if err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"%s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": err.Error()})
 		return
 	}
 
 	backupPath := currentPath + ".old"
 	if err := os.Rename(currentPath, backupPath); err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"backup failed: %s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("backup failed: %s", err.Error())})
 		return
 	}
 
 	in, err := os.Open(binaryPath)
 	if err != nil {
-		sendEvent("error", fmt.Sprintf(`{"error":"failed to open downloaded binary: %s"}`, err.Error()))
+		os.Rename(backupPath, currentPath)
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to open downloaded binary: %s", err.Error())})
 		return
 	}
-	out, err := os.Create(currentPath)
+	tmpTarget := currentPath + ".new"
+	out, err := os.OpenFile(tmpTarget, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 	if err != nil {
 		in.Close()
-		// Restore backup
 		os.Rename(backupPath, currentPath)
-		sendEvent("error", fmt.Sprintf(`{"error":"failed to create target binary: %s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to create target binary: %s", err.Error())})
 		return
 	}
 	if _, err := io.Copy(out, in); err != nil {
 		in.Close()
 		out.Close()
+		os.Remove(tmpTarget)
 		os.Rename(backupPath, currentPath)
-		sendEvent("error", fmt.Sprintf(`{"error":"failed to write binary: %s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to write binary: %s", err.Error())})
 		return
 	}
 	in.Close()
-	out.Close()
-	if err := os.Chmod(currentPath, 0755); err != nil {
+	if err := out.Sync(); err != nil {
+		out.Close()
+		os.Remove(tmpTarget)
 		os.Rename(backupPath, currentPath)
-		sendEvent("error", fmt.Sprintf(`{"error":"failed to chmod binary: %s"}`, err.Error()))
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to sync binary: %s", err.Error())})
+		return
+	}
+	out.Close()
+	if err := os.Rename(tmpTarget, currentPath); err != nil {
+		os.Remove(tmpTarget)
+		os.Rename(backupPath, currentPath)
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to install binary: %s", err.Error())})
 		return
 	}
 
 	slog.Info("self-update", "version", release.GetTagName(), "from", "webui")
-	sendEvent("done", `{"status":"done","progress":100,"message":"Update complete. Service restarting..."}`)
+	sendJSONEvent("done", gin.H{"status": "done", "progress": 100, "message": "Update complete. Service restarting..."})
 
 	go func() {
 		os.Exit(0)
 	}()
 }
+
+const maxAssetSize = 100 << 20
 
 func downloadWithProgress(url, dest string, sendEvent func(string, string)) error {
 	resp, err := httpUpdateClient.Get(url)
@@ -262,6 +285,10 @@ func downloadWithProgress(url, dest string, sendEvent func(string, string)) erro
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
+	if resp.ContentLength > maxAssetSize {
+		return fmt.Errorf("asset too large: %d bytes (max %d)", resp.ContentLength, maxAssetSize)
+	}
+
 	f, err := os.Create(dest)
 	if err != nil {
 		return err
@@ -271,11 +298,18 @@ func downloadWithProgress(url, dest string, sendEvent func(string, string)) erro
 	total := resp.ContentLength
 	var downloaded int64
 	buf := make([]byte, 32*1024)
+	limitedReader := io.LimitReader(resp.Body, maxAssetSize)
 
 	for {
-		n, err := resp.Body.Read(buf)
+		n, err := limitedReader.Read(buf)
 		if n > 0 {
-			f.Write(buf[:n])
+			written, writeErr := f.Write(buf[:n])
+			if writeErr != nil {
+				return fmt.Errorf("failed to write: %w", writeErr)
+			}
+			if written != n {
+				return fmt.Errorf("short write: expected %d, got %d", n, written)
+			}
 			downloaded += int64(n)
 			if total > 0 {
 				pct := int(downloaded * 100 / total)
@@ -293,12 +327,17 @@ func downloadWithProgress(url, dest string, sendEvent func(string, string)) erro
 }
 
 func verifyWebChecksum(binaryPath, checksumPath string) error {
-	data, err := os.ReadFile(binaryPath)
+	f, err := os.Open(binaryPath)
 	if err != nil {
 		return err
 	}
-	hash := sha256.Sum256(data)
-	actual := hex.EncodeToString(hash[:])
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("failed to hash binary: %w", err)
+	}
+	actual := hex.EncodeToString(h.Sum(nil))
 
 	expected, err := parseSha256sumFile(checksumPath)
 	if err != nil {

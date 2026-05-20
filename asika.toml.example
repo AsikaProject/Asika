@@ -69,6 +69,7 @@ fast_forward_only  = false  # if true, auto-rebase PR before merge to ensure lin
 # Supported variables: approvals, required, ci, conflict, draft, core_approved, author, age_hours, label
 # Example: "approvals >= 2 AND ci == success AND NOT conflict"
 # Example: "core_approved >= 1 OR author IN core_contributors"
+# allow_expression_override_ci = false  # if true, expression can override CI/conflict hard gates
 
 # Spam detection
 [spam]

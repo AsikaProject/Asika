@@ -3,6 +3,7 @@ package platforms
 import (
 	"context"
 	"crypto/hmac"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log/slog"
@@ -507,7 +508,9 @@ func (c *GerritClient) GetPRBody(ctx context.Context, owner, repo string, number
 }
 
 func (c *GerritClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
-	endpoint := fmt.Sprintf("%s/projects/%s/files/%s/content", c.baseURL, url.PathEscape(owner), url.PathEscape(path))
+	project := url.PathEscape(owner)
+	filePath := url.PathEscape(path)
+	endpoint := fmt.Sprintf("%s/projects/%s/files/%s/content", c.baseURL, project, filePath)
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return "", err
@@ -519,11 +522,19 @@ func (c *GerritClient) GetFileContent(ctx context.Context, owner, repo, path str
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("gerrit GetFileContent: unexpected status %d for %s", resp.StatusCode, endpoint)
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return "", fmt.Errorf("gerrit GetFileContent: unexpected status %d for %s: %s", resp.StatusCode, endpoint, string(errBody))
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return "", fmt.Errorf("gerrit GetFileContent: failed to read body: %w", err)
+	}
+	if len(body) > 0 && body[0] == ']' {
+		body = body[1:]
+	}
+	decoded, err := base64.StdEncoding.DecodeString(string(body))
+	if err == nil {
+		return string(decoded), nil
 	}
 	return string(body), nil
 }

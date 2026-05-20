@@ -127,10 +127,19 @@ func (s *mongoStorage) Get(bucket, key string) ([]byte, error) {
 	var result bson.M
 	err := s.coll(bucket).FindOne(ctx, bson.M{"_id": key}).Decode(&result)
 	if err == mongo.ErrNoDocuments {
-		return nil, nil
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
+	}
+	dataVal, ok := result["data"]
+	if ok {
+		switch v := dataVal.(type) {
+		case string:
+			return []byte(v), nil
+		case bson.Binary:
+			return v.Data, nil
+		}
 	}
 	data, err := bson.MarshalExtJSON(result, true, true)
 	if err != nil {
@@ -242,7 +251,11 @@ func (s *mongoStorage) PutPRWithIndex(key string, value []byte, prID, repoGroup 
 		return err
 	}
 	if prID != "" {
-		_, err = s.coll(BucketPRIndexByID).ReplaceOne(ctx, bson.M{"_id": prID}, bson.M{"_id": prID, "target": key}, options.Replace().SetUpsert(true))
+		idxKey := prID
+		if repoGroup != "" {
+			idxKey = repoGroup + ":" + prID
+		}
+		_, err = s.coll(BucketPRIndexByID).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": key}, options.Replace().SetUpsert(true))
 		if err != nil {
 			return err
 		}
@@ -262,8 +275,12 @@ func (s *mongoStorage) GetPRByIndex(prID, repoGroup string, prNumber int) ([]byt
 	defer cancel()
 	var targetKey string
 	if prID != "" {
+		idxKey := prID
+		if repoGroup != "" {
+			idxKey = repoGroup + ":" + prID
+		}
 		var idxDoc bson.M
-		err := s.coll(BucketPRIndexByID).FindOne(ctx, bson.M{"_id": prID}).Decode(&idxDoc)
+		err := s.coll(BucketPRIndexByID).FindOne(ctx, bson.M{"_id": idxKey}).Decode(&idxDoc)
 		if err == nil {
 			targetKey, _ = idxDoc["target"].(string)
 		}
@@ -286,6 +303,15 @@ func (s *mongoStorage) GetPRByIndex(prID, repoGroup string, prNumber int) ([]byt
 	}
 	if err != nil {
 		return nil, err
+	}
+	dataVal, ok := doc["data"]
+	if ok {
+		switch v := dataVal.(type) {
+		case string:
+			return []byte(v), nil
+		case bson.Binary:
+			return v.Data, nil
+		}
 	}
 	return bson.MarshalExtJSON(doc, true, true)
 }

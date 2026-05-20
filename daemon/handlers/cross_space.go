@@ -131,6 +131,7 @@ func findPRByGlobalID(prID string) (*models.PRRecord, error) {
 		}
 		if pr.ID == prID {
 			found = &pr
+			return errStopCrossSpace
 		}
 		return nil
 	})
@@ -139,6 +140,8 @@ func findPRByGlobalID(prID string) (*models.PRRecord, error) {
 	}
 	return found, nil
 }
+
+var errStopCrossSpace = fmt.Errorf("stop cross-space scan")
 
 func GetCrossSpaceDeps(c *gin.Context) {
 	sourcePRID := c.Param("source_pr_id")

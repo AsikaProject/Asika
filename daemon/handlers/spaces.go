@@ -48,6 +48,7 @@ func CreateSpace(c *gin.Context) {
 	}
 
 	db.PutSpaceMember(req.Name, username.(string), "space_admin")
+	invalidateSpaceCache()
 	slog.Info("team space created", "name", req.Name, "by", username)
 	c.JSON(http.StatusCreated, space)
 }
@@ -56,6 +57,10 @@ func GetSpace(c *gin.Context) {
 	name := c.Param("name")
 	space, err := db.GetTeamSpace(name)
 	if err != nil {
+		if err == db.ErrNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "space not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get space"})
 		return
 	}
@@ -75,6 +80,7 @@ func DeleteSpace(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete space"})
 		return
 	}
+	invalidateSpaceCache()
 	slog.Info("team space deleted", "name", name)
 	c.JSON(http.StatusOK, gin.H{"message": "space deleted"})
 }
@@ -103,6 +109,7 @@ func AddSpaceMember(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to add member"})
 		return
 	}
+	invalidateSpaceCache()
 	slog.Info("space member added", "space", name, "user", req.Username, "role", req.Role)
 	c.JSON(http.StatusOK, gin.H{"message": "member added"})
 }
@@ -119,6 +126,7 @@ func RemoveSpaceMember(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove member"})
 		return
 	}
+	invalidateSpaceCache()
 	slog.Info("space member removed", "space", name, "user", username)
 	c.JSON(http.StatusOK, gin.H{"message": "member removed"})
 }
@@ -157,6 +165,7 @@ func UpdateSpaceRepoGroups(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update space"})
 		return
 	}
+	invalidateSpaceCache()
 	c.JSON(http.StatusOK, space)
 }
 

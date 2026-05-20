@@ -232,13 +232,18 @@ func RebaseAndPush(workdir, remoteURL, token, headBranch, baseBranch string) err
 	}
 
 	var commitsToRebase []*object.Commit
+	foundBase := false
 	iter.ForEach(func(c *object.Commit) error {
 		if c.Hash == *baseCommit {
+			foundBase = true
 			return storer.ErrStop
 		}
 		commitsToRebase = append([]*object.Commit{c}, commitsToRebase...)
 		return nil
 	})
+	if !foundBase {
+		return fmt.Errorf("base commit %s not found in history of %s; cannot rebase", baseCommit.String()[:8], headBranch)
+	}
 
 	err = w.Reset(&git.ResetOptions{
 		Commit: *baseCommit,

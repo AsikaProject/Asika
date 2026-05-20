@@ -61,11 +61,12 @@ type RSSItem struct {
 
 // Feed maintains an in-memory ring buffer of recent PR events and generates RSS feeds.
 type Feed struct {
-	mu       sync.RWMutex
-	items    []FeedItem
-	maxItems int
-	enabled  bool
-	title    string
+	mu         sync.RWMutex
+	items      []FeedItem
+	maxItems   int
+	enabled    bool
+	title      string
+	publicFeed bool
 }
 
 // NewFeed creates a new Feed instance.
@@ -75,10 +76,11 @@ func NewFeed(cfg models.FeedConfig) *Feed {
 		maxItems = 50
 	}
 	return &Feed{
-		items:    make([]FeedItem, 0, maxItems),
-		maxItems: maxItems,
-		enabled:  cfg.Enabled,
-		title:    cfg.Title,
+		items:      make([]FeedItem, 0, maxItems),
+		maxItems:   maxItems,
+		enabled:    cfg.Enabled,
+		title:      cfg.Title,
+		publicFeed: cfg.PublicFeed,
 	}
 }
 
@@ -88,6 +90,7 @@ func (f *Feed) UpdateConfig(cfg models.FeedConfig) {
 	defer f.mu.Unlock()
 	f.enabled = cfg.Enabled
 	f.title = cfg.Title
+	f.publicFeed = cfg.PublicFeed
 	if cfg.MaxItems > 0 {
 		f.maxItems = cfg.MaxItems
 	}
@@ -196,8 +199,10 @@ func (f *Feed) GetConfig() models.FeedConfig {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return models.FeedConfig{
-		Enabled: f.enabled,
-		Title:   f.title,
+		Enabled:    f.enabled,
+		Title:      f.title,
+		MaxItems:   f.maxItems,
+		PublicFeed: f.publicFeed,
 	}
 }
 

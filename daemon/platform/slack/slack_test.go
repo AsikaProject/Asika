@@ -53,8 +53,10 @@ func TestSlackIsAdmin_EmptyAdminIDs(t *testing.T) {
 	bot, cleanup := setupSlackTest(t)
 	defer cleanup()
 	bot.adminIDs = map[string]bool{}
-	if !bot.isAdmin("any_user") {
-		t.Error("with empty adminIDs, everyone should be admin")
+	bot.operatorIDs = map[string]bool{}
+	bot.viewerIDs = map[string]bool{}
+	if bot.isAdmin("any_user") {
+		t.Error("with empty allowlists, no one should be admin")
 	}
 }
 

@@ -302,7 +302,20 @@ func (s *Syncer) pushBranchToTargets(gitRepo *git.Repository, pr *models.PRRecor
 		remoteName := "target-" + target.name
 
 		if err := gitutil.AddRemote(gitRepo, remoteName, targetURL); err != nil {
-			slog.Warn("add remote failed (may already exist)", "remote", remoteName, "error", err)
+			rem, remErr := gitRepo.Remote(remoteName)
+			if remErr == nil && rem != nil {
+				existingURLs := rem.Config().URLs
+				if len(existingURLs) > 0 && existingURLs[0] != targetURL {
+					slog.Info("remote URL changed, updating", "remote", remoteName, "old", existingURLs[0], "new", targetURL)
+					if delErr := gitRepo.DeleteRemote(remoteName); delErr != nil {
+						slog.Warn("failed to delete remote before re-adding", "remote", remoteName, "error", delErr)
+					} else if addErr := gitutil.AddRemote(gitRepo, remoteName, targetURL); addErr != nil {
+						slog.Warn("failed to re-add remote with new URL", "remote", remoteName, "error", addErr)
+					}
+				}
+			} else {
+				slog.Warn("add remote failed", "remote", remoteName, "error", err)
+			}
 		}
 
 		if err := s.pushWithRetry(gitRepo, remoteName, branch, targetToken, target.name, pr); err != nil {

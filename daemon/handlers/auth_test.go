@@ -489,7 +489,7 @@ func TestDeleteUser_Success(t *testing.T) {
 	}
 
 	data, err := db.Get(db.BucketUsers, "deluser")
-	if err != nil {
+	if err != nil && err != db.ErrNotFound {
 		t.Fatalf("db.Get error: %v", err)
 	}
 	if data != nil {

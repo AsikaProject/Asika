@@ -62,7 +62,14 @@ function renderTeamStats(data) {
     const tbody = document.querySelector('#authorsTable tbody');
     tbody.innerHTML = '';
     (data.authors || []).forEach(a => {
-        tbody.innerHTML += '<tr><td>' + a.author + '</td><td>' + a.prs_opened + '</td><td>' + a.prs_merged + '</td><td>' + a.prs_reviewed + '</td><td>' + (a.avg_lead_time_hours ? a.avg_lead_time_hours.toFixed(1) + 'h' : '-') + '</td></tr>';
+        const tr = document.createElement('tr');
+        const mk = (v) => { const td = document.createElement('td'); td.textContent = v; return td; };
+        tr.appendChild(mk(a.author));
+        tr.appendChild(mk(a.prs_opened));
+        tr.appendChild(mk(a.prs_merged));
+        tr.appendChild(mk(a.prs_reviewed));
+        tr.appendChild(mk(a.avg_lead_time_hours ? a.avg_lead_time_hours.toFixed(1) + 'h' : '-'));
+        tbody.appendChild(tr);
     });
 
     renderChart(data.top_contributors || []);

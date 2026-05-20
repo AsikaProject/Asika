@@ -39,6 +39,10 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
+	if data == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
 	if err := json.Unmarshal(data, &user); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
@@ -390,6 +394,6 @@ func SetLocale(c *gin.Context) {
 		return
 	}
 	i18n.SetLocale(req.Locale)
-	c.SetCookie("asika_lang", req.Locale, 86400*365, "/", "", false, false)
+	c.SetCookie("asika_lang", req.Locale, 86400*365, "/", "", true, false)
 	c.JSON(http.StatusOK, gin.H{"message": "locale set", "locale": req.Locale})
 }

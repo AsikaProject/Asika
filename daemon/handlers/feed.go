@@ -21,6 +21,14 @@ func GetFeed(c *gin.Context) {
 		return
 	}
 
+	if !cfg.PublicFeed {
+		username, exists := c.Get("username")
+		if !exists || username == nil || username.(string) == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+	}
+
 	repoGroup := c.Query("repo_group")
 
 	baseURL := fmt.Sprintf("http://%s", c.Request.Host)

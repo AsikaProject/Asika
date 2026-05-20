@@ -102,6 +102,17 @@ func ListBackups(c *gin.Context) {
 // Restores the database from a backup file.
 // Requires server restart after restore.
 func RestoreBackup(c *gin.Context) {
+	cfg := config.Current()
+	if cfg == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "config not loaded"})
+		return
+	}
+
+	if cfg.Database.Type != "bbolt" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "backup/restore is only supported for bbolt database"})
+		return
+	}
+
 	var req struct {
 		Filename string `json:"filename"`
 	}
@@ -110,16 +121,10 @@ func RestoreBackup(c *gin.Context) {
 		return
 	}
 
-	cfg := config.Current()
-	if cfg == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "config not loaded"})
-		return
-	}
 	dbPath := cfg.Database.Path
 	backupDir := filepath.Join(filepath.Dir(dbPath), "backups")
 	backupPath := filepath.Join(backupDir, req.Filename)
 
-	// Validate the backup file exists and is within the backup directory
 	absBackup, err := filepath.Abs(backupPath)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid backup path"})
@@ -137,16 +142,22 @@ func RestoreBackup(c *gin.Context) {
 		return
 	}
 
-	// Close current DB, restore from backup, reopen
-	db.Close()
-
-	// Copy backup over current DB
 	backupData, err := os.ReadFile(backupPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read backup file"})
 		return
 	}
-	if err := os.WriteFile(dbPath, backupData, 0600); err != nil {
+
+	tmpPath := dbPath + ".restore"
+	if err := os.WriteFile(tmpPath, backupData, 0600); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write restore file"})
+		return
+	}
+
+	db.Close()
+
+	if err := os.Rename(tmpPath, dbPath); err != nil {
+		os.Remove(tmpPath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restore backup"})
 		return
 	}

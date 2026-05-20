@@ -75,7 +75,9 @@ func AuthMiddleware() gin.HandlerFunc {
 			key := handlers.ValidateAPIKey(apiKey)
 			if key != nil {
 				key.LastUsedAt = time.Now()
-				db.PutAPIKey(key)
+				if err := db.PutAPIKey(key); err != nil {
+					slog.Warn("failed to update API key last used", "key_id", key.ID, "error", err)
+				}
 				c.Set("username", fmt.Sprintf("apikey:%s", key.Name))
 				c.Set("role", key.Role)
 				c.Set("api_key_id", key.ID)
@@ -101,7 +103,6 @@ func AuthMiddleware() gin.HandlerFunc {
 func LocaleMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		locale := i18n.Locale()
-		// Check cookie first (user preference override)
 		if lang, err := c.Cookie("asika_lang"); err == nil && lang != "" {
 			locale = lang
 		} else {
@@ -182,20 +183,13 @@ func RequireRepoGroupAccess() gin.HandlerFunc {
 			return
 		}
 
-		// API key auth: check AllowedRepoGroups on the key
-		allowedGroups, _ := c.Get("allowed_repo_groups")
-		if allowedGroups != nil {
-			groups, ok := allowedGroups.([]string)
-			if ok && len(groups) > 0 {
-				for _, g := range groups {
-					if g == repoGroup {
-						c.Next()
-						return
-					}
-				}
-				c.JSON(http.StatusForbidden, gin.H{"error": "权限不够: 无权访问仓库组 " + repoGroup, "code": 403})
-				c.Abort()
-				return
+		// API key auth: check AllowedRepoGroups on the key.
+		// If the key has groups defined, use key scope intersected with user scope.
+		apiKeyGroups, _ := c.Get("allowed_repo_groups")
+		var keyAllowedGroups []string
+		if apiKeyGroups != nil {
+			if groups, ok := apiKeyGroups.([]string); ok && len(groups) > 0 {
+				keyAllowedGroups = groups
 			}
 		}
 
@@ -212,12 +206,31 @@ func RequireRepoGroupAccess() gin.HandlerFunc {
 			return
 		}
 
-		if len(user.AllowedRepoGroups) == 0 {
+		userGroups := user.AllowedRepoGroups
+
+		allowedGroups := userGroups
+		if len(keyAllowedGroups) > 0 && len(userGroups) > 0 {
+			groupSet := make(map[string]bool, len(userGroups))
+			for _, g := range userGroups {
+				groupSet[g] = true
+			}
+			var intersected []string
+			for _, g := range keyAllowedGroups {
+				if groupSet[g] {
+					intersected = append(intersected, g)
+				}
+			}
+			allowedGroups = intersected
+		} else if len(keyAllowedGroups) > 0 {
+			allowedGroups = keyAllowedGroups
+		}
+
+		if len(allowedGroups) == 0 {
 			c.Next()
 			return
 		}
 
-		for _, g := range user.AllowedRepoGroups {
+		for _, g := range allowedGroups {
 			if g == repoGroup {
 				c.Next()
 				return
@@ -253,7 +266,8 @@ func RequireRepoAccess() gin.HandlerFunc {
 			if ok && len(repos) > 0 {
 				resolvedRepo := resolveRepoFromRequest(c)
 				if resolvedRepo == "" {
-					c.Next()
+					c.JSON(http.StatusForbidden, gin.H{"error": "权限不够: 无法解析仓库", "code": 403})
+					c.Abort()
 					return
 				}
 				for _, r := range repos {
@@ -288,7 +302,8 @@ func RequireRepoAccess() gin.HandlerFunc {
 
 		resolvedRepo := resolveRepoFromRequest(c)
 		if resolvedRepo == "" {
-			c.Next()
+			c.JSON(http.StatusForbidden, gin.H{"error": "权限不够: 无法解析仓库", "code": 403})
+			c.Abort()
 			return
 		}
 
@@ -340,7 +355,12 @@ func RequireSpaceAccess() gin.HandlerFunc {
 		}
 
 		spaces, err := db.ListTeamSpaces()
-		if err != nil || len(spaces) == 0 {
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load spaces", "code": 500})
+			c.Abort()
+			return
+		}
+		if len(spaces) == 0 {
 			c.Next()
 			return
 		}
@@ -389,6 +409,29 @@ func RequireAnyRole(roles ...string) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "code": 403})
+		c.Abort()
+	}
+}
+
+// RequireSelfOrAdmin ensures the current user matches the :username path param or is admin.
+func RequireSelfOrAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		currentUser, _ := c.Get("username")
+		currentRole, _ := c.Get("role")
+		targetUsername := c.Param("username")
+
+		if currentUser == nil || currentRole == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "code": 401})
+			c.Abort()
+			return
+		}
+
+		if currentRole.(string) == "admin" || currentUser.(string) == targetUsername {
+			c.Next()
+			return
+		}
+
+		c.JSON(http.StatusForbidden, gin.H{"error": "forbidden: can only access own resources", "code": 403})
 		c.Abort()
 	}
 }

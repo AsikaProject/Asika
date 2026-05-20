@@ -357,7 +357,7 @@ func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, rep
 	case "bitbucket":
 		repoPath = group.Bitbucket
 	case "gerrit":
-		repoPath = group.Gerrit
+		return group.Gerrit, ""
 	}
 	if repoPath == "" {
 		return "", ""
@@ -432,6 +432,15 @@ func GetCloneURL(platform, owner, repo string) string {
 		}
 	case "bitbucket":
 		baseURL = "https://bitbucket.org"
+	case "gerrit":
+		cfg := Current()
+		if cfg != nil && cfg.Tokens.Gerrit.URL != "" {
+			baseURL = strings.TrimSuffix(cfg.Tokens.Gerrit.URL, "/")
+		} else {
+			slog.Warn("gerrit URL not configured")
+			return ""
+		}
+		return fmt.Sprintf("%s/%s", baseURL, owner)
 	}
 	return fmt.Sprintf("%s/%s/%s", baseURL, owner, repo)
 }
@@ -453,6 +462,8 @@ func GetToken(cfg *models.Config, platform string) string {
 		return cfg.Tokens.Codeberg
 	case "bitbucket":
 		return cfg.Tokens.Bitbucket
+	case "gerrit":
+		return cfg.Tokens.Gerrit.Password
 	}
 	return ""
 }
@@ -489,7 +500,7 @@ func SaveToFile(cfg models.Config) error {
 	}
 
 	tmpPath := path + ".tmp"
-	f, err := os.Create(tmpPath)
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
 	}
@@ -502,9 +513,16 @@ func SaveToFile(cfg models.Config) error {
 		os.Remove(tmpPath)
 		return fmt.Errorf("failed to close config file: %w", err)
 	}
+	if err := os.Chmod(tmpPath, 0600); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to chmod config file: %w", err)
+	}
 	if err := os.Rename(tmpPath, path); err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("failed to rename config file: %w", err)
+	}
+	if err := os.Chmod(path, 0600); err != nil {
+		return fmt.Errorf("failed to chmod config file: %w", err)
 	}
 
 	ConfigPath = path

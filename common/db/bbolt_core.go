@@ -91,7 +91,13 @@ func (s *bboltStorage) Get(bucket, key string) ([]byte, error) {
 		}
 		return nil
 	})
-	return result, err
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, ErrNotFound
+	}
+	return result, nil
 }
 
 func (s *bboltStorage) Delete(bucket, key string) error {
@@ -169,14 +175,22 @@ func (s *bboltStorage) PutPRWithIndex(key string, value []byte, prID, repoGroup 
 		if prID != "" {
 			idxB := tx.Bucket([]byte(BucketPRIndexByID))
 			if idxB != nil {
-				idxB.Put([]byte(prID), []byte(key))
+				idxKey := prID
+				if repoGroup != "" {
+					idxKey = repoGroup + ":" + prID
+				}
+				if err := idxB.Put([]byte(idxKey), []byte(key)); err != nil {
+					return fmt.Errorf("failed to write pr_index_by_id: %w", err)
+				}
 			}
 		}
 		if repoGroup != "" {
 			idxB := tx.Bucket([]byte(BucketPRIndexByRG))
 			if idxB != nil {
 				rgKey := fmt.Sprintf("%s:%d", repoGroup, prNumber)
-				idxB.Put([]byte(rgKey), []byte(key))
+				if err := idxB.Put([]byte(rgKey), []byte(key)); err != nil {
+					return fmt.Errorf("failed to write pr_index_by_rg: %w", err)
+				}
 			}
 		}
 		return nil
@@ -189,7 +203,11 @@ func (s *bboltStorage) GetPRByIndex(prID, repoGroup string, prNumber int) ([]byt
 		if prID != "" {
 			idxB := tx.Bucket([]byte(BucketPRIndexByID))
 			if idxB != nil {
-				if key := idxB.Get([]byte(prID)); key != nil {
+				idxKey := prID
+				if repoGroup != "" {
+					idxKey = repoGroup + ":" + prID
+				}
+				if key := idxB.Get([]byte(idxKey)); key != nil {
 					b := tx.Bucket([]byte(BucketPRs))
 					if b != nil {
 						if val := b.Get(key); val != nil {
@@ -244,6 +262,9 @@ func (s *bboltStorage) GetPRByIndex(prID, repoGroup string, prNumber int) ([]byt
 				continue
 			}
 			if pr.ID == prID {
+				if repoGroup != "" && pr.RepoGroup != repoGroup {
+					continue
+				}
 				fallbackKey = string(k)
 				fallbackVal = make([]byte, len(v))
 				copy(fallbackVal, v)
@@ -258,9 +279,24 @@ func (s *bboltStorage) GetPRByIndex(prID, repoGroup string, prNumber int) ([]byt
 	}
 	if result != nil && fallbackKey != "" {
 		s.db.Update(func(tx *bbolt.Tx) error {
+			var pr models.PRRecord
+			if err := json.Unmarshal(result, &pr); err != nil {
+				return nil
+			}
 			idxB := tx.Bucket([]byte(BucketPRIndexByID))
 			if idxB != nil {
-				idxB.Put([]byte(prID), []byte(fallbackKey))
+				idxKey := prID
+				if pr.RepoGroup != "" {
+					idxKey = pr.RepoGroup + ":" + prID
+				}
+				idxB.Put([]byte(idxKey), []byte(fallbackKey))
+			}
+			if pr.RepoGroup != "" && pr.PRNumber > 0 {
+				idxB := tx.Bucket([]byte(BucketPRIndexByRG))
+				if idxB != nil {
+					rgKey := fmt.Sprintf("%s:%d", pr.RepoGroup, pr.PRNumber)
+					idxB.Put([]byte(rgKey), []byte(fallbackKey))
+				}
 			}
 			return nil
 		})

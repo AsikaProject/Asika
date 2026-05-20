@@ -85,16 +85,28 @@ func getPRBody(pr *models.PRRecord) string {
 
 // GetIssueLinks handles GET /api/v1/repos/:repo_group/issues/:issue_id/prs
 func GetIssueLinks(c *gin.Context) {
-	issueID := c.Param("issue_id")
+	issueID := c.Query("issue_id")
 	if issueID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "issue_id required"})
 		return
 	}
 
+	repoGroup := c.Param("repo_group")
+
 	links, err := db.GetIssuePRLinksByIssue(issueID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query links"})
 		return
+	}
+
+	if repoGroup != "" {
+		filtered := make([]*models.IssuePRLink, 0, len(links))
+		for _, l := range links {
+			if l.RepoGroup == repoGroup {
+				filtered = append(filtered, l)
+			}
+		}
+		links = filtered
 	}
 
 	c.JSON(http.StatusOK, links)

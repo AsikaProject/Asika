@@ -28,12 +28,12 @@ func GetNotificationPrefs(c *gin.Context) {
 	}
 
 	data, err := db.GetNotificationPrefs(username)
-	if err != nil {
+	if err != nil && err != db.ErrNotFound {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to read preferences"})
 		return
 	}
 
-	if data == nil {
+	if data == nil || err == db.ErrNotFound {
 		c.JSON(http.StatusOK, models.NotificationPreferences{
 			Username:   username,
 			Enabled:    true,

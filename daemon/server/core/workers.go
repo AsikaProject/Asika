@@ -139,21 +139,23 @@ func StartWorkers(
 	slog.Info("RSS feed subscriber started", "enabled", cfg.Feed.Enabled)
 
 	// Token blacklist & fingerprint cleanup worker
+	cleanupStop := make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
-		stopCh := make(chan struct{})
 		for {
 			select {
 			case <-ticker.C:
 				auth.CleanupBlacklist()
 				auth.CleanupExpiredFingerprints()
-			case <-stopCh:
+			case <-cleanupStop:
+				slog.Info("token blacklist & fingerprint cleanup worker stopped")
 				return
 			}
 		}
 	}()
 	slog.Info("token blacklist & fingerprint cleanup worker started")
+	_ = cleanupStop
 
 	return
 }

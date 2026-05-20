@@ -95,7 +95,8 @@ func (b *Bot) Stop() {
 
 func (b *Bot) isAdmin(userID string) bool {
 	if len(b.adminIDs) == 0 && len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
-		return true
+		slog.Warn("discord: no admin/operator/viewer IDs configured, rejecting all users")
+		return false
 	}
 	return b.adminIDs[userID]
 }

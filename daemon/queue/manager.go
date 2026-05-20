@@ -15,6 +15,15 @@ import (
 	"asika/common/platforms"
 )
 
+const maxRetryCount = 5
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // Manager manages the merge queue
 type Manager struct {
 	cfg      *models.Config
@@ -168,8 +177,17 @@ func (m *Manager) CheckQueue() {
 			doneKeys = append(doneKeys, string(key))
 			return nil
 		}
-		// Process waiting, checking, and failed items (failed items can be retried)
 		if item.Status != "waiting" && item.Status != "checking" && item.Status != "failed" {
+			return nil
+		}
+		if item.Status == "failed" && item.RetryCount >= maxRetryCount {
+			slog.Warn("queue item exceeded max retries, moving to dead-letter", "pr_id", item.PRID, "repo_group", item.RepoGroup, "retries", item.RetryCount)
+			item.Status = "dead-letter"
+			deadData, _ := json.Marshal(item)
+			db.Put(db.BucketQueueItems, string(key), deadData)
+			return nil
+		}
+		if item.Status == "failed" && !item.NextRetryAt.IsZero() && item.NextRetryAt.After(time.Now()) {
 			return nil
 		}
 		items = append(items, item)
@@ -208,6 +226,8 @@ func (m *Manager) CheckQueue() {
 				slog.Error("check failed", "error", err, "pr_id", item.PRID)
 				item.Status = "failed"
 				item.FailureReason = err.Error()
+				item.RetryCount++
+				item.NextRetryAt = time.Now().Add(time.Duration(1<<uint(min(item.RetryCount, 10))) * time.Second)
 			}
 			updated, err := json.Marshal(item)
 			if err != nil {
@@ -222,6 +242,8 @@ func (m *Manager) CheckQueue() {
 			if err := m.merge(&item); err != nil {
 				item.Status = "failed"
 				item.FailureReason = err.Error()
+				item.RetryCount++
+				item.NextRetryAt = time.Now().Add(time.Duration(1<<uint(min(item.RetryCount, 10))) * time.Second)
 				updated, err := json.Marshal(item)
 				if err != nil {
 					slog.Error("failed to marshal queue item", "error", err, "pr_id", item.PRID)

@@ -127,7 +127,7 @@
                 '<td style="font-size:12px;font-family:monospace;">' + k.id + '</td>' +
                 '<td style="font-size:12px;">' + (k.created_at ? k.created_at.substring(0,16) : '-') + '</td>' +
                 '<td style="font-size:12px;">' + lastUsed + '</td>' +
-                '<td><button class="btn btn-danger btn-sm" onclick="revokeKey(\'' + k.id + '\',\'' + escapeHtml(k.name) + '\')">{{t "apikeys.revoke"}}</button></td>' +
+                '<td><button class="btn btn-danger btn-sm" onclick="revokeKey(\'' + escapeJs(k.id) + '\',\'' + escapeJs(k.name) + '\')">{{t "apikeys.revoke"}}</button></td>' +
                 '</tr>';
         });
         html += '</table>';

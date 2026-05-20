@@ -45,12 +45,15 @@ func FeishuEventHandler(c *gin.Context) {
 		var tokenCheck struct {
 			Token string `json:"token"`
 		}
-		if unmarshalErr := json.Unmarshal(body, &tokenCheck); unmarshalErr == nil {
-			if tokenCheck.Token != cfg.Feishu.VerificationToken {
-				slog.Warn("feishu: invalid verification token")
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid verification token"})
-				return
-			}
+		if unmarshalErr := json.Unmarshal(body, &tokenCheck); unmarshalErr != nil {
+			slog.Warn("feishu: failed to parse request body", "error", unmarshalErr)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+		if tokenCheck.Token != cfg.Feishu.VerificationToken {
+			slog.Warn("feishu: invalid verification token")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid verification token"})
+			return
 		}
 	}
 

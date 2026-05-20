@@ -86,7 +86,7 @@
                     '<p><strong>Last commit:</strong> <code style="font-size:12px;">'+escapeHtml(p.merge_commit_sha.substring(0,8))+'</code></p>';
             }
             document.getElementById('prDetail').innerHTML =
-                '<h1>'+escapeHtml(p.title)+' <span style="font-size:14px;color:#666;">#'+p.pr_number+'</span></h1>' +
+                '<h1>'+escapeHtml(p.title)+' <span style="font-size:14px;color:#666;">#'+escapeHtml(String(p.pr_number))+'</span></h1>' +
                 '<p><strong>{{t "pr_detail.author"}} </strong> '+escapeHtml(p.author)+'</p>' +
                 '<p><strong>{{t "pr_detail.state"}} </strong> <span class="status-'+escapeHtml(p.state)+'">'+escapeHtml(p.state)+'</span></p>' +
                 '<p><strong>{{t "pr_detail.platform"}} </strong> '+platformLink+'</p>' +
@@ -191,7 +191,7 @@
         });
         if(resp.ok){ L(); }
     }
-    function D(m){ document.getElementById('prDetail').innerHTML = '<p class="error">'+m+'</p>'; }
+    function D(m){ var el = document.getElementById('prDetail'); el.innerHTML = ''; var p = document.createElement('p'); p.className = 'error'; p.textContent = m; el.appendChild(p); }
     L();
 </script>
 {{template "client_auth"}}

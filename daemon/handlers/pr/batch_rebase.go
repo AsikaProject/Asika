@@ -59,8 +59,7 @@ func BatchRebasePR(c *gin.Context) {
 }
 
 func batchRebaseSinglePR(c *gin.Context, group *models.RepoGroup, repoGroup, prID string, cfg *models.Config) BatchRebaseResult {
-	// Find PR
-	data, err := db.GetPRByIndex(prID, "", 0)
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
 	if err != nil || data == nil {
 		return BatchRebaseResult{
 			PRID:    prID,
@@ -75,6 +74,13 @@ func batchRebaseSinglePR(c *gin.Context, group *models.RepoGroup, repoGroup, prI
 			PRID:    prID,
 			Success: false,
 			Message: "failed to parse PR",
+		}
+	}
+	if pr.RepoGroup != "" && pr.RepoGroup != repoGroup {
+		return BatchRebaseResult{
+			PRID:    prID,
+			Success: false,
+			Message: "PR not found in repo group",
 		}
 	}
 

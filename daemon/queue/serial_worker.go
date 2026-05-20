@@ -245,7 +245,26 @@ func (w *SerialWorker) markMergeable(item *models.QueueItem, key string) {
 	item.Status = "ready"
 	item.ValidationDetail = "serial validation complete, ready for merge"
 	w.updateItem(item, key)
+	queueItem := &models.QueueItem{
+		PRID:             item.PRID,
+		RepoGroup:        item.RepoGroup,
+		Status:           "ready",
+		ValidationDetail: item.ValidationDetail,
+		AddedAt:          item.AddedAt,
+	}
+	if err := w.updateMainQueue(queueItem); err != nil {
+		slog.Error("serial: failed to update main queue", "pr_id", item.PRID, "error", err)
+	}
 	slog.Info("serial: PR marked ready for merge", "pr_id", item.PRID)
+}
+
+func (w *SerialWorker) updateMainQueue(item *models.QueueItem) error {
+	key := fmt.Sprintf("%s#%s", item.RepoGroup, item.PRID)
+	data, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	return db.Put(db.BucketQueueItems, key, data)
 }
 
 func (w *SerialWorker) fail(item *models.QueueItem, key, reason string) {

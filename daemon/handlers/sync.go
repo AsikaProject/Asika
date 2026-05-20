@@ -91,15 +91,16 @@ func RetrySync(c *gin.Context) {
 
 // findPRInDB finds a PR by repo group and PR ID in bbolt
 func findPRInDB(repoGroup, prID string) *models.PRRecord {
-	// Try index lookup first
-	data, err := db.GetPRByIndex(prID, "", 0)
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
 	if err == nil && data != nil {
 		var pr models.PRRecord
-		if json.Unmarshal(data, &pr) == nil && pr.RepoGroup == repoGroup {
+		if json.Unmarshal(data, &pr) == nil {
+			if pr.RepoGroup != "" && pr.RepoGroup != repoGroup {
+				return nil
+			}
 			return &pr
 		}
 	}
-	// Fallback to full scan
 	var found *models.PRRecord
 	db.ForEach(db.BucketPRs, func(key, value []byte) error {
 		var pr models.PRRecord

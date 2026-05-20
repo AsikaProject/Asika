@@ -68,6 +68,10 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 			return false, nil
 		}
 	}
+	if pr.HasConflict && mq.Expression != "" && !mq.AllowExpressionOverrideCI {
+		slog.Info("PR has merge conflicts, hard gate blocking", "pr_id", pr.ID, "title", pr.Title)
+		return false, nil
+	}
 
 	approvalStatus, err := c.fetchApprovals(ctx, pr, group)
 	if err != nil {
@@ -250,15 +254,16 @@ func isTransientError(err error) bool {
 var errStop = fmt.Errorf("stop")
 
 func getPRFromDB(repoGroup, prID string) (*models.PRRecord, error) {
-	// Try index lookup first (fast path for production data)
-	data, err := db.GetPRByIndex(prID, "", 0)
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
 	if err == nil && data != nil {
 		var pr models.PRRecord
 		if json.Unmarshal(data, &pr) == nil {
+			if pr.RepoGroup != "" && pr.RepoGroup != repoGroup {
+				return nil, fmt.Errorf("pr repo_group mismatch: expected %s, got %s", repoGroup, pr.RepoGroup)
+			}
 			return &pr, nil
 		}
 	}
-	// Fallback: direct key lookup by repoGroup#prID
 	key := fmt.Sprintf("%s#%s", repoGroup, prID)
 	data, err = db.Get(db.BucketPRs, key)
 	if err == nil && data != nil {

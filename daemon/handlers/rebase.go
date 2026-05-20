@@ -70,7 +70,7 @@ func RebaseQueue(c *gin.Context) {
 		if item.RepoGroup != repoGroup {
 			return nil
 		}
-		pr, findErr := findPRForRebase(item.PRID)
+		pr, findErr := findPRForRebaseInGroup(item.PRID, repoGroup)
 		if findErr != nil || pr == nil {
 			return nil
 		}
@@ -107,7 +107,7 @@ func RebaseQueue(c *gin.Context) {
 }
 
 func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID string, cfg *models.Config) (*RebaseResponse, error) {
-	pr, err := findPRForRebase(prID)
+	pr, err := findPRForRebaseInGroup(prID, repoGroup)
 	if err != nil {
 		return nil, fmt.Errorf("PR not found: %s", prID)
 	}
@@ -192,10 +192,17 @@ func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID
 }
 
 func findPRForRebase(prID string) (*models.PRRecord, error) {
-	data, err := db.GetPRByIndex(prID, "", 0)
+	return findPRForRebaseInGroup(prID, "")
+}
+
+func findPRForRebaseInGroup(prID, repoGroup string) (*models.PRRecord, error) {
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
 	if err == nil && data != nil {
 		var pr models.PRRecord
 		if json.Unmarshal(data, &pr) == nil {
+			if repoGroup != "" && pr.RepoGroup != "" && pr.RepoGroup != repoGroup {
+				return nil, fmt.Errorf("PR #%s not found in repo group %s", prID, repoGroup)
+			}
 			return &pr, nil
 		}
 	}
@@ -207,6 +214,9 @@ func findPRForRebase(prID string) (*models.PRRecord, error) {
 			return nil
 		}
 		if pr.ID == prID {
+			if repoGroup != "" && pr.RepoGroup != repoGroup {
+				return nil
+			}
 			found = &pr
 		}
 		return nil
@@ -266,7 +276,7 @@ func CherryPickSinglePR(c *gin.Context) {
 }
 
 func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, prID, targetBranch string, cfg *models.Config) (*CherryPickResponse, error) {
-	pr, err := findPRForRebase(prID)
+	pr, err := findPRForRebaseInGroup(prID, repoGroup)
 	if err != nil {
 		return nil, fmt.Errorf("PR not found: %s", prID)
 	}

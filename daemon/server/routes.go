@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"net/http/pprof"
 
@@ -17,6 +18,7 @@ func (s *Server) setupRoutes() {
 	s.engine.GET("/metrics", metricsHandler)
 
 	if s.cfg != nil && s.cfg.Server.EnablePprof {
+		slog.Warn("pprof debug endpoints are enabled; ensure admin sessions are not exposed to untrusted networks")
 		debug := s.engine.Group("/debug/pprof")
 		debug.Use(RequireAuth())
 		debug.Use(RequireRole("admin"))
@@ -181,6 +183,7 @@ func (s *Server) setupRoutes() {
 		protected.GET("/reports", handlers.GetReportHistory)
 
 		notifPrefs := protected.Group("/users/:username/notifications")
+		notifPrefs.Use(RequireSelfOrAdmin())
 		{
 			notifPrefs.GET("", handlers.GetNotificationPrefs)
 			notifPrefs.PUT("", handlers.UpdateNotificationPrefs)
@@ -222,7 +225,7 @@ func (s *Server) setupRoutes() {
 			webhooksAdmin.POST("/:index/test", handlers.TestWebhook)
 		}
 
-		protected.GET("/feed.xml", handlers.GetFeed)
+		api.GET("/feed.xml", handlers.GetFeed)
 		feedAdmin := protected.Group("/feed")
 		feedAdmin.Use(RequireRole("admin"))
 		{
@@ -246,9 +249,17 @@ func (s *Server) setupRoutes() {
 		issueLinks := protected.Group("/repos/:repo_group")
 		issueLinks.Use(RequireRepoGroupAccess())
 		{
-			issueLinks.GET("/issues/:issue_id/prs", handlers.GetIssueLinks)
+			issueLinks.GET("/issues", handlers.GetIssueLinks)
 			issueLinks.GET("/prs/:pr_id/issues", handlers.GetPRLinks)
 			issueLinks.POST("/prs/:pr_id/sync-links", handlers.SyncIssueLinks)
+		}
+
+		// Label rules
+		rules := protected.Group("/rules")
+		rules.Use(RequireAnyRole("viewer", "operator", "admin"))
+		{
+			rules.GET("/labels", handlers.GetLabelRules)
+			rules.PUT("/labels", handlers.UpdateLabelRules)
 		}
 
 		// PR templates

@@ -76,6 +76,7 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	}
 
 	auth.Init(cfg.Auth.JWTSecret, config.GenerateTokenExpiry(cfg.Auth.TokenExpiry))
+	handlers.SetHMACSecret(cfg.Auth.JWTSecret)
 
 	if cfg.Auth.FingerprintEnabled {
 		fpExpiry := config.GenerateTokenExpiry(cfg.Auth.FingerprintExpiry)
@@ -131,7 +132,7 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	events.Init()
 
 	if err := platforms.CheckMergeMethods(cfg, clients); err != nil {
-		platforms.ExitOnCheckFailed(err)
+		slog.Error("merge method check failed, continuing with warnings", "error", err)
 	}
 
 	ic := &InitConfig{

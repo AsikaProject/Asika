@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
+	"asika/daemon/hooks"
 )
 
 var (
@@ -88,7 +88,10 @@ func UpdateConfig(c *gin.Context) {
 	}
 
 	// Get current config path
-	configPath := os.Getenv("ASIKA_CONFIG")
+	configPath := config.ConfigPath
+	if configPath == "" {
+		configPath = os.Getenv("ASIKA_CONFIG")
+	}
 	if configPath == "" {
 		configPath = "/etc/asika_config.toml"
 	}
@@ -175,22 +178,27 @@ func UpdateConfig(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "hookpath must be a string"})
 			return
 		}
-		if !filepath.IsAbs(hp) || strings.Contains(hp, "..") {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "hookpath must be an absolute path without .. components"})
+		if err := hooks.ValidateHookPath(hp); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		existing["hookpath"] = hookpath
 	}
 
-	// Write back
 	newData, err := toml.Marshal(&existing)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal config"})
 		return
 	}
 
-	if err := os.WriteFile(configPath, newData, 0600); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write config"})
+	var cfgToWrite models.Config
+	if err := toml.Unmarshal(newData, &cfgToWrite); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse merged config"})
+		return
+	}
+
+	if err := config.SaveToFile(cfgToWrite); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save config"})
 		return
 	}
 

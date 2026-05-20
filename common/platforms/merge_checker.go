@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 
 	"asika/common/config"
@@ -128,10 +127,10 @@ func checkGerritMergeMethod(ctx context.Context, client PlatformClient, project 
 	return nil
 }
 
-// ExitOnCheckFailed exits if merge method check fails
+// ExitOnCheckFailed logs a fatal error for merge method check failures.
+// Deprecated: callers should handle the error directly instead of exiting.
 func ExitOnCheckFailed(err error) {
 	if err != nil {
 		slog.Error("FATAL: merge method check failed", "error", err)
-		os.Exit(1)
 	}
 }

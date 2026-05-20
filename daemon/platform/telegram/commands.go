@@ -3,13 +3,15 @@ package telegram
 import (
 	"fmt"
 	"html"
+	"log/slog"
 
 	"gopkg.in/telebot.v3"
 )
 
 func (b *Bot) isAdmin(c telebot.Context) bool {
 	if len(b.adminIDs) == 0 && len(b.operatorIDs) == 0 && len(b.viewerIDs) == 0 {
-		return true
+		slog.Warn("telegram: no admin/operator/viewer IDs configured, rejecting all users")
+		return false
 	}
 	return b.adminIDs[c.Sender().ID]
 }

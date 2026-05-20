@@ -64,9 +64,8 @@ func TestRun_HookScriptFails(t *testing.T) {
 
 	r := NewRunner(dir)
 	err = r.Run("update", "/tmp/git", "abc123", "def456", "refs/heads/main")
-	// Hook failure should not return error (just warn)
-	if err != nil {
-		t.Errorf("Run should not return error even if hook fails, got %v", err)
+	if err == nil {
+		t.Errorf("Run should return error when hook fails")
 	}
 }
 
