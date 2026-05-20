@@ -10,7 +10,7 @@
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>{{t "audit.title"}}</h1>
+<h1><span data-i18n="audit.title">{{t "audit.title"}}</span></h1>
 
 <div style="margin:12px 0;display:flex;gap:8px;flex-wrap:wrap;">
     <select id="filterLevel" onchange="loadLogs()">

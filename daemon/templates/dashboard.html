@@ -10,69 +10,69 @@
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>{{t "dashboard.title"}}</h1>
+<h1><span data-i18n="dashboard.title">{{t "dashboard.title"}}</span></h1>
 
-<h2 style="margin-top:20px;">{{t "dashboard.dora"}} <span style="font-size:13px;color:var(--text-secondary);font-weight:normal;">(last <span id="periodLabel">30</span> days)</span></h2>
+<h2 style="margin-top:20px;"><span data-i18n="dashboard.dora">{{t "dashboard.dora"}}</span> <span style="font-size:13px;color:var(--text-secondary);font-weight:normal;">(last <span id="periodLabel">30</span> days)</span></h2>
 <div class="stats" id="doraStats">
     <div class="stat-card">
-        <h3>{{t "dashboard.deployments_per_day"}}</h3>
+        <h3><span data-i18n="dashboard.deployments_per_day">{{t "dashboard.deployments_per_day"}}</span></h3>
         <p id="deployFreq">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "dashboard.lead_time"}}</h3>
+        <h3><span data-i18n="dashboard.lead_time">{{t "dashboard.lead_time"}}</span></h3>
         <p id="leadTime">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "dashboard.failure_rate"}}</h3>
+        <h3><span data-i18n="dashboard.failure_rate">{{t "dashboard.failure_rate"}}</span></h3>
         <p id="failRate">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "dashboard.mttr"}}</h3>
+        <h3><span data-i18n="dashboard.mttr">{{t "dashboard.mttr"}}</span></h3>
         <p id="mttr">-</p>
     </div>
 </div>
 
-<h2 style="margin-top:20px;">{{t "dashboard.overview"}}</h2>
+<h2 style="margin-top:20px;"><span data-i18n="dashboard.overview">{{t "dashboard.overview"}}</span></h2>
 <div class="stats">
     <div class="stat-card">
-        <h3>{{t "dashboard.total_prs"}}</h3>
+        <h3><span data-i18n="dashboard.total_prs">{{t "dashboard.total_prs"}}</span></h3>
         <p id="totalPRs">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "dashboard.open"}}</h3>
+        <h3><span data-i18n="dashboard.open">{{t "dashboard.open"}}</span></h3>
         <p id="openPRs">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "dashboard.merged"}}</h3>
+        <h3><span data-i18n="dashboard.merged">{{t "dashboard.merged"}}</span></h3>
         <p id="mergedPRs">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "dashboard.queue_items"}}</h3>
+        <h3><span data-i18n="dashboard.queue_items">{{t "dashboard.queue_items"}}</span></h3>
         <p id="queueItems">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "dashboard.failed_queue"}}</h3>
+        <h3><span data-i18n="dashboard.failed_queue">{{t "dashboard.failed_queue"}}</span></h3>
         <p id="failedQueue">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "dashboard.sync_failures"}}</h3>
+        <h3><span data-i18n="dashboard.sync_failures">{{t "dashboard.sync_failures"}}</span></h3>
         <p id="syncFails">-</p>
     </div>
 </div>
 
-<h2 style="margin-top:20px;">{{t "dashboard.breakdown"}}</h2>
+<h2 style="margin-top:20px;"><span data-i18n="dashboard.breakdown">{{t "dashboard.breakdown"}}</span></h2>
 <div class="card">
-    <h3>{{t "dashboard.prs_by_repo_group"}}</h3>
-    <div id="byGroup">{{t "common.loading"}}</div>
+    <h3><span data-i18n="dashboard.prs_by_repo_group">{{t "dashboard.prs_by_repo_group"}}</span></h3>
+    <div id="byGroup"><span data-i18n="common.loading">{{t "common.loading"}}</span></div>
 </div>
 <div class="card">
-    <h3>{{t "dashboard.prs_by_platform"}}</h3>
-    <div id="byPlatform">{{t "common.loading"}}</div>
+    <h3><span data-i18n="dashboard.prs_by_platform">{{t "dashboard.prs_by_platform"}}</span></h3>
+    <div id="byPlatform"><span data-i18n="common.loading">{{t "common.loading"}}</span></div>
 </div>
 
-<h2 style="margin-top:20px;">{{t "dashboard.activity"}}</h2>
+<h2 style="margin-top:20px;"><span data-i18n="dashboard.activity">{{t "dashboard.activity"}}</span></h2>
 <div class="card">
-    <div id="activity">{{t "common.loading"}}</div>
+    <div id="activity"><span data-i18n="common.loading">{{t "common.loading"}}</span></div>
 </div>
 </div>
 {{template "scripts"}}

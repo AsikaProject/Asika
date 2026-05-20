@@ -5,30 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
     {{template "styles"}}
-    <title>{{t "queue.title"}} - Asika</title>
+    <title><span data-i18n="queue.title">{{t "queue.title"}}</span> - Asika</title>
 </head>
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>{{t "queue.title"}}</h1>
+<h1><span data-i18n="queue.title">{{t "queue.title"}}</span></h1>
 <div class="form-group">
-    <label>{{t "pr_list.repo_group"}}</label>
+    <label><span data-i18n="pr_list.repo_group">{{t "pr_list.repo_group"}}</span></label>
     <select id="repoGroupSelect" onchange="loadQueue()">
     </select>
 </div>
 <div class="card">
-      <button class="btn btn-primary" onclick="recheckQueue()">{{t "queue.recheck"}}</button>
-     <button class="btn btn-danger" onclick="clearQueue()" style="margin-left: 10px;">{{t "common.delete"}}</button>
+      <button class="btn btn-primary" onclick="recheckQueue()"><span data-i18n="queue.recheck">{{t "queue.recheck"}}</span></button>
+     <button class="btn btn-danger" onclick="clearQueue()" style="margin-left: 10px;"><span data-i18n="common.delete">{{t "common.delete"}}</span></button>
     <div class="table-wrapper">
     <table style="margin-top: 20px;">
         <thead>
              <tr>
-                 <th>{{t "queue.th.pr"}}</th>
-                 <th>{{t "queue.th.title"}}</th>
-                 <th>{{t "queue.th.status"}}</th>
-                 <th>{{t "queue.th.approvals"}}</th>
-                 <th>{{t "queue.th.ci"}}</th>
-                 <th>{{t "queue.th.action"}}</th>
+                 <th><span data-i18n="queue.th.pr">{{t "queue.th.pr"}}</span></th>
+                 <th><span data-i18n="queue.th.title">{{t "queue.th.title"}}</span></th>
+                 <th><span data-i18n="queue.th.status">{{t "queue.th.status"}}</span></th>
+                 <th><span data-i18n="queue.th.approvals">{{t "queue.th.approvals"}}</span></th>
+                 <th><span data-i18n="queue.th.ci">{{t "queue.th.ci"}}</span></th>
+                 <th><span data-i18n="queue.th.action">{{t "queue.th.action"}}</span></th>
              </tr>
         </thead>
         <tbody id="queueBody">

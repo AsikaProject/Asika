@@ -1,13 +1,13 @@
 {{template "layout.html" .}}
 
 <div class="container mx-auto px-4 py-8">
-  <h1 class="text-2xl font-bold mb-6">{{t "notification_preferences"}}</h1>
+  <h1 class="text-2xl font-bold mb-6"><span data-i18n="notification_preferences">{{t "notification_preferences"}}</span></h1>
 
   <div class="bg-white rounded-lg shadow p-6 mb-6">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h2 class="text-lg font-semibold">{{t "master_switch"}}</h2>
-        <p class="text-gray-500 text-sm">{{t "master_switch_desc"}}</p>
+        <h2 class="text-lg font-semibold"><span data-i18n="master_switch">{{t "master_switch"}}</span></h2>
+        <p class="text-gray-500 text-sm"><span data-i18n="master_switch_desc">{{t "master_switch_desc"}}</span></p>
       </div>
       <label class="relative inline-flex items-center cursor-pointer">
         <input type="checkbox" id="notif-enabled" class="sr-only peer" checked>
@@ -16,82 +16,82 @@
     </div>
 
     <div class="mb-6">
-      <h3 class="text-md font-semibold mb-3">{{t "digest_mode"}}</h3>
+      <h3 class="text-md font-semibold mb-3"><span data-i18n="digest_mode">{{t "digest_mode"}}</span></h3>
       <div class="flex gap-4">
         <label class="flex items-center gap-2">
           <input type="radio" name="digest" value="realtime" checked class="text-blue-600">
-          <span>{{t "realtime"}}</span>
+          <span><span data-i18n="realtime">{{t "realtime"}}</span></span>
         </label>
         <label class="flex items-center gap-2">
           <input type="radio" name="digest" value="hourly" class="text-blue-600">
-          <span>{{t "hourly"}}</span>
+          <span><span data-i18n="hourly">{{t "hourly"}}</span></span>
         </label>
         <label class="flex items-center gap-2">
           <input type="radio" name="digest" value="daily" class="text-blue-600">
-          <span>{{t "daily"}}</span>
+          <span><span data-i18n="daily">{{t "daily"}}</span></span>
         </label>
       </div>
     </div>
 
     <div class="mb-6">
-      <h3 class="text-md font-semibold mb-3">{{t "notifiers"}}</h3>
+      <h3 class="text-md font-semibold mb-3"><span data-i18n="notifiers">{{t "notifiers"}}</span></h3>
       <div id="notifier-list" class="space-y-2">
       </div>
     </div>
 
     <div class="mb-6">
-      <h3 class="text-md font-semibold mb-3">{{t "event_types"}}</h3>
+      <h3 class="text-md font-semibold mb-3"><span data-i18n="event_types">{{t "event_types"}}</span></h3>
       <div class="grid grid-cols-2 gap-3">
         <label class="flex items-center gap-2">
           <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_opened" checked>
-          <span>{{t "pr_opened"}}</span>
+          <span><span data-i18n="pr_opened">{{t "pr_opened"}}</span></span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_closed" checked>
-          <span>{{t "pr_closed"}}</span>
+          <span><span data-i18n="pr_closed">{{t "pr_closed"}}</span></span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_merged" checked>
-          <span>{{t "pr_merged"}}</span>
+          <span><span data-i18n="pr_merged">{{t "pr_merged"}}</span></span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_approved" checked>
-          <span>{{t "pr_approved"}}</span>
+          <span><span data-i18n="pr_approved">{{t "pr_approved"}}</span></span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_reopened">
-          <span>{{t "pr_reopened"}}</span>
+          <span><span data-i18n="pr_reopened">{{t "pr_reopened"}}</span></span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="event-pref text-blue-600 rounded" value="pr_labeled">
-          <span>{{t "pr_labeled"}}</span>
+          <span><span data-i18n="pr_labeled">{{t "pr_labeled"}}</span></span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="event-pref text-blue-600 rounded" value="spam_detected">
-          <span>{{t "spam_detected"}}</span>
+          <span><span data-i18n="spam_detected">{{t "spam_detected"}}</span></span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="event-pref text-blue-600 rounded" value="sync_failed">
-          <span>{{t "sync_failed"}}</span>
+          <span><span data-i18n="sync_failed">{{t "sync_failed"}}</span></span>
         </label>
       </div>
     </div>
 
     <div class="mb-6">
-      <h3 class="text-md font-semibold mb-3">{{t "quiet_hours_override"}}</h3>
+      <h3 class="text-md font-semibold mb-3"><span data-i18n="quiet_hours_override">{{t "quiet_hours_override"}}</span></h3>
       <div class="flex items-center gap-4">
         <label class="flex items-center gap-2">
           <input type="checkbox" id="quiet-override" class="text-blue-600 rounded">
-          <span>{{t "enable_quiet_hours"}}</span>
+          <span><span data-i18n="enable_quiet_hours">{{t "enable_quiet_hours"}}</span></span>
         </label>
         <input type="time" id="quiet-start" value="22:00" class="border rounded px-2 py-1">
-        <span>{{t "to"}}</span>
+        <span><span data-i18n="to">{{t "to"}}</span></span>
         <input type="time" id="quiet-end" value="08:00" class="border rounded px-2 py-1">
       </div>
     </div>
 
     <button id="save-prefs" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
-      {{t "save_preferences"}}
+      <span data-i18n="save_preferences">{{t "save_preferences"}}</span>
     </button>
   </div>
 </div>

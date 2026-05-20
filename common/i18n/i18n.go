@@ -130,6 +130,33 @@ func translate(locale, key string, args ...interface{}) string {
 	return fmt.Sprintf(msg, args...)
 }
 
+// AllMessages returns a copy of all messages for the given locale.
+// If the locale is not found, falls back to "en".
+func AllMessages(locale string) map[string]string {
+	mu.RLock()
+	defer mu.RUnlock()
+	msgs, ok := messages[locale]
+	if !ok {
+		msgs = messages["en"]
+	}
+	result := make(map[string]string, len(msgs))
+	for k, v := range msgs {
+		result[k] = v
+	}
+	return result
+}
+
+// Locales returns the list of available locale codes.
+func Locales() []string {
+	mu.RLock()
+	defer mu.RUnlock()
+	result := make([]string, 0, len(messages))
+	for k := range messages {
+		result = append(result, k)
+	}
+	return result
+}
+
 // ParseAcceptLanguage parses an Accept-Language header and returns the best match.
 func ParseAcceptLanguage(header string) string {
 	if header == "" {

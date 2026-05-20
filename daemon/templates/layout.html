@@ -225,18 +225,18 @@
             <option value="en" {{if eq (currentLang) "en"}}selected{{end}}>English</option>
             <option value="zh" {{if eq (currentLang) "zh"}}selected{{end}}>中文</option>
         </select>
-        <div class="user-info">{{.username}} | <a href="#" onclick="logout(); return false;" style="color: var(--danger);">{{t "nav.logout"}}</a></div>
+        <div class="user-info">{{.username}} | <a href="#" onclick="logout(); return false;" style="color: var(--danger);"><span data-i18n="nav.logout">{{t "nav.logout"}}</span></a></div>
         <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Menu">&#9776;</button>
     </div>
     <div class="nav">
-        <a href="/dashboard">{{t "nav.dashboard"}}</a>
-        <a href="/prs">{{t "nav.prs"}}</a>
-        <a href="/queue">{{t "nav.queue"}}</a>
-        <a href="/users">{{t "nav.users"}}</a>
-        <a href="/settings">{{t "nav.settings"}}</a>
-        <a href="/config">{{t "nav.config"}}</a>
-        <a href="/apikeys">{{t "nav.apikeys"}}</a>
-        <a href="/usage">{{t "nav.usage"}}</a>
+        <a href="/dashboard"><span data-i18n="nav.dashboard">{{t "nav.dashboard"}}</span></a>
+        <a href="/prs"><span data-i18n="nav.prs">{{t "nav.prs"}}</span></a>
+        <a href="/queue"><span data-i18n="nav.queue">{{t "nav.queue"}}</span></a>
+        <a href="/users"><span data-i18n="nav.users">{{t "nav.users"}}</span></a>
+        <a href="/settings"><span data-i18n="nav.settings">{{t "nav.settings"}}</span></a>
+        <a href="/config"><span data-i18n="nav.config">{{t "nav.config"}}</span></a>
+        <a href="/apikeys"><span data-i18n="nav.apikeys">{{t "nav.apikeys"}}</span></a>
+        <a href="/usage"><span data-i18n="nav.usage">{{t "nav.usage"}}</span></a>
     </div>
 </div>
 {{end}}

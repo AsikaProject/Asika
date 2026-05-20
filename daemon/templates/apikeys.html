@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
     {{template "styles"}}
-    <title>{{t "apikeys.title"}}</title>
+    <title><span data-i18n="apikeys.title">{{t "apikeys.title"}}</span></title>
     <style>
         .key-display { font-family: monospace; font-size: 13px; background: #f0f0f0; padding: 8px 12px; border-radius: 4px; word-break: break-all; }
         .key-hidden { color: #999; }
@@ -35,38 +35,38 @@
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>{{t "apikeys.title"}}</h1>
+<h1><span data-i18n="apikeys.title">{{t "apikeys.title"}}</span></h1>
 
 <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h2 style="margin:0">{{t "apikeys.api_keys"}}</h2>
-        <button class="btn btn-primary" onclick="openCreateModal()">+ {{t "apikeys.create"}}</button>
+        <h2 style="margin:0"><span data-i18n="apikeys.api_keys">{{t "apikeys.api_keys"}}</span></h2>
+        <button class="btn btn-primary" onclick="openCreateModal()">+ <span data-i18n="apikeys.create">{{t "apikeys.create"}}</span></button>
     </div>
-    <div id="keysList">{{t "common.loading"}}</div>
+    <div id="keysList"><span data-i18n="common.loading">{{t "common.loading"}}</span></div>
 </div>
 </div>
 
 <!-- Create Modal -->
 <div id="createModal" class="modal-overlay">
     <div class="modal">
-        <h3>{{t "apikeys.create_api_key"}}</h3>
+        <h3><span data-i18n="apikeys.create_api_key">{{t "apikeys.create_api_key"}}</span></h3>
         <div class="form-group">
-            <label>{{t "apikeys.name"}}</label>
+            <label><span data-i18n="apikeys.name">{{t "apikeys.name"}}</span></label>
             <input type="text" id="newKeyName" placeholder="e.g. ci-cd-operator">
         </div>
         <div class="form-group">
-            <label>{{t "apikeys.role"}}</label>
+            <label><span data-i18n="apikeys.role">{{t "apikeys.role"}}</span></label>
             <select id="newKeyRole" onchange="toggleNewPerms()">
-                <option value="viewer">{{t "users.role.viewer"}}</option>
-                <option value="operator" selected>{{t "users.role.operator"}}</option>
-                <option value="admin">{{t "users.role.admin"}}</option>
+                <option value="viewer"><span data-i18n="users.role.viewer">{{t "users.role.viewer"}}</span></option>
+                <option value="operator" selected><span data-i18n="users.role.operator">{{t "users.role.operator"}}</span></option>
+                <option value="admin"><span data-i18n="users.role.admin">{{t "users.role.admin"}}</span></option>
             </select>
         </div>
-        <div id="newPermsSection" class="section-title" style="margin:12px 0 8px;">{{t "users.permissions"}}</div>
+        <div id="newPermsSection" class="section-title" style="margin:12px 0 8px;"><span data-i18n="users.permissions">{{t "users.permissions"}}</span></div>
         <div id="newPerms" class="perm-grid"></div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeCreateModal()">{{t "common.cancel"}}</button>
-            <button class="btn btn-primary" onclick="createKey()">{{t "common.create"}}</button>
+            <button class="btn btn-secondary" onclick="closeCreateModal()"><span data-i18n="common.cancel">{{t "common.cancel"}}</span></button>
+            <button class="btn btn-primary" onclick="createKey()"><span data-i18n="common.create">{{t "common.create"}}</span></button>
         </div>
         <div id="createMsg" style="margin-top:10px;"></div>
     </div>
@@ -75,12 +75,12 @@
 <!-- Show Key Modal (display raw key after creation) -->
 <div id="showKeyModal" class="modal-overlay">
     <div class="modal">
-        <h3>{{t "apikeys.key_created"}}</h3>
-        <p style="font-size:13px;color:#dc3545;">{{t "apikeys.key_warning"}}</p>
+        <h3><span data-i18n="apikeys.key_created">{{t "apikeys.key_created"}}</span></h3>
+        <p style="font-size:13px;color:#dc3545;"><span data-i18n="apikeys.key_warning">{{t "apikeys.key_warning"}}</span></p>
         <div class="key-display" id="rawKeyDisplay"></div>
         <div class="modal-actions">
-            <button class="btn btn-primary" onclick="copyKey()">{{t "apikeys.copy"}}</button>
-            <button class="btn btn-secondary" onclick="closeShowKeyModal()">{{t "common.close"}}</button>
+            <button class="btn btn-primary" onclick="copyKey()"><span data-i18n="apikeys.copy">{{t "apikeys.copy"}}</span></button>
+            <button class="btn btn-secondary" onclick="closeShowKeyModal()"><span data-i18n="common.close">{{t "common.close"}}</span></button>
         </div>
     </div>
 </div>

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
     {{template "styles"}}
-    <title>{{t "settings.title"}} - Asika</title>
+    <title><span data-i18n="settings.title">{{t "settings.title"}}</span> - Asika</title>
     <style>
         .collapsible-header { display:flex; justify-content:space-between; align-items:center; cursor:pointer; padding:4px 0; }
         .collapsible-header h2 { margin:0; }
@@ -19,75 +19,75 @@
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>{{t "settings.title"}}</h1>
+<h1><span data-i18n="settings.title">{{t "settings.title"}}</span></h1>
 <div id="errorMsg" class="error" style="display:none;"></div>
 <div id="successMsg" class="success" style="display:none;"></div>
 
 <!-- Server Settings -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('serverSection')">
-        <h2>{{t "settings.server"}}</h2>
+        <h2><span data-i18n="settings.server">{{t "settings.server"}}</span></h2>
         <span class="toggle-icon">▼</span>
     </div>
     <div id="serverSection" class="collapsible-body" style="max-height:1000px; margin-top:12px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.min_procs"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.min_procs">{{t "settings.min_procs"}}</span></label>
                 <input id="serverMinProcs" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <span style="font-size:12px; color:#999;">0 = Go default (1)</span>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.max_procs"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.max_procs">{{t "settings.max_procs"}}</span></label>
                 <input id="serverMaxProcs" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <span style="font-size:12px; color:#999;">0 = use all CPUs</span>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.listen"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.listen">{{t "settings.listen"}}</span></label>
                 <input id="serverListen" type="text" value=":8080" placeholder=":8080" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.mode"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.mode">{{t "settings.mode"}}</span></label>
                 <select id="serverMode" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="release">release</option>
                     <option value="debug">debug</option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enable_web_update"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.enable_web_update">{{t "settings.enable_web_update"}}</span></label>
                 <select id="serverEnableWebUpdate" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.rate_limit_enabled"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.rate_limit_enabled">{{t "settings.rate_limit_enabled"}}</span></label>
                 <select id="serverRateLimitEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                     <option value="false">Disabled</option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.rate_limit_rps"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.rate_limit_rps">{{t "settings.rate_limit_rps"}}</span></label>
                 <input id="serverRateLimitRPS" type="number" min="1" value="10" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.rate_limit_burst"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.rate_limit_burst">{{t "settings.rate_limit_burst"}}</span></label>
                 <input id="serverRateLimitBurst" type="number" min="1" value="20" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.read_timeout"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.read_timeout">{{t "settings.read_timeout"}}</span></label>
                 <input id="serverReadTimeout" type="number" min="1" value="30" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.write_timeout"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.write_timeout">{{t "settings.write_timeout"}}</span></label>
                 <input id="serverWriteTimeout" type="number" min="1" value="30" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.shutdown_timeout"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.shutdown_timeout">{{t "settings.shutdown_timeout"}}</span></label>
                 <input id="serverShutdownTimeout" type="number" min="1" value="30" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.metrics_interval"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.metrics_interval">{{t "settings.metrics_interval"}}</span></label>
                 <input id="serverMetricsInterval" type="text" value="5m" placeholder="5m" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
         </div>
@@ -97,29 +97,29 @@
 <!-- Events/Webhook Settings -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('eventsSection')">
-        <h2>{{t "settings.events"}}</h2>
+        <h2><span data-i18n="settings.events">{{t "settings.events"}}</span></h2>
         <span class="toggle-icon collapsed">▼</span>
     </div>
     <div id="eventsSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.events_mode"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.events_mode">{{t "settings.events_mode"}}</span></label>
                 <select id="eventsMode" onchange="showRestartWarning(this, 'eventsMode')" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="webhook">webhook</option>
                     <option value="polling">polling</option>
                 </select>
-                <div id="eventsModeWarning" class="restart-warning" style="display:none;">{{t "settings.restart_warning"}}</div>
+                <div id="eventsModeWarning" class="restart-warning" style="display:none;"><span data-i18n="settings.restart_warning">{{t "settings.restart_warning"}}</span></div>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.polling_interval"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.polling_interval">{{t "settings.polling_interval"}}</span></label>
                 <input id="eventsPollingInterval" type="text" value="5m" placeholder="5m" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.health_check_interval"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.health_check_interval">{{t "settings.health_check_interval"}}</span></label>
                 <input id="eventsHealthCheckInterval" type="text" value="2m" placeholder="2m" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.health_check_threshold"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.health_check_threshold">{{t "settings.health_check_threshold"}}</span></label>
                 <input id="eventsHealthCheckThreshold" type="text" value="5m" placeholder="5m" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
         </div>
@@ -129,27 +129,27 @@
 <!-- Updates Settings -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('updatesSection')">
-        <h2>{{t "settings.updates"}}</h2>
+        <h2><span data-i18n="settings.updates">{{t "settings.updates"}}</span></h2>
         <span class="toggle-icon collapsed">▼</span>
     </div>
     <div id="updatesSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.auto_check"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.auto_check">{{t "settings.auto_check"}}</span></label>
                 <select id="updatesCheck" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.update_interval"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.update_interval">{{t "settings.update_interval"}}</span></label>
                 <input id="updatesInterval" type="text" value="24h" placeholder="24h" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.notify_on_new"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.notify_on_new">{{t "settings.notify_on_new"}}</span></label>
                 <select id="updatesNotifyOnNew" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
         </div>
@@ -159,33 +159,33 @@
 <!-- Worker Pool Settings -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('workerPoolSection')">
-        <h2>{{t "settings.worker_pool"}}</h2>
+        <h2><span data-i18n="settings.worker_pool">{{t "settings.worker_pool"}}</span></h2>
         <span class="toggle-icon collapsed">▼</span>
     </div>
     <div id="workerPoolSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.min_workers"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.min_workers">{{t "settings.min_workers"}}</span></label>
                 <input id="wpMinWorkers" type="number" min="1" value="2" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.max_workers"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.max_workers">{{t "settings.max_workers"}}</span></label>
                 <input id="wpMaxWorkers" type="number" min="1" value="8" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.scale_up_pct"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.scale_up_pct">{{t "settings.scale_up_pct"}}</span></label>
                 <input id="wpScaleUpPct" type="number" min="1" max="100" value="75" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.scale_down_pct"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.scale_down_pct">{{t "settings.scale_down_pct"}}</span></label>
                 <input id="wpScaleDownPct" type="number" min="1" max="100" value="25" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.cooldown_secs"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.cooldown_secs">{{t "settings.cooldown_secs"}}</span></label>
                 <input id="wpCooldownSecs" type="number" min="1" value="30" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.stats_interval"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.stats_interval">{{t "settings.stats_interval"}}</span></label>
                 <input id="wpStatsInterval" type="text" value="30s" placeholder="30s" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
         </div>
@@ -195,32 +195,32 @@
 <!-- Quiet Hours Settings -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('quietHoursSection')">
-        <h2>{{t "settings.quiet_hours"}}</h2>
+        <h2><span data-i18n="settings.quiet_hours">{{t "settings.quiet_hours"}}</span></h2>
         <span class="toggle-icon collapsed">▼</span>
     </div>
     <div id="quietHoursSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></label>
                 <select id="qhEnabled" onchange="toggleQuietHours(this.value==='true')" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.timezone"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.timezone">{{t "settings.timezone"}}</span></label>
                 <input id="qhTimezone" type="text" value="Asia/Shanghai" placeholder="Asia/Shanghai" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div id="qhStartTimeGroup">
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.start_time"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.start_time">{{t "settings.start_time"}}</span></label>
                 <input id="qhStartTime" type="text" value="22:00" placeholder="22:00" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div id="qhEndTimeGroup">
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.end_time"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.end_time">{{t "settings.end_time"}}</span></label>
                 <input id="qhEndTime" type="text" value="08:00" placeholder="08:00" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div id="qhEscalationGroup">
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.escalation_role"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.escalation_role">{{t "settings.escalation_role"}}</span></label>
                 <select id="qhEscalationRole" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="admin">admin</option>
                     <option value="operator">operator</option>
@@ -228,7 +228,7 @@
             </div>
         </div>
         <div style="margin-top:12px;" id="qhBypassGroup">
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.bypass_urgent"}}</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.bypass_urgent">{{t "settings.bypass_urgent"}}</span></label>
             <textarea id="qhBypassUrgent" rows="2" placeholder="spam_detected&#10;sync_failed" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
         </div>
     </div>
@@ -237,31 +237,31 @@
 <!-- Feed Settings -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('feedSection')">
-        <h2>{{t "settings.feed"}}</h2>
+        <h2><span data-i18n="settings.feed">{{t "settings.feed"}}</span></h2>
         <span class="toggle-icon collapsed">▼</span>
     </div>
     <div id="feedSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.feed_enabled"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.feed_enabled">{{t "settings.feed_enabled"}}</span></label>
                 <select id="feedEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.feed_title"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.feed_title">{{t "settings.feed_title"}}</span></label>
                 <input id="feedTitle" type="text" value="Asika PR Feed" placeholder="Asika PR Feed" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.max_items"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.max_items">{{t "settings.max_items"}}</span></label>
                 <input id="feedMaxItems" type="number" min="1" value="50" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.public_feed"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.public_feed">{{t "settings.public_feed"}}</span></label>
                 <select id="feedPublicFeed" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
         </div>
@@ -271,25 +271,25 @@
 <!-- Reports Settings -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('reportsSection')">
-        <h2>{{t "settings.reports"}}</h2>
+        <h2><span data-i18n="settings.reports">{{t "settings.reports"}}</span></h2>
         <span class="toggle-icon collapsed">▼</span>
     </div>
     <div id="reportsSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.reports_enabled"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.reports_enabled">{{t "settings.reports_enabled"}}</span></label>
                 <select id="reportsEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.cron"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.cron">{{t "settings.cron"}}</span></label>
                 <input id="reportsCron" type="text" value="weekly" placeholder="weekly" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <span style="font-size:12px; color:#999;">hourly/daily/weekly/monthly</span>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.period_days"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.period_days">{{t "settings.period_days"}}</span></label>
                 <input id="reportsPeriodDays" type="number" min="1" value="7" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
         </div>
@@ -299,7 +299,7 @@
 <!-- Close Reasons -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('closeReasonsSection')">
-        <h2>{{t "settings.close_reasons"}}</h2>
+        <h2><span data-i18n="settings.close_reasons">{{t "settings.close_reasons"}}</span></h2>
         <span class="toggle-icon collapsed">▼</span>
     </div>
     <div id="closeReasonsSection" class="collapsible-body collapsed" style="max-height:0; margin-top:12px;">
@@ -309,33 +309,33 @@
 
 <!-- Merge Queue Settings -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>{{t "settings.merge_queue"}}</h2>
+    <h2><span data-i18n="settings.merge_queue">{{t "settings.merge_queue"}}</span></h2>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.required_approvals"}}</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.required_approvals">{{t "settings.required_approvals"}}</span></label>
             <input id="mqRequiredApprovals" type="number" min="0" value="1" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.ci_check_required"}}</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.ci_check_required">{{t "settings.ci_check_required"}}</span></label>
             <select id="mqCICheck" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="true">Yes</option>
                 <option value="false">No</option>
             </select>
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.fast_forward_only"}}</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.fast_forward_only">{{t "settings.fast_forward_only"}}</span></label>
             <select id="mqFastForward" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <option value="false">No (allow merge commits)</option>
                 <option value="true">Yes (auto-rebase first)</option>
             </select>
         </div>
         <div>
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.ci_provider"}}</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.ci_provider">{{t "settings.ci_provider"}}</span></label>
             <input id="mqCIProvider" type="text" placeholder="github-actions" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
     </div>
     <div style="margin-top:12px;">
-        <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.core_contributors"}}</label>
+        <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.core_contributors">{{t "settings.core_contributors"}}</span></label>
         <textarea id="mqCoreContributors" rows="4" placeholder="username1&#10;username2" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
     </div>
 </div>
@@ -343,54 +343,54 @@
 <!-- Spam Detection Settings -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('spamSection')">
-        <h2>{{t "settings.spam_detection"}}</h2>
+        <h2><span data-i18n="settings.spam_detection">{{t "settings.spam_detection"}}</span></h2>
         <span class="toggle-icon">▼</span>
     </div>
     <div id="spamSection" class="collapsible-body" style="max-height:1500px; margin-top:12px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></label>
                 <select id="spamEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.time_window"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.time_window">{{t "settings.time_window"}}</span></label>
                 <input id="spamTimeWindow" type="text" value="1h" placeholder="1h, 30m, etc." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.threshold"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.threshold">{{t "settings.threshold"}}</span></label>
                 <input id="spamThreshold" type="number" min="1" value="5" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.trigger_on_author"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.trigger_on_author">{{t "settings.trigger_on_author"}}</span></label>
                 <select id="spamAuthor" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.similar_title"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.similar_title">{{t "settings.similar_title"}}</span></label>
                 <select id="spamSimilarTitle" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">No</option>
                     <option value="true">Yes</option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.similarity_threshold"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.similarity_threshold">{{t "settings.similarity_threshold"}}</span></label>
                 <input id="spamSimilarityThreshold" type="number" min="0" max="1" step="0.1" value="0.6" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                 <span style="font-size:12px; color:#999;">0.0 - 1.0</span>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.auto_clean"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.auto_clean">{{t "settings.auto_clean"}}</span></label>
                 <select id="spamAutoCleanEnabled" onchange="toggleSpamAutoClean(this.value==='true')" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
             <div id="spamAutoCleanIntervalGroup" style="display:none;">
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.auto_clean_interval"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.auto_clean_interval">{{t "settings.auto_clean_interval"}}</span></label>
                 <select id="spamAutoCleanInterval" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="1h">Every hour</option>
                     <option value="6h">Every 6 hours</option>
@@ -402,18 +402,18 @@
         </div>
         <div style="margin-top:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <label style="font-weight:600; margin:0;">{{t "settings.title_keywords"}}</label>
+                <label style="font-weight:600; margin:0;"><span data-i18n="settings.title_keywords">{{t "settings.title_keywords"}}</span></label>
                 <div style="display:flex; gap:6px; align-items:center;">
                     <input type="checkbox" id="selectAllSpamKw" onchange="toggleAllSpamKw(this.checked)" style="cursor:pointer;">
-                    <label for="selectAllSpamKw" style="font-size:13px; color:#666; cursor:pointer; margin:0;">{{t "common.select_all"}}</label>
-                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedSpamKw()" style="padding:2px 8px; font-size:12px;">{{t "common.delete_selected"}}</button>
+                    <label for="selectAllSpamKw" style="font-size:13px; color:#666; cursor:pointer; margin:0;"><span data-i18n="common.select_all">{{t "common.select_all"}}</span></label>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSelectedSpamKw()" style="padding:2px 8px; font-size:12px;"><span data-i18n="common.delete_selected">{{t "common.delete_selected"}}</span></button>
                 </div>
             </div>
             <div id="spamKeywordsContainer" style="display:flex; flex-wrap:wrap; gap:6px; padding:8px; border:1px solid #ddd; border-radius:4px; min-height:40px; align-items:center;">
             </div>
             <div style="display:flex; gap:6px; margin-top:6px;">
-                <input id="spamKeywordInput" type="text" placeholder="{{t "settings.add_keyword"}}" onkeydown="if(event.key==='Enter'){event.preventDefault();addSpamKeyword();}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
-                <button class="btn btn-secondary btn-sm" onclick="addSpamKeyword()">{{t "users.add"}}</button>
+                <input id="spamKeywordInput" type="text" data-i18n-placeholder="settings.add_keyword" placeholder="{{t "settings.add_keyword"}}" onkeydown="if(event.key==='Enter'){event.preventDefault();addSpamKeyword();}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+                <button class="btn btn-secondary btn-sm" onclick="addSpamKeyword()"><span data-i18n="users.add">{{t "users.add"}}</span></button>
             </div>
         </div>
     </div>
@@ -422,50 +422,50 @@
 <!-- Stale PR Settings -->
 <div class="card" style="margin-bottom:20px;">
     <div class="collapsible-header" onclick="toggleSection('staleSection')">
-        <h2>{{t "settings.stale_pr"}}</h2>
+        <h2><span data-i18n="settings.stale_pr">{{t "settings.stale_pr"}}</span></h2>
         <span class="toggle-icon">▼</span>
     </div>
     <div id="staleSection" class="collapsible-body" style="max-height:1500px; margin-top:12px;">
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.enabled"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></label>
                 <select id="staleEnabled" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="false">Disabled</option>
-                    <option value="true">{{t "settings.enabled"}}</option>
+                    <option value="true"><span data-i18n="settings.enabled">{{t "settings.enabled"}}</span></option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.check_interval"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.check_interval">{{t "settings.check_interval"}}</span></label>
                 <input id="staleInterval" type="text" value="6h" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.days_until_stale"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.days_until_stale">{{t "settings.days_until_stale"}}</span></label>
                 <input id="staleDaysStale" type="number" min="1" value="21" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.days_until_close"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.days_until_close">{{t "settings.days_until_close"}}</span></label>
                 <input id="staleDaysClose" type="number" min="0" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.stale_label"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.stale_label">{{t "settings.stale_label"}}</span></label>
                 <input id="staleLabel" type="text" value="stale" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.notify_on_stale"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.notify_on_stale">{{t "settings.notify_on_stale"}}</span></label>
                 <select id="staleNotify" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.skip_draft"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.skip_draft">{{t "settings.skip_draft"}}</span></label>
                 <select id="staleSkipDraft" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                 </select>
             </div>
             <div>
-                <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.remove_on_activity"}}</label>
+                <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.remove_on_activity">{{t "settings.remove_on_activity"}}</span></label>
                 <select id="staleRemoveActivity" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
                     <option value="true">Yes</option>
                     <option value="false">No</option>
@@ -473,15 +473,15 @@
             </div>
         </div>
         <div style="margin-top:12px;">
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.exempt_labels"}}</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.exempt_labels">{{t "settings.exempt_labels"}}</span></label>
             <textarea id="staleExemptLabels" rows="2" placeholder="long-term&#10;pinned" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
         </div>
         <div style="margin-top:12px;">
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.comment_on_stale"}}</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.comment_on_stale">{{t "settings.comment_on_stale"}}</span></label>
             <textarea id="staleCommentOnStale" rows="3" placeholder="This PR has been marked as stale due to {{.Days}} days of inactivity." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-family:monospace; font-size:13px;"></textarea>
         </div>
         <div style="margin-top:12px;">
-            <label style="display:block; font-weight:600; margin-bottom:4px;">{{t "settings.comment_on_close"}}</label>
+            <label style="display:block; font-weight:600; margin-bottom:4px;"><span data-i18n="settings.comment_on_close">{{t "settings.comment_on_close"}}</span></label>
             <input id="staleCommentOnClose" type="text" value="" placeholder="Automatically closed due to inactivity." style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px;">
         </div>
     </div>
@@ -489,12 +489,12 @@
 
 <!-- Label Rules -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>{{t "settings.label_rules"}}</h2>
+    <h2><span data-i18n="settings.label_rules">{{t "settings.label_rules"}}</span></h2>
     <p style="color:#666; font-size:13px; margin-bottom:12px;">Auto-apply labels based on file paths, PR title, or author. Scopes: <code>file:</code> (default), <code>title:</code>, <code>author:</code></p>
     <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center;">
         <input type="checkbox" id="selectAllLabelRules" onchange="toggleAllLabelRules(this.checked)" style="cursor:pointer;">
-        <label for="selectAllLabelRules" style="font-size:13px; color:#666; cursor:pointer; margin:0;">{{t "common.select_all"}}</label>
-        <button class="btn btn-danger btn-sm" onclick="deleteSelectedLabelRules()" style="margin-left:auto; padding:2px 8px; font-size:12px;">{{t "common.delete_selected"}}</button>
+        <label for="selectAllLabelRules" style="font-size:13px; color:#666; cursor:pointer; margin:0;"><span data-i18n="common.select_all">{{t "common.select_all"}}</span></label>
+        <button class="btn btn-danger btn-sm" onclick="deleteSelectedLabelRules()" style="margin-left:auto; padding:2px 8px; font-size:12px;"><span data-i18n="common.delete_selected">{{t "common.delete_selected"}}</span></button>
     </div>
     <table id="labelRulesTable" style="width:100%; margin-bottom:12px;">
         <thead>
@@ -510,12 +510,12 @@
         <tbody id="labelRulesBody">
         </tbody>
     </table>
-    <button class="btn btn-secondary btn-sm" onclick="addLabelRule()">{{t "settings.add_rule"}}</button>
+    <button class="btn btn-secondary btn-sm" onclick="addLabelRule()"><span data-i18n="settings.add_rule">{{t "settings.add_rule"}}</span></button>
 </div>
 
 <!-- Config History -->
 <div class="card" style="margin-bottom:20px;">
-    <h2>{{t "settings.config_history"}}</h2>
+    <h2><span data-i18n="settings.config_history">{{t "settings.config_history"}}</span></h2>
     <div id="configHistoryLoading" style="color:#999;">Loading...</div>
     <table id="configHistoryTable" style="width:100%; display:none;">
         <thead>
@@ -532,8 +532,8 @@
 </div>
 
 <div style="margin-top:20px;">
-    <button class="btn btn-primary" onclick="saveSettings()">{{t "settings.save"}}</button>
-    <button class="btn btn-secondary" onclick="loadSettings()" style="margin-left:10px;">{{t "settings.refresh"}}</button>
+    <button class="btn btn-primary" onclick="saveSettings()"><span data-i18n="settings.save">{{t "settings.save"}}</span></button>
+    <button class="btn btn-secondary" onclick="loadSettings()" style="margin-left:10px;"><span data-i18n="settings.refresh">{{t "settings.refresh"}}</span></button>
     <span id="saveStatus" style="margin-left:15px; font-size:13px;"></span>
 </div>
 </div>

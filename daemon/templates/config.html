@@ -5,26 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
     {{template "styles"}}
-    <title>{{t "config.title"}} - Asika</title>
+    <title><span data-i18n="config.title">{{t "config.title"}}</span> - Asika</title>
 </head>
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>{{t "config.title"}}</h1>
-<p style="margin-bottom:15px;"><a href="/settings" class="btn btn-secondary btn-sm">⚙ {{t "settings.title"}}</a> <span style="color:#999; font-size:13px; margin-left:8px;">(or edit raw TOML below)</span></p>
+<h1><span data-i18n="config.title">{{t "config.title"}}</span></h1>
+<p style="margin-bottom:15px;"><a href="/settings" class="btn btn-secondary btn-sm">⚙ <span data-i18n="settings.title">{{t "settings.title"}}</span></a> <span style="color:#999; font-size:13px; margin-left:8px;">(or edit raw TOML below)</span></p>
 <div id="errorMsg" class="error" style="display:none;"></div>
 <div id="successMsg" class="success" style="display:none;"></div>
 
 <div class="card" style="margin-bottom:20px;">
-    <h2>{{t "config.system"}}</h2>
+    <h2><span data-i18n="config.system">{{t "config.system"}}</span></h2>
     <div style="margin-bottom:15px;">
-        <strong>{{t "config.current_version"}}</strong> <span id="currentVersion">-</span>
+        <strong><span data-i18n="config.current_version">{{t "config.current_version"}}</span></strong> <span id="currentVersion">-</span>
         <span id="latestVersionInfo" style="margin-left:10px; display:none;">
             (Latest: <span id="latestVersion">-</span>)
         </span>
     </div>
-    <button class="btn btn-primary" onclick="checkUpdate()" id="checkUpdateBtn">{{t "config.check_updates"}}</button>
-    <button class="btn btn-success" onclick="performUpdate()" id="performUpdateBtn" style="display:none; margin-left:10px;">{{t "config.update_now"}}</button>
+    <button class="btn btn-primary" onclick="checkUpdate()" id="checkUpdateBtn"><span data-i18n="config.check_updates">{{t "config.check_updates"}}</span></button>
+    <button class="btn btn-success" onclick="performUpdate()" id="performUpdateBtn" style="display:none; margin-left:10px;"><span data-i18n="config.update_now">{{t "config.update_now"}}</span></button>
     <div id="updateProgress" style="margin-top:10px; display:none;">
         <div style="background:#e9ecef; border-radius:4px; height:20px; overflow:hidden;">
             <div id="updateProgressBar" style="background:#28a745; height:100%; width:0%; transition:width 0.3s;"></div>
@@ -34,7 +34,7 @@
 </div>
 
 <div class="card" style="margin-bottom:20px;">
-    <h2>{{t "config.stale_pr_mgmt"}}</h2>
+    <h2><span data-i18n="config.stale_pr_mgmt">{{t "config.stale_pr_mgmt"}}</span></h2>
     <p style="color:#666; font-size:13px; margin-bottom:15px;">Configure automatic detection and management of inactive PRs.</p>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
         <div>
@@ -60,20 +60,20 @@
     <div style="margin-top:12px; color:#666; font-size:12px;">
         Exempt labels: long-term (configure additional via TOML below)
     </div>
-    <button class="btn btn-primary" onclick="triggerStaleCheck()" style="margin-top:12px;">{{t "config.run_stale_check"}}</button>
+    <button class="btn btn-primary" onclick="triggerStaleCheck()" style="margin-top:12px;"><span data-i18n="config.run_stale_check">{{t "config.run_stale_check"}}</span></button>
     <span id="staleCheckStatus" style="font-size:12px; color:#666; margin-left:10px;"></span>
 </div>
 
 <div class="card">
-    <h2>{{t "config.current_config"}}</h2>
-    <pre id="configDisplay" style="background: #f9f9f9; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 13px;">{{t "common.loading"}}</pre>
+    <h2><span data-i18n="config.current_config">{{t "config.current_config"}}</span></h2>
+    <pre id="configDisplay" style="background: #f9f9f9; padding: 15px; border-radius: 4px; overflow-x: auto; font-size: 13px;"><span data-i18n="common.loading">{{t "common.loading"}}</span></pre>
     <div style="margin-top: 20px;">
-        <h3>{{t "config.update_config"}}</h3>
-        <p style="color: #666; font-size: 13px; margin-bottom: 15px;">{{t "config.paste_toml"}}</p>
+        <h3><span data-i18n="config.update_config">{{t "config.update_config"}}</span></h3>
+        <p style="color: #666; font-size: 13px; margin-bottom: 15px;"><span data-i18n="config.paste_toml">{{t "config.paste_toml"}}</span></p>
         <textarea id="configInput" rows="20" style="width:100%; padding: 12px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 13px;"></textarea>
         <div style="margin-top: 15px;">
-            <button class="btn btn-primary" onclick="updateConfig()">{{t "config.update"}}</button>
-            <button class="btn btn-secondary" onclick="loadConfig()" style="margin-left: 10px;">{{t "settings.refresh"}}</button>
+            <button class="btn btn-primary" onclick="updateConfig()"><span data-i18n="config.update">{{t "config.update"}}</span></button>
+            <button class="btn btn-secondary" onclick="loadConfig()" style="margin-left: 10px;"><span data-i18n="settings.refresh">{{t "settings.refresh"}}</span></button>
         </div>
     </div>
 </div>

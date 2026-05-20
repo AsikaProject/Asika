@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -28,6 +29,12 @@ func currentLangFunc() string {
 	return i18n.Locale()
 }
 
+func i18nJSONFunc() string {
+	msgs := i18n.AllMessages(i18n.Locale())
+	data, _ := json.Marshal(msgs)
+	return string(data)
+}
+
 // Server represents the HTTP server
 type Server struct {
 	engine  *gin.Engine
@@ -44,7 +51,7 @@ func NewServer(cfg *models.Config, clients map[platforms.PlatformType]platforms.
 
 	engine := gin.New()
 
-	t, err := template.New("").Funcs(template.FuncMap{"t": tFunc, "currentLang": currentLangFunc}).ParseFS(templates.FS, "*.html")
+	t, err := template.New("").Funcs(template.FuncMap{"t": tFunc, "currentLang": currentLangFunc, "i18nJSON": i18nJSONFunc}).ParseFS(templates.FS, "*.html")
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse templates: %v", err))
 	}

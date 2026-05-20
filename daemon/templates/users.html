@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
     {{template "styles"}}
-    <title>{{t "users.title"}} - Asika</title>
+    <title><span data-i18n="users.title">{{t "users.title"}}</span> - Asika</title>
     <style>
         .perm-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px; }
         .perm-item { display:flex; align-items:center; gap:6px; font-size:13px; }
@@ -29,61 +29,61 @@
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>{{t "users.title"}}</h1>
+<h1><span data-i18n="users.title">{{t "users.title"}}</span></h1>
 
 <div class="card">
-    <h2 style="margin-bottom:15px">{{t "users.add_user"}}</h2>
+    <h2 style="margin-bottom:15px"><span data-i18n="users.add_user">{{t "users.add_user"}}</span></h2>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div class="form-group" style="margin:0;">
-            <label>{{t "users.th.username"}}</label>
-            <input type="text" id="newUsername" placeholder="{{t "users.th.username"}}">
+            <label><span data-i18n="users.th.username">{{t "users.th.username"}}</span></label>
+            <input type="text" id="newUsername" data-i18n-placeholder="users.th.username" placeholder="{{t "users.th.username"}}">
         </div>
         <div class="form-group" style="margin:0;">
-            <label>{{t "login.password"}}</label>
-            <input type="password" id="newPassword" placeholder="{{t "login.password"}}">
+            <label><span data-i18n="login.password">{{t "login.password"}}</span></label>
+            <input type="password" id="newPassword" data-i18n-placeholder="login.password" placeholder="{{t "login.password"}}">
         </div>
         <div class="form-group" style="margin:0;">
-            <label>{{t "users.th.role"}}</label>
+            <label><span data-i18n="users.th.role">{{t "users.th.role"}}</span></label>
             <select id="newRole" onchange="togglePerms('new')">
-                <option value="viewer">{{t "users.role.viewer"}}</option>
-                <option value="operator">{{t "users.role.operator"}}</option>
-                <option value="admin">{{t "users.role.admin"}}</option>
+                <option value="viewer"><span data-i18n="users.role.viewer">{{t "users.role.viewer"}}</span></option>
+                <option value="operator"><span data-i18n="users.role.operator">{{t "users.role.operator"}}</span></option>
+                <option value="admin"><span data-i18n="users.role.admin">{{t "users.role.admin"}}</span></option>
             </select>
         </div>
     </div>
-    <div class="section-title" style="margin:12px 0 8px;">{{t "users.allowed_groups"}}</div>
+    <div class="section-title" style="margin:12px 0 8px;"><span data-i18n="users.allowed_groups">{{t "users.allowed_groups"}}</span></div>
     <div id="newUserGroups" class="group-select-list"></div>
     <div id="addGroupInput" style="display:flex; gap:6px; margin-top:8px;">
-        <input id="newGroupInput" type="text" placeholder="{{t "users.add_group"}}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
-        <button class="btn btn-secondary btn-sm" onclick="addNewUserGroup()">{{t "users.add"}}</button>
+        <input id="newGroupInput" type="text" data-i18n-placeholder="users.add_group" placeholder="{{t "users.add_group"}}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+        <button class="btn btn-secondary btn-sm" onclick="addNewUserGroup()"><span data-i18n="users.add">{{t "users.add"}}</span></button>
     </div>
-    <div id="newUserPermsSection" class="section-title" style="margin:12px 0 8px;display:none;">{{t "users.permissions"}}</div>
+    <div id="newUserPermsSection" class="section-title" style="margin:12px 0 8px;display:none;"><span data-i18n="users.permissions">{{t "users.permissions"}}</span></div>
     <div id="newUserPerms" class="perm-grid" style="display:none;"></div>
     <div style="margin-top:12px;">
-        <button class="btn btn-primary" onclick="addUser()">{{t "users.add"}}</button>
+        <button class="btn btn-primary" onclick="addUser()"><span data-i18n="users.add">{{t "users.add"}}</span></button>
     </div>
     <div id="addMsg" style="margin-top:10px;"></div>
 </div>
 
 <div class="card">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <h2 style="margin:0">{{t "users.title"}}</h2>
+        <h2 style="margin:0"><span data-i18n="users.title">{{t "users.title"}}</span></h2>
         <span id="userCount" style="font-size:13px; color:#666;"></span>
     </div>
     <div class="table-wrapper">
     <table style="margin-top:0;">
         <thead>
             <tr>
-                <th>{{t "users.th.username"}}</th>
-                <th>{{t "users.th.role"}}</th>
-                <th>{{t "users.allowed_groups"}}</th>
-                <th>{{t "users.th.permissions"}}</th>
-                <th>{{t "users.th.created"}}</th>
-                <th>{{t "users.th.action"}}</th>
+                <th><span data-i18n="users.th.username">{{t "users.th.username"}}</span></th>
+                <th><span data-i18n="users.th.role">{{t "users.th.role"}}</span></th>
+                <th><span data-i18n="users.allowed_groups">{{t "users.allowed_groups"}}</span></th>
+                <th><span data-i18n="users.th.permissions">{{t "users.th.permissions"}}</span></th>
+                <th><span data-i18n="users.th.created">{{t "users.th.created"}}</span></th>
+                <th><span data-i18n="users.th.action">{{t "users.th.action"}}</span></th>
             </tr>
         </thead>
         <tbody id="usersBody">
-            <tr><td colspan="6" style="text-align:center;">{{t "common.loading"}}</td></tr>
+            <tr><td colspan="6" style="text-align:center;"><span data-i18n="common.loading">{{t "common.loading"}}</span></td></tr>
         </tbody>
     </table>
     </div>
@@ -93,37 +93,37 @@
 <!-- Edit User Modal -->
 <div id="editUserModal" class="edit-modal-overlay">
     <div class="edit-modal">
-        <h3>{{t "users.edit_user"}}</h3>
+        <h3><span data-i18n="users.edit_user">{{t "users.edit_user"}}</span></h3>
         <input type="hidden" id="editUsername">
         <div class="form-group">
-            <label>{{t "users.th.username"}}</label>
+            <label><span data-i18n="users.th.username">{{t "users.th.username"}}</span></label>
             <input type="text" id="editUsernameDisplay" disabled style="background:#f5f5f5;">
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div class="form-group" style="margin:0;">
-                <label>{{t "login.password"}} ({{t "users.password_hint"}})</label>
-                <input type="password" id="editPassword" placeholder="{{t "users.password_hint"}}">
+                <label><span data-i18n="login.password">{{t "login.password"}}</span> (<span data-i18n="users.password_hint">{{t "users.password_hint"}}</span>)</label>
+                <input type="password" id="editPassword" data-i18n-placeholder="users.password_hint" placeholder="{{t "users.password_hint"}}">
             </div>
             <div class="form-group" style="margin:0;">
-                <label>{{t "users.th.role"}}</label>
+                <label><span data-i18n="users.th.role">{{t "users.th.role"}}</span></label>
                 <select id="editRole" onchange="togglePerms('edit')">
-                    <option value="viewer">{{t "users.role.viewer"}}</option>
-                    <option value="operator">{{t "users.role.operator"}}</option>
-                    <option value="admin">{{t "users.role.admin"}}</option>
+                    <option value="viewer"><span data-i18n="users.role.viewer">{{t "users.role.viewer"}}</span></option>
+                    <option value="operator"><span data-i18n="users.role.operator">{{t "users.role.operator"}}</span></option>
+                    <option value="admin"><span data-i18n="users.role.admin">{{t "users.role.admin"}}</span></option>
                 </select>
             </div>
         </div>
-        <div class="section-title">{{t "users.allowed_groups"}}</div>
+        <div class="section-title"><span data-i18n="users.allowed_groups">{{t "users.allowed_groups"}}</span></div>
         <div id="editUserGroups" class="group-select-list"></div>
         <div style="display:flex; gap:6px; margin-top:8px;">
-            <input id="editGroupInput" type="text" placeholder="{{t "users.add_group"}}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
-            <button class="btn btn-secondary btn-sm" onclick="addEditUserGroup()">{{t "users.add"}}</button>
+            <input id="editGroupInput" type="text" data-i18n-placeholder="users.add_group" placeholder="{{t "users.add_group"}}" style="flex:1; padding:6px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+            <button class="btn btn-secondary btn-sm" onclick="addEditUserGroup()"><span data-i18n="users.add">{{t "users.add"}}</span></button>
         </div>
-    <div id="editUserPermsSection" class="section-title" style="display:none;">{{t "users.permissions"}}</div>
+    <div id="editUserPermsSection" class="section-title" style="display:none;"><span data-i18n="users.permissions">{{t "users.permissions"}}</span></div>
     <div id="editUserPerms" class="perm-grid" style="display:none;"></div>
         <div class="modal-actions">
-            <button class="btn btn-secondary" onclick="closeEditModal()">{{t "common.cancel"}}</button>
-            <button class="btn btn-primary" onclick="saveEditUser()">{{t "common.save"}}</button>
+            <button class="btn btn-secondary" onclick="closeEditModal()"><span data-i18n="common.cancel">{{t "common.cancel"}}</span></button>
+            <button class="btn btn-primary" onclick="saveEditUser()"><span data-i18n="common.save">{{t "common.save"}}</span></button>
         </div>
         <div id="editMsg" style="margin-top:10px;"></div>
     </div>

@@ -43,6 +43,7 @@ func (s *Server) setupRoutes() {
 	}
 
 	api.POST("/locale", handlers.SetLocale)
+	api.GET("/i18n", handlers.GetI18n)
 
 	wizard := api.Group("/wizard")
 	{

@@ -5,6 +5,7 @@
 ### UX Improvements
 
 - **Feat**: Rewrote `asika wizard` with grouped selection, visible options, and config summary. Platforms and notification channels now use numbered multi-select instead of prompting every option. Added server address confirmation, initialization status check, risk disclaimer, and pre-write summary review.
+- **Feat**: Unified font-family across all pages (layout, login, wizard) with CJK font support. Added `/api/v1/i18n` endpoint for fetching translations as JSON. Implemented locale switching without page reload using `data-i18n` attributes and dynamic DOM replacement.
 
 ### Bug Fixes & Stability
 

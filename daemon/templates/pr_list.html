@@ -10,19 +10,19 @@
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>{{t "pr_list.title"}}</h1>
+<h1><span data-i18n="pr_list.title">{{t "pr_list.title"}}</span></h1>
 <div class="form-group">
-    <label for="repoGroupSelect">{{t "pr_list.repo_group"}}</label>
+    <label for="repoGroupSelect"><span data-i18n="pr_list.repo_group">{{t "pr_list.repo_group"}}</span></label>
     <select id="repoGroupSelect" onchange="changePage(1)">
     </select>
 </div>
 <div class="form-group">
-    <label>{{t "pr_list.filter_state"}}</label>
+    <label><span data-i18n="pr_list.filter_state">{{t "pr_list.filter_state"}}</span></label>
     <select id="stateFilter" onchange="stateChanged()">
-        <option value="open">{{t "pr_list.state.open"}}</option>
-        <option value="closed">{{t "pr_list.state.closed"}}</option>
-        <option value="merged">{{t "pr_list.state.merged"}}</option>
-        <option value="">{{t "pr_list.state.all"}}</option>
+        <option value="open"><span data-i18n="pr_list.state.open">{{t "pr_list.state.open"}}</span></option>
+        <option value="closed"><span data-i18n="pr_list.state.closed">{{t "pr_list.state.closed"}}</span></option>
+        <option value="merged"><span data-i18n="pr_list.state.merged">{{t "pr_list.state.merged"}}</span></option>
+        <option value=""><span data-i18n="pr_list.state.all">{{t "pr_list.state.all"}}</span></option>
     </select>
 </div>
     <div id="batchBar" style="display:none;margin-bottom:12px;padding:12px;background:#e8f4fd;border-radius:4px;align-items:center;gap:8px;">
@@ -38,13 +38,13 @@
         <thead>
              <tr>
                  <th style="width:30px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
-                 <th>{{t "pr_list.th.number"}}</th>
-                 <th>{{t "pr_list.th.title"}}</th>
-                 <th>{{t "pr_list.th.author"}}</th>
-                 <th>{{t "pr_list.th.platform"}}</th>
-                 <th>{{t "pr_list.th.state"}}</th>
-                 <th>{{t "pr_list.th.labels"}}</th>
-                 <th>{{t "pr_list.th.actions"}}</th>
+                 <th><span data-i18n="pr_list.th.number">{{t "pr_list.th.number"}}</span></th>
+                 <th><span data-i18n="pr_list.th.title">{{t "pr_list.th.title"}}</span></th>
+                 <th><span data-i18n="pr_list.th.author">{{t "pr_list.th.author"}}</span></th>
+                 <th><span data-i18n="pr_list.th.platform">{{t "pr_list.th.platform"}}</span></th>
+                 <th><span data-i18n="pr_list.th.state">{{t "pr_list.th.state"}}</span></th>
+                 <th><span data-i18n="pr_list.th.labels">{{t "pr_list.th.labels"}}</span></th>
+                 <th><span data-i18n="pr_list.th.actions">{{t "pr_list.th.actions"}}</span></th>
              </tr>
         </thead>
         <tbody id="prTableBody">

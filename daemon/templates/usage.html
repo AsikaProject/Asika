@@ -5,59 +5,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
     {{template "styles"}}
-    <title>{{t "usage.title"}}</title>
+    <title><span data-i18n="usage.title">{{t "usage.title"}}</span></title>
 </head>
 <body>
 {{template "header" .}}
 <div class="container">
-<h1>{{t "usage.title"}}</h1>
+<h1><span data-i18n="usage.title">{{t "usage.title"}}</span></h1>
 
-<h2 style="margin-top:20px;">{{t "usage.cpu"}}</h2>
+<h2 style="margin-top:20px;"><span data-i18n="usage.cpu">{{t "usage.cpu"}}</span></h2>
 <div class="stats" id="cpuStats">
     <div class="stat-card">
-        <h3>{{t "usage.cpu_percent"}}</h3>
+        <h3><span data-i18n="usage.cpu_percent">{{t "usage.cpu_percent"}}</span></h3>
         <p id="cpuPercent">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "usage.num_cpu"}}</h3>
+        <h3><span data-i18n="usage.num_cpu">{{t "usage.num_cpu"}}</span></h3>
         <p id="numCPU">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "usage.goroutines"}}</h3>
+        <h3><span data-i18n="usage.goroutines">{{t "usage.goroutines"}}</span></h3>
         <p id="goroutines">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "usage.pid"}}</h3>
+        <h3><span data-i18n="usage.pid">{{t "usage.pid"}}</span></h3>
         <p id="pid">-</p>
     </div>
 </div>
 
-<h2 style="margin-top:20px;">{{t "usage.memory"}}</h2>
+<h2 style="margin-top:20px;"><span data-i18n="usage.memory">{{t "usage.memory"}}</span></h2>
 <div class="stats" id="memStats">
     <div class="stat-card">
-        <h3>{{t "usage.mem_alloc"}}</h3>
+        <h3><span data-i18n="usage.mem_alloc">{{t "usage.mem_alloc"}}</span></h3>
         <p id="memAlloc">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "usage.mem_total"}}</h3>
+        <h3><span data-i18n="usage.mem_total">{{t "usage.mem_total"}}</span></h3>
         <p id="memTotal">-</p>
     </div>
     <div class="stat-card">
-        <h3>{{t "usage.mem_sys"}}</h3>
+        <h3><span data-i18n="usage.mem_sys">{{t "usage.mem_sys"}}</span></h3>
         <p id="memSys">-</p>
     </div>
     <div class="stat-card" id="memLimitCard" style="display:none;">
-        <h3>{{t "usage.mem_limit"}}</h3>
+        <h3><span data-i18n="usage.mem_limit">{{t "usage.mem_limit"}}</span></h3>
         <p id="memLimit">-</p>
     </div>
     <div class="stat-card" id="memPercentCard" style="display:none;">
-        <h3>{{t "usage.mem_percent"}}</h3>
+        <h3><span data-i18n="usage.mem_percent">{{t "usage.mem_percent"}}</span></h3>
         <p id="memPercent">-</p>
     </div>
 </div>
 
 <div class="card" style="margin-top:20px;">
-    <h3>{{t "usage.progress"}}</h3>
+    <h3><span data-i18n="usage.progress">{{t "usage.progress"}}</span></h3>
     <div style="background: var(--border); border-radius: 4px; height: 24px; overflow: hidden; margin-top: 8px;">
         <div id="memBar" style="background: var(--success); height: 100%; width: 0%; transition: width 0.3s ease, background 0.3s ease;"></div>
     </div>
