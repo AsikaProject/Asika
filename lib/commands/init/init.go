@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
-
-	"asika/lib/commands"
 )
 
 var WizardCmd = &cobra.Command{
@@ -26,7 +25,7 @@ You can also provide an existing TOML config file via --file and only enter
 the admin credentials interactively.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		reader := bufio.NewReader(os.Stdin)
-		server := commands.GetServer(cmd)
+		server := getServer(cmd)
 
 		PrintHeader(server)
 
@@ -175,5 +174,33 @@ func checkInitialized(server string) (bool, error) {
 
 func init() {
 	WizardCmd.Flags().String("file", "", "Path to existing TOML config file (skip interactive config)")
-	commands.RootCmd.AddCommand(WizardCmd)
+}
+
+// RegisterWizardCmd registers the wizard command on the given root command.
+// Called from the commands package to avoid circular import.
+func RegisterWizardCmd(root *cobra.Command) {
+	root.AddCommand(WizardCmd)
+}
+
+func getServer(cmd *cobra.Command) string {
+	server, _ := cmd.Flags().GetString("server")
+	if server != "" && server != "http://localhost:8080" {
+		return server
+	}
+	if s := os.Getenv("ASIKA_SERVER"); s != "" {
+		return s
+	}
+	home, _ := os.UserHomeDir()
+	configPath := filepath.Join(home, ".config", "asika", "config.json")
+	data, err := os.ReadFile(configPath)
+	if err == nil {
+		var cfg struct {
+			Server string `json:"server"`
+		}
+		json.Unmarshal(data, &cfg)
+		if cfg.Server != "" {
+			return cfg.Server
+		}
+	}
+	return "http://localhost:8080"
 }

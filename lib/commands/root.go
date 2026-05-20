@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	cmdinit "asika/lib/commands/init"
 )
 
 // RootCmd is the root command
@@ -93,6 +95,7 @@ func init() {
 	RootCmd.PersistentFlags().StringP("token", "t", "", "JWT token (or use ASIKA_TOKEN env)")
 	RootCmd.PersistentFlags().StringP("server", "s", "http://localhost:8080", "asikad server address")
 	RootCmd.PersistentFlags().StringP("output", "o", "table", "Output format: table, json, yaml")
+	cmdinit.RegisterWizardCmd(RootCmd)
 }
 
 // handleResponse reads the HTTP response and returns the parsed body as []interface{}
