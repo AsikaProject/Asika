@@ -67,16 +67,16 @@
 
         <!-- Step 1: Mode Selection -->
         <div class="step-content active" id="step1">
-            <h3>{{t "wizard.step"}} 1: Operation Mode</h3>
+            <h3>{{t "wizard.step"}} 1: {{t "wizard.mode"}}</h3>
             <div class="form-group">
-                <label>Select mode:</label>
+                <label>{{t "wizard.mode.select"}}:</label>
                 <select id="mode" onchange="onModeChange()">
-                    <option value="single">Single Repo (one platform only)</option>
-                    <option value="multi">Multi Platform (sync across platforms)</option>
+                    <option value="single">{{t "wizard.mode.single"}}</option>
+                    <option value="multi">{{t "wizard.mode.multi"}}</option>
                 </select>
                 <div class="info">
-                    <strong>Single Repo:</strong> Manage PRs for one platform only. No code sync.<br>
-                    <strong>Multi Platform:</strong> Sync PRs and code across GitHub, GitLab, Gitea, Forgejo, Codeberg, Bitbucket, and Gerrit.
+                    <strong>{{t "wizard.mode.single"}}:</strong> {{t "wizard.mode.single.desc"}}<br>
+                    <strong>{{t "wizard.mode.multi"}}:</strong> {{t "wizard.mode.multi.desc"}}
                 </div>
             </div>
             <div class="nav-buttons">
@@ -87,27 +87,27 @@
 
         <!-- Step 2: Database -->
         <div class="step-content" id="step2">
-            <h3>{{t "wizard.step"}} 2: Database Configuration</h3>
+            <h3>{{t "wizard.step"}} 2: {{t "wizard.database"}}</h3>
             <div class="form-group">
-                <label>Database Type:</label>
+                <label>{{t "wizard.database.type"}}</label>
                 <select id="dbtype" onchange="onDbTypeChange()">
-                    <option value="bbolt">Bbolt (embedded, file-based)</option>
-                    <option value="mongo">MongoDB</option>
+                    <option value="bbolt">{{t "wizard.database.bbolt"}}</option>
+                    <option value="mongo">{{t "wizard.database.mongo"}}</option>
                 </select>
             </div>
             <div id="bboltFields">
                 <div class="form-group">
-                    <label>Database file path:</label>
+                    <label>{{t "wizard.database.path"}}</label>
                     <input type="text" id="dbpath" value="/var/lib/asika/asika.db">
                 </div>
             </div>
             <div id="mongoFields" style="display:none;">
                 <div class="form-group">
-                    <label>MongoDB Connection String:</label>
+                    <label>{{t "wizard.database.mongo_conn"}}</label>
                     <input type="text" id="mongo_conn" value="mongodb://localhost:27017">
                 </div>
                 <div class="form-group">
-                    <label>MongoDB Database Name:</label>
+                    <label>{{t "wizard.database.mongo_dbname"}}</label>
                     <input type="text" id="mongo_dbname" value="asika">
                 </div>
             </div>
@@ -119,42 +119,42 @@
 
         <!-- Step 3: Platform Tokens -->
         <div class="step-content" id="step3">
-            <h3>{{t "wizard.step"}} 3: Platform Tokens</h3>
+            <h3>{{t "wizard.step"}} 3: {{t "wizard.tokens"}}</h3>
             <div class="form-group">
-                <label>GitHub Token (optional):</label>
+                <label>{{t "wizard.tokens.github"}}</label>
                 <input type="password" id="github_token" placeholder="ghp_xxxx or leave empty">
             </div>
             <div class="form-group">
-                <label>GitLab Token (optional):</label>
+                <label>{{t "wizard.tokens.gitlab"}}</label>
                 <input type="password" id="gitlab_token" placeholder="glpat-xxxx or leave empty">
             </div>
             <div class="form-group">
-                <label>Gitea Token (optional):</label>
+                <label>{{t "wizard.tokens.gitea"}}</label>
                 <input type="password" id="gitea_token" placeholder="gitea_xxxx or leave empty">
             </div>
             <div class="form-group">
-                <label>Forgejo Token (optional):</label>
+                <label>{{t "wizard.tokens.forgejo"}}</label>
                 <input type="password" id="forgejo_token" placeholder="forgejo_xxxx or leave empty">
             </div>
             <div class="form-group">
-                <label>Codeberg Token (optional):</label>
+                <label>{{t "wizard.tokens.codeberg"}}</label>
                 <input type="password" id="codeberg_token" placeholder="codeberg_xxxx or leave empty">
             </div>
             <div class="form-group">
-                <label>Bitbucket Token (optional):</label>
+                <label>{{t "wizard.tokens.bitbucket"}}</label>
                 <input type="password" id="bitbucket_token" placeholder="bitbucket_xxxx or leave empty">
             </div>
             <div class="form-group">
-                <label>Gerrit URL (optional):</label>
+                <label>{{t "wizard.tokens.gerrit_url"}}</label>
                 <input type="text" id="gerrit_url" placeholder="https://gerrit.example.com or leave empty">
             </div>
             <div id="gerritAuthFields" style="display:none;">
                 <div class="form-group">
-                    <label>Gerrit Username:</label>
+                    <label>{{t "wizard.tokens.gerrit_user"}}</label>
                     <input type="text" id="gerrit_username" placeholder="username">
                 </div>
                 <div class="form-group">
-                    <label>Gerrit Password:</label>
+                    <label>{{t "wizard.tokens.gerrit_pass"}}</label>
                     <input type="password" id="gerrit_password" placeholder="password">
                 </div>
             </div>
@@ -166,13 +166,13 @@
 
         <!-- Step 4: Repository Groups -->
         <div class="step-content" id="step4">
-            <h3>{{t "wizard.step"}} 4: Repository Group</h3>
+            <h3>{{t "wizard.step"}} 4: {{t "wizard.repo"}}</h3>
             <div class="form-group">
-                <label>Group Name:</label>
+                <label>{{t "wizard.repo.name"}}</label>
                 <input type="text" id="group_name" value="default">
             </div>
             <div id="mirrorPlatformGroup" class="form-group" style="display:none;">
-                <label>Mirror Platform (single mode):</label>
+                <label>{{t "wizard.repo.mirror_platform"}}</label>
                 <select id="mirror_platform">
                     <option value="github">GitHub</option>
                     <option value="gitlab">GitLab</option>
@@ -184,35 +184,35 @@
                 </select>
             </div>
             <div id="githubRepoGroup" class="form-group">
-                <label>GitHub Repository (owner/repo):</label>
+                <label>{{t "wizard.repo.github"}}</label>
                 <input type="text" id="github_repo" placeholder="e.g., octocat/hello-world">
             </div>
             <div id="gitlabRepoGroup" class="form-group">
-                <label>GitLab Repository (owner/repo):</label>
+                <label>{{t "wizard.repo.gitlab"}}</label>
                 <input type="text" id="gitlab_repo" placeholder="e.g., octocat/hello-world">
             </div>
             <div id="giteaRepoGroup" class="form-group">
-                <label>Gitea Repository (owner/repo):</label>
+                <label>{{t "wizard.repo.gitea"}}</label>
                 <input type="text" id="gitea_repo" placeholder="e.g., octocat/hello-world">
             </div>
             <div id="forgejoRepoGroup" class="form-group">
-                <label>Forgejo Repository (owner/repo):</label>
+                <label>{{t "wizard.repo.forgejo"}}</label>
                 <input type="text" id="forgejo_repo" placeholder="e.g., octocat/hello-world">
             </div>
             <div id="codebergRepoGroup" class="form-group">
-                <label>Codeberg Repository (owner/repo):</label>
+                <label>{{t "wizard.repo.codeberg"}}</label>
                 <input type="text" id="codeberg_repo" placeholder="e.g., octocat/hello-world">
             </div>
             <div id="bitbucketRepoGroup" class="form-group">
-                <label>Bitbucket Repository (owner/repo):</label>
+                <label>{{t "wizard.repo.bitbucket"}}</label>
                 <input type="text" id="bitbucket_repo" placeholder="e.g., octocat/hello-world">
             </div>
             <div id="gerritRepoGroup" class="form-group">
-                <label>Gerrit Repository (project~number):</label>
+                <label>{{t "wizard.repo.gerrit"}}</label>
                 <input type="text" id="gerrit_repo" placeholder="e.g., myproject~123">
             </div>
             <div class="form-group">
-                <label>Default Branch:</label>
+                <label>{{t "wizard.repo.branch"}}</label>
                 <input type="text" id="default_branch" value="main">
             </div>
             <div class="nav-buttons">
@@ -223,11 +223,11 @@
 
         <!-- Step 5: Notification Channels -->
         <div class="step-content" id="step5">
-            <h3>{{t "wizard.step"}} 5: Notification Channels</h3>
-            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Configure how Asika sends alerts. All fields optional.</p>
+            <h3>{{t "wizard.step"}} 5: {{t "wizard.notify"}}</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 15px;">{{t "wizard.notify.hint"}}</p>
 
             <div class="form-group">
-                <label>Notification Channel:</label>
+                <label>{{t "wizard.notify.channel"}}</label>
                 <select id="notifyChannelSelect" onchange="onNotifyChannelChange()">
                     <option value="telegram">Telegram Bot</option>
                     <option value="feishu">Feishu / Lark Bot</option>
@@ -373,22 +373,22 @@
 
         <!-- Step 6: Admin Account -->
         <div class="step-content" id="step6">
-            <h3>{{t "wizard.step"}} 6: Admin Account & Server</h3>
+            <h3>{{t "wizard.step"}} 6: {{t "wizard.server"}}</h3>
             <div class="form-group">
-                <label>JWT Secret (leave empty to auto-generate):</label>
+                <label>{{t "wizard.server.jwt"}}</label>
                 <input type="text" id="jwt_secret" placeholder="auto-generated if empty">
-                <button type="button" onclick="genSecret()" style="margin-top: 5px; padding: 5px 10px; font-size: 12px; background: #6c757d; color: white; border: none; border-radius: 3px; cursor: pointer;">Generate</button>
+                <button type="button" onclick="genSecret()" style="margin-top: 5px; padding: 5px 10px; font-size: 12px; background: var(--secondary); color: white; border: none; border-radius: 3px; cursor: pointer;">Generate</button>
             </div>
             <div class="form-group">
-                <label>Server Listen Address:</label>
+                <label>{{t "wizard.server.listen"}}</label>
                 <input type="text" id="listen" value=":8080">
             </div>
             <div class="form-group">
-                <label>Admin Username:</label>
+                <label>{{t "wizard.server.admin_user"}}</label>
                 <input type="text" id="admin_user" value="admin">
             </div>
             <div class="form-group">
-                <label>Admin Password:</label>
+                <label>{{t "wizard.server.admin_pass"}}</label>
                 <input type="password" id="admin_pass" placeholder="set a strong password">
             </div>
             <div class="nav-buttons">
@@ -399,30 +399,30 @@
 
         <!-- Step 7: Self-Updates -->
         <div class="step-content" id="step7">
-            <h3>{{t "wizard.step"}} 7: Self-Update Settings</h3>
-            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Configure automatic version checking.</p>
+            <h3>{{t "wizard.step"}} 7: {{t "wizard.updates"}}</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 15px;">{{t "wizard.updates.hint"}}</p>
 
             <div class="form-group">
                 <label>
                     <input type="checkbox" id="updates_check" style="width:auto; display:inline; margin-right:8px;">
-                    Periodically check for new versions
+                    {{t "wizard.updates.check"}}
                 </label>
             </div>
             <div class="form-group" id="updatesIntervalGroup" style="display:none;">
-                <label>Check interval:</label>
+                <label>{{t "wizard.updates.interval"}}</label>
                 <select id="updates_interval">
-                    <option value="1h">Every hour</option>
-                    <option value="6h">Every 6 hours</option>
-                    <option value="12h">Every 12 hours</option>
-                    <option value="24h" selected>Every 24 hours</option>
-                    <option value="48h">Every 48 hours</option>
-                    <option value="168h">Weekly</option>
+                    <option value="1h">{{t "wizard.updates.1h"}}</option>
+                    <option value="6h">{{t "wizard.updates.6h"}}</option>
+                    <option value="12h">{{t "wizard.updates.12h"}}</option>
+                    <option value="24h" selected>{{t "wizard.updates.24h"}}</option>
+                    <option value="48h">{{t "wizard.updates.48h"}}</option>
+                    <option value="168h">{{t "wizard.updates.168h"}}</option>
                 </select>
             </div>
             <div class="form-group" id="updatesNotifyGroup" style="display:none;">
                 <label>
                     <input type="checkbox" id="updates_notify" style="width:auto; display:inline; margin-right:8px;">
-                    Send notification when new version is available
+                    {{t "wizard.updates.notify"}}
                 </label>
             </div>
             <div class="nav-buttons">
@@ -435,7 +435,7 @@
         <div class="step-content" id="stepComplete">
             <h3>{{t "wizard.setup_complete"}}</h3>
             <div class="success">{{t "wizard.setup_complete_desc"}}</div>
-            <p style="margin-top: 15px;">You can now <a href="/login" style="color: #0066cc;">{{t "wizard.go_to_login"}}</a> with your admin credentials.</p>
+            <p style="margin-top: 15px;">You can now <a href="/login" style="color: var(--primary);">{{t "wizard.go_to_login"}}</a> with your admin credentials.</p>
             <div class="nav-buttons">
                 <button class="btn btn-primary" onclick="window.location='/login'">{{t "wizard.go_to_login"}}</button>
             </div>
@@ -488,7 +488,6 @@
             document.getElementById('updatesNotifyGroup').style.display = checked ? 'block' : 'none';
         });
 
-        // Show/hide Gerrit auth fields when URL is entered
         document.getElementById('gerrit_url').addEventListener('input', function() {
             document.getElementById('gerritAuthFields').style.display = this.value.trim() ? 'block' : 'none';
         });
@@ -576,29 +575,23 @@
             const mode = document.getElementById('mode').value;
             const jwtSecret = document.getElementById('jwt_secret').value || genSecretValue();
 
-            // Parse Telegram admin IDs
             const tgAdminIdsRaw = document.getElementById('tg_admin_ids').value;
             const tgAdminIds = tgAdminIdsRaw ? tgAdminIdsRaw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
 
-            // Parse Feishu admin IDs
             const fsAdminIdsRaw = document.getElementById('fs_admin_ids').value;
             const fsAdminIds = fsAdminIdsRaw ? fsAdminIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
 
-            // Parse chat IDs
             const tgChatIdsRaw = document.getElementById('tg_chat_ids').value;
             const tgChatIds = tgChatIdsRaw ? tgChatIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
 
-            // Parse SMTP recipients
             const smtpToRaw = document.getElementById('smtp_to').value;
             const smtpTo = smtpToRaw ? smtpToRaw.split(',').map(s => s.trim()).filter(s => s) : [];
 
-            // Parse Discord channel IDs
             const discordChannelIdsRaw = document.getElementById('discord_channel_ids').value;
             const discordChannelIds = discordChannelIdsRaw ? discordChannelIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
             const slackChannelIdsRaw = document.getElementById('slack_channel_ids').value;
             const slackChannelIds = slackChannelIdsRaw ? slackChannelIdsRaw.split(',').map(s => s.trim()).filter(s => s) : [];
 
-            // Build database config
             const dbtype = document.getElementById('dbtype').value;
             const database = { type: dbtype };
             if (dbtype === 'mongo') {
@@ -608,55 +601,30 @@
                 database.path = document.getElementById('dbpath').value;
             }
 
-            // Build notify channels
             const notifyChannels = [];
             if (document.getElementById('tg_token').value) {
-                notifyChannels.push({
-                    type: 'telegram',
-                    config: {}
-                });
+                notifyChannels.push({ type: 'telegram', config: {} });
             }
             if (document.getElementById('fs_app_id').value) {
-                notifyChannels.push({
-                    type: 'feishu',
-                    config: {}
-                });
+                notifyChannels.push({ type: 'feishu', config: {} });
             }
             if (document.getElementById('discord_token').value) {
-                notifyChannels.push({
-                    type: 'discord',
-                    config: {}
-                });
+                notifyChannels.push({ type: 'discord', config: {} });
             }
             if (document.getElementById('slack_token').value) {
-                notifyChannels.push({
-                    type: 'slack_bot',
-                    config: {}
-                });
+                notifyChannels.push({ type: 'slack_bot', config: {} });
             }
             if (document.getElementById('dingtalk_token').value) {
-                notifyChannels.push({
-                    type: 'dingtalk',
-                    config: {}
-                });
+                notifyChannels.push({ type: 'dingtalk', config: {} });
             }
             if (document.getElementById('wecom_webhook_key').value) {
-                notifyChannels.push({
-                    type: 'wecom',
-                    config: {}
-                });
+                notifyChannels.push({ type: 'wecom', config: {} });
             }
             if (document.getElementById('msteams_webhook_url').value) {
-                notifyChannels.push({
-                    type: 'msteams',
-                    config: {}
-                });
+                notifyChannels.push({ type: 'msteams', config: {} });
             }
             if (document.getElementById('custom_webhook_url').value) {
-                notifyChannels.push({
-                    type: 'webhook',
-                    config: {}
-                });
+                notifyChannels.push({ type: 'webhook', config: {} });
             }
             if (document.getElementById('smtp_host').value) {
                 notifyChannels.push({
@@ -689,14 +657,8 @@
                         password: document.getElementById('gerrit_password').value
                     } : { url: '', username: '', password: '' }
                 },
-                auth: {
-                    jwt_secret: jwtSecret,
-                    token_expiry: "72h"
-                },
-                server: {
-                    listen: document.getElementById('listen').value,
-                    mode: "release"
-                },
+                auth: { jwt_secret: jwtSecret, token_expiry: "72h" },
+                server: { listen: document.getElementById('listen').value, mode: "release" },
                 repo_groups: [{
                     name: document.getElementById('group_name').value,
                     mode: mode,
@@ -709,59 +671,18 @@
                     bitbucket: document.getElementById('bitbucket_repo').value,
                     gerrit: document.getElementById('gerrit_repo').value,
                     default_branch: document.getElementById('default_branch').value,
-                    merge_queue: {
-                        required_approvals: 1,
-                        ci_check_required: true,
-                        core_contributors: []
-                    }
+                    merge_queue: { required_approvals: 1, ci_check_required: true, core_contributors: [] }
                 }],
                 notify: notifyChannels,
-                telegram: {
-                    enabled: !!document.getElementById('tg_token').value,
-                    token: document.getElementById('tg_token').value,
-                    admin_ids: tgAdminIds,
-                    chat_ids: tgChatIds
-                },
-                feishu: {
-                    enabled: !!document.getElementById('fs_app_id').value,
-                    app_id: document.getElementById('fs_app_id').value,
-                    app_secret: document.getElementById('fs_app_secret').value,
-                    webhook_url: document.getElementById('fs_webhook').value,
-                    admin_ids: fsAdminIds
-                },
-                discord: {
-                    enabled: !!document.getElementById('discord_token').value,
-                    token: document.getElementById('discord_token').value,
-                    channel_ids: discordChannelIds
-                },
-                slack: {
-                    enabled: !!document.getElementById('slack_token').value,
-                    token: document.getElementById('slack_token').value,
-                    app_token: document.getElementById('slack_app_token').value,
-                    channel_ids: slackChannelIds
-                },
-                dingtalk: {
-                    enabled: !!document.getElementById('dingtalk_token').value,
-                    token: document.getElementById('dingtalk_token').value,
-                    secret: document.getElementById('dingtalk_secret').value
-                },
-                wecom: {
-                    enabled: !!document.getElementById('wecom_webhook_key').value,
-                    webhook_key: document.getElementById('wecom_webhook_key').value
-                },
-                msteams: {
-                    enabled: !!document.getElementById('msteams_webhook_url').value,
-                    webhook_url: document.getElementById('msteams_webhook_url').value
-                },
-                webhook: {
-                    enabled: !!document.getElementById('custom_webhook_url').value,
-                    url: document.getElementById('custom_webhook_url').value
-                },
-                users: [{
-                    username: document.getElementById('admin_user').value,
-                    password: document.getElementById('admin_pass').value,
-                    role: "admin"
-                }],
+                telegram: { enabled: !!document.getElementById('tg_token').value, token: document.getElementById('tg_token').value, admin_ids: tgAdminIds, chat_ids: tgChatIds },
+                feishu: { enabled: !!document.getElementById('fs_app_id').value, app_id: document.getElementById('fs_app_id').value, app_secret: document.getElementById('fs_app_secret').value, webhook_url: document.getElementById('fs_webhook').value, admin_ids: fsAdminIds },
+                discord: { enabled: !!document.getElementById('discord_token').value, token: document.getElementById('discord_token').value, channel_ids: discordChannelIds },
+                slack: { enabled: !!document.getElementById('slack_token').value, token: document.getElementById('slack_token').value, app_token: document.getElementById('slack_app_token').value, channel_ids: slackChannelIds },
+                dingtalk: { enabled: !!document.getElementById('dingtalk_token').value, token: document.getElementById('dingtalk_token').value, secret: document.getElementById('dingtalk_secret').value },
+                wecom: { enabled: !!document.getElementById('wecom_webhook_key').value, webhook_key: document.getElementById('wecom_webhook_key').value },
+                msteams: { enabled: !!document.getElementById('msteams_webhook_url').value, webhook_url: document.getElementById('msteams_webhook_url').value },
+                webhook: { enabled: !!document.getElementById('custom_webhook_url').value, url: document.getElementById('custom_webhook_url').value },
+                users: [{ username: document.getElementById('admin_user').value, password: document.getElementById('admin_pass').value, role: "admin" }],
                 events: { mode: "webhook" },
                 merge_queue: { required_approvals: 1, ci_check_required: true },
                 spam: { enabled: false },
@@ -790,10 +711,7 @@
                     document.getElementById('stepComplete').classList.add('active');
                     for (let i = 1; i <= 7; i++) {
                         const dot = document.getElementById('dot' + i);
-                        if (dot) {
-                            dot.classList.remove('active');
-                            dot.classList.add('done');
-                        }
+                        if (dot) { dot.classList.remove('active'); dot.classList.add('done'); }
                     }
                     setTimeout(() => { window.location = '/login'; }, 3000);
                 }
