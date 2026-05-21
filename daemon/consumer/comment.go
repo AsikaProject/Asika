@@ -10,6 +10,7 @@ import (
 	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/daemon/handlers"
 )
 
 func (c *Consumer) handlePRComment(event events.Event) {
@@ -28,6 +29,10 @@ func (c *Consumer) handlePRComment(event events.Event) {
 	commentAuthor := payload.CommentAuthor
 
 	slog.Info("PR comment received", "repo_group", event.RepoGroup, "pr", pr.PRNumber, "author", commentAuthor, "body", commentBody)
+
+	if len(payload.Mentions) > 0 {
+		handlers.NotifyMentions(pr, payload, event.RepoGroup)
+	}
 
 	if !strings.HasPrefix(commentBody, "/") {
 		return

@@ -152,6 +152,10 @@ func (c *Consumer) handlePRApproved(event events.Event) {
 
 	slog.Info("PR approved", "title", pr.Title)
 
+	if c.autoMerge != nil {
+		c.autoMerge.EvaluatePR(pr)
+	}
+
 	if c.queue != nil {
 		if err := c.queue.AddToQueue(pr); err != nil {
 			slog.Error("failed to add PR to queue", "error", err, "pr_id", pr.ID)

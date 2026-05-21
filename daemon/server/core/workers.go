@@ -13,6 +13,7 @@ import (
 	"asika/common/models"
 	"asika/common/platforms"
 	"asika/common/utils"
+	"asika/daemon/automerge"
 	"asika/daemon/consumer"
 	"asika/daemon/feed"
 	"asika/daemon/handlers"
@@ -133,6 +134,12 @@ func StartWorkers(
 	escalationWorker := NewEscalationWorker()
 	escalationWorker.Start()
 
+	// Digest notification worker
+	StartDigestWorker()
+
+	// Auto-merge periodic scanner
+	startAutoMergeScanner(cfg, clients)
+
 	// RSS feed
 	feed.InitGlobalFeed(cfg.Feed)
 	feed.StartFeedSubscriber()
@@ -158,6 +165,24 @@ func StartWorkers(
 	_ = cleanupStop
 
 	return
+}
+
+func startAutoMergeScanner(cfg *models.Config, clients map[platforms.PlatformType]platforms.PlatformClient) {
+	if !cfg.AutoMerge.Enabled {
+		return
+	}
+	evaluator := automerge.NewEvaluator(cfg, clients)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				evaluator.EvaluateAll()
+			}
+		}
+	}()
+	slog.Info("auto-merge scanner started", "enabled", cfg.AutoMerge.Enabled)
 }
 
 func persistSpamClean(cfg *models.Config) {

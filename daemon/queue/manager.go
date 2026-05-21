@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -207,7 +208,10 @@ func (m *Manager) CheckQueue() {
 		}
 	}
 
-	// Process items outside any db transaction
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Priority > items[j].Priority
+	})
+
 	now := time.Now()
 	for i, item := range items {
 		if !item.ScheduleAt.IsZero() && item.ScheduleAt.After(now) {

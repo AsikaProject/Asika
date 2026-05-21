@@ -52,6 +52,9 @@ type Storage interface {
 	PutNotificationDedup(key string, data []byte) error
 	GetNotificationDedup(key string) ([]byte, error)
 	DeleteNotificationDedup(key string) error
+	AppendNotificationDigest(username, notifier, title, body string) error
+	ListNotificationDigests() (map[string][]DigestEntry, error)
+	DeleteNotificationDigests(username string) error
 	ListNotificationPrefs(usernames []string) ([]models.NotificationPreferences, error)
 	PutTeamSpace(space *models.TeamSpace) error
 	GetTeamSpace(name string) (*models.TeamSpace, error)
@@ -223,6 +226,15 @@ func GetNotificationDedup(key string) ([]byte, error) {
 }
 func DeleteNotificationDedup(key string) error {
 	return mustStorage().DeleteNotificationDedup(key)
+}
+func AppendNotificationDigest(username, notifier, title, body string) error {
+	return mustStorage().AppendNotificationDigest(username, notifier, title, body)
+}
+func ListNotificationDigests() (map[string][]DigestEntry, error) {
+	return mustStorage().ListNotificationDigests()
+}
+func DeleteNotificationDigests(username string) error {
+	return mustStorage().DeleteNotificationDigests(username)
 }
 func ListNotificationPrefs(usernames []string) ([]models.NotificationPreferences, error) {
 	return mustStorage().ListNotificationPrefs(usernames)

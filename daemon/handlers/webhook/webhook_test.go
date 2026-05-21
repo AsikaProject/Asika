@@ -632,7 +632,9 @@ func TestParseBitbucketWebhook_NoComment(t *testing.T) {
 		},
 		"pullrequest": {
 			"id": 51, "title": "Test", "state": "OPEN",
-			"author": {"display_name": "dev1"}
+			"author": {"display_name": "dev1"},
+			"links": {"html": {"href": "https://bitbucket.org/org/repo/pull-requests/51"}},
+			"description": ""
 		},
 		"repository": {"full_name": "org/repo"}
 	}`
@@ -640,8 +642,17 @@ func TestParseBitbucketWebhook_NoComment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if evt != "" || pr != nil {
-		t.Error("expected empty event and nil pr for empty comment")
+	if evt != string(events.EventPROpened) {
+		t.Errorf("expected pr_opened event, got %q", evt)
+	}
+	if pr == nil {
+		t.Fatal("expected non-nil pr")
+	}
+	if pr.PRNumber != 51 {
+		t.Errorf("expected PR number 51, got %d", pr.PRNumber)
+	}
+	if pr.State != "open" {
+		t.Errorf("expected state open, got %q", pr.State)
 	}
 }
 

@@ -126,6 +126,12 @@ func (m *Manager) analyzePR(client platforms.PlatformClient, group *models.RepoG
 		return StaleAction{Type: "skip", PRNumber: pr.PRNumber, PRTitle: pr.Title, Reason: "draft PR"}
 	}
 
+	for _, excluded := range cfg.ExcludeAuthors {
+		if pr.Author == excluded {
+			return StaleAction{Type: "skip", PRNumber: pr.PRNumber, PRTitle: pr.Title, Reason: "excluded author"}
+		}
+	}
+
 	isExempt := false
 	for _, exempt := range cfg.ExemptLabels {
 		if hasLabel(pr.Labels, exempt) {
@@ -156,6 +162,12 @@ func (m *Manager) processPR(client platforms.PlatformClient, group *models.RepoG
 
 	if cfg.SkipDraftPRs && pr.IsDraft {
 		return
+	}
+
+	for _, excluded := range cfg.ExcludeAuthors {
+		if pr.Author == excluded {
+			return
+		}
 	}
 
 	isExempt := false

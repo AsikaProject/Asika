@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -62,6 +63,47 @@ func (s *mongoStorage) DeleteNotificationDedup(key string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_, err := s.coll(BucketNotificationDedup).DeleteOne(ctx, bson.M{"_id": key})
+	return err
+}
+
+func (s *mongoStorage) AppendNotificationDigest(username, notifier, title, body string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	doc := bson.M{
+		"_id":       fmt.Sprintf("%s:%s:%d", username, notifier, time.Now().UnixNano()),
+		"username":  username,
+		"notifier":  notifier,
+		"title":     title,
+		"body":      body,
+		"timestamp": time.Now(),
+	}
+	_, err := s.coll(BucketNotificationDigest).InsertOne(ctx, doc)
+	return err
+}
+
+func (s *mongoStorage) ListNotificationDigests() (map[string][]DigestEntry, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketNotificationDigest).Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	result := make(map[string][]DigestEntry)
+	for cursor.Next(ctx) {
+		var entry DigestEntry
+		if err := cursor.Decode(&entry); err != nil {
+			continue
+		}
+		result[entry.Username] = append(result[entry.Username], entry)
+	}
+	return result, nil
+}
+
+func (s *mongoStorage) DeleteNotificationDigests(username string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := s.coll(BucketNotificationDigest).DeleteMany(ctx, bson.M{"username": username})
 	return err
 }
 

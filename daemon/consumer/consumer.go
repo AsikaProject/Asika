@@ -13,6 +13,7 @@ import (
 	"asika/common/models"
 	"asika/common/platforms"
 	"asika/common/timeutil"
+	"asika/daemon/automerge"
 	"asika/daemon/handlers"
 	"asika/daemon/labeler"
 	"asika/daemon/queue"
@@ -31,6 +32,7 @@ type Consumer struct {
 	spamDetector *syncer.SpamDetector
 	queue        *queue.Manager
 	staleMgr     *stale.Manager
+	autoMerge    *automerge.Evaluator
 	stop         chan struct{}
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -68,6 +70,7 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 	s.SetNotifyFunc(handlers.SendNotificationSync)
 	sd := syncer.NewSpamDetectorWithClients(cfg, clients)
 	q := queue.NewManager(cfg, clients)
+	am := automerge.NewEvaluator(cfg, clients)
 	poolCfg := cfg.WorkerPool
 	if poolCfg.MinWorkers <= 0 {
 		poolCfg = models.WorkerPoolConfig{MinWorkers: 2, MaxWorkers: 8, ScaleUpPct: 75, ScaleDownPct: 25, CooldownSecs: 30, StatsInterval: "30s"}
@@ -80,6 +83,7 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 		syncer:         s,
 		spamDetector:   sd,
 		queue:          q,
+		autoMerge:      am,
 		stop:           make(chan struct{}),
 		writer:         newWriterActor(256),
 		workers:        newWorkerPool(poolCfg),

@@ -367,6 +367,7 @@ Buckets (33 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `cross_space_deps` | `{sourcePRID}:{targetPRID}` | CrossSpaceDep (JSON); cross-space dependency records |
 | `escalation_rules` | `{prID}` or `"default"` | Escalation state (JSON); last escalation timestamp or level |
 | `pr_stacks` | `{stackID}` | PRStack (JSON); cross-platform PR chain tracking |
+| `notification_digest` | `{username}:{notifier}:{nanotime}` | DigestEntry (JSON); buffered notifications for digest mode |
 
 Performance optimizations:
 - Index-based PR lookups via `PutPRWithIndex` / `GetPRByIndex` (O(1) vs O(n) scan)

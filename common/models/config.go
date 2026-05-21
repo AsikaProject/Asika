@@ -91,6 +91,7 @@ type StaleConfig struct {
 	DaysUntilClose   int      `toml:"days_until_close" json:"days_until_close"`
 	StaleLabel       string   `toml:"stale_label" json:"stale_label"`
 	ExemptLabels     []string `toml:"exempt_labels" json:"exempt_labels"`
+	ExcludeAuthors   []string `toml:"exclude_authors" json:"exclude_authors"`
 	NotifyOnStale    bool     `toml:"notify_on_stale" json:"notify_on_stale"`
 	CommentOnStale   string   `toml:"comment_on_stale" json:"comment_on_stale"`
 	CommentOnClose   string   `toml:"comment_on_close" json:"comment_on_close"`

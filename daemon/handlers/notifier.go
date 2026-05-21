@@ -63,6 +63,28 @@ func SetLabelNotifyFunc(fn func(title, body, eventType, prID string, prLabels []
 	notifyFuncMu.Unlock()
 }
 
+// NotifyMentions sends notifications to users mentioned in a PR comment.
+func NotifyMentions(pr *models.PRRecord, comment *models.PRCommentPayload, repoGroup string) {
+	if len(comment.Mentions) == 0 {
+		return
+	}
+	notifyFuncMu.RLock()
+	fn := labelNotifyFunc
+	notifyFuncMu.RUnlock()
+	if fn == nil {
+		return
+	}
+	prID := fmt.Sprintf("%s#%s#%d", repoGroup, pr.Platform, pr.PRNumber)
+	title := fmt.Sprintf("💬 Mentioned in PR #%d", pr.PRNumber)
+	body := fmt.Sprintf("%s mentioned %s in PR \"%s\"\n\n%s\n\nURL: %s",
+		comment.CommentAuthor,
+		strings.Join(comment.Mentions, ", "),
+		pr.Title,
+		comment.CommentBody,
+		pr.HTMLURL)
+	fn(title, body, string(events.EventPRComment), prID, nil)
+}
+
 // NotifyLabelSubscribers sends label-subscription notifications for a labeled PR.
 // Called by the consumer after a PR label is updated.
 func NotifyLabelSubscribers(pr *models.PRRecord, repoGroup string) {

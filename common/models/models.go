@@ -113,8 +113,9 @@ type PREvent struct {
 }
 
 type PRCommentPayload struct {
-	CommentBody   string `json:"comment_body"`
-	CommentAuthor string `json:"comment_author"`
+	CommentBody   string   `json:"comment_body"`
+	CommentAuthor string   `json:"comment_author"`
+	Mentions      []string `json:"mentions"`
 }
 
 // ApprovalStatus holds the result of replaying all reviews for a PR.
@@ -330,6 +331,21 @@ type AutoRebaseConfig struct {
 	ExcludeAuthors []string `toml:"exclude_authors" json:"exclude_authors"` // PRs from these authors will not be auto-rebased
 }
 
+type AutoMergeRule struct {
+	Name              string   `toml:"name" json:"name"`
+	Labels            []string `toml:"labels" json:"labels"`
+	RequiredApprovals int      `toml:"required_approvals" json:"required_approvals"`
+	CIRequired        bool     `toml:"ci_required" json:"ci_required"`
+	ExcludeLabels     []string `toml:"exclude_labels" json:"exclude_labels"`
+	ExcludeAuthors    []string `toml:"exclude_authors" json:"exclude_authors"`
+	Enabled           bool     `toml:"enabled" json:"enabled"`
+}
+
+type AutoMergeConfig struct {
+	Enabled bool            `toml:"enabled" json:"enabled"`
+	Rules   []AutoMergeRule `toml:"rules" json:"rules"`
+}
+
 type Config struct {
 	Server         ServerConfig       `toml:"server" json:"server"`
 	Database       DatabaseConfig     `toml:"database" json:"database"`
@@ -363,6 +379,7 @@ type Config struct {
 	WebhookFilter  WebhookFilter      `toml:"webhook_filter" json:"webhook_filter"`
 	NotifyRules    NotifyRulesConfig  `toml:"notify_rules" json:"notify_rules"`
 	AutoRebase     AutoRebaseConfig   `toml:"auto_rebase" json:"auto_rebase"`
+	AutoMerge      AutoMergeConfig    `toml:"auto_merge" json:"auto_merge"`
 }
 
 type ScheduleConfig struct {

@@ -2,9 +2,12 @@ package webhook
 
 import (
 	"encoding/json"
+	"regexp"
 
 	"asika/common/models"
 )
+
+var mentionRe = regexp.MustCompile(`@([a-zA-Z0-9_\-\[\]]+)`)
 
 // extractCommentPayload extracts comment data from a webhook payload for PR comment events
 func extractCommentPayload(platform string, body []byte) *models.PRCommentPayload {
@@ -21,7 +24,7 @@ func extractCommentPayload(platform string, body []byte) *models.PRCommentPayloa
 		if err := json.Unmarshal(body, &payload); err != nil {
 			return nil
 		}
-		return &models.PRCommentPayload{CommentBody: payload.Comment.Body, CommentAuthor: payload.Comment.User.Login}
+		return &models.PRCommentPayload{CommentBody: payload.Comment.Body, CommentAuthor: payload.Comment.User.Login, Mentions: extractMentions(payload.Comment.Body)}
 	case "gitlab":
 		var payload struct {
 			ObjectAttributes struct {
@@ -34,7 +37,7 @@ func extractCommentPayload(platform string, body []byte) *models.PRCommentPayloa
 		if err := json.Unmarshal(body, &payload); err != nil {
 			return nil
 		}
-		return &models.PRCommentPayload{CommentBody: payload.ObjectAttributes.Note, CommentAuthor: payload.User.Username}
+		return &models.PRCommentPayload{CommentBody: payload.ObjectAttributes.Note, CommentAuthor: payload.User.Username, Mentions: extractMentions(payload.ObjectAttributes.Note)}
 	case "gitea", "forgejo", "codeberg":
 		var payload struct {
 			Comment struct {
@@ -47,7 +50,7 @@ func extractCommentPayload(platform string, body []byte) *models.PRCommentPayloa
 		if err := json.Unmarshal(body, &payload); err != nil {
 			return nil
 		}
-		return &models.PRCommentPayload{CommentBody: payload.Comment.Body, CommentAuthor: payload.Comment.User.Login}
+		return &models.PRCommentPayload{CommentBody: payload.Comment.Body, CommentAuthor: payload.Comment.User.Login, Mentions: extractMentions(payload.Comment.Body)}
 	case "bitbucket":
 		var payload struct {
 			Comment struct {
@@ -62,7 +65,21 @@ func extractCommentPayload(platform string, body []byte) *models.PRCommentPayloa
 		if err := json.Unmarshal(body, &payload); err != nil {
 			return nil
 		}
-		return &models.PRCommentPayload{CommentBody: payload.Comment.Content.Raw, CommentAuthor: payload.Actor.DisplayName}
+		return &models.PRCommentPayload{CommentBody: payload.Comment.Content.Raw, CommentAuthor: payload.Actor.DisplayName, Mentions: extractMentions(payload.Comment.Content.Raw)}
 	}
 	return nil
+}
+
+func extractMentions(text string) []string {
+	matches := mentionRe.FindAllString(text, -1)
+	seen := make(map[string]bool)
+	var mentions []string
+	for _, m := range matches {
+		username := m[1:]
+		if !seen[username] {
+			seen[username] = true
+			mentions = append(mentions, username)
+		}
+	}
+	return mentions
 }

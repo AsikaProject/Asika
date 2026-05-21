@@ -4,7 +4,13 @@
 
 ### Features
 
-- **Feature**: Label-based PR subscription notifications. Users can now subscribe to specific PR labels via `LabelSubs` in their notification preferences. When a PR is labeled (manually, via auto-labeler, or via webhook), only users subscribed to matching labels receive notifications. Supports glob patterns (e.g. `"area/*"` matches `"area/frontend"`). Empty/nil `LabelSubs` subscribes to all labels (backward compatible).
+- **Feature**: Label-based PR subscription notifications. Users can now subscribe to specific PR labels via `LabelSubs` in their notification preferences. When a PR is labeled (manually, via auto-labeler, or via webhook), only users subscribed to matching labels receive notifications. Supports glob patterns (e.g. `"area/*"` matches `"area/frontend"`). Empty/nil `LabelSubs` subscribes to all labels (backward compatible). The labeler publishes `pr_labeled` events after auto-labeling, and the consumer's handlePRLabeled triggers label-aware notifications via `SendNotificationWithLabels`.
+- **Feature**: Notification digest mode. `DigestMode` in user preferences now works — `"hourly"` and `"daily"` modes buffer notifications and send them as a summary at the configured interval. `"realtime"` (default) sends immediately as before.
+- **Feature**: PR comment @mention notifications. Comments containing `@username` now extract mentions and trigger targeted notifications to mentioned users via `NotifyMentions`.
+- **Feature**: Auto-merge rules. New `[auto_merge]` config section with named rules that automatically merge PRs when conditions are met (labels, required approvals, CI status). Evaluated on `pr_approved` events and via a periodic 5-minute scanner.
+- **Feature**: Queue priority sorting. `QueueItem.Priority` field (already in model) is now used — items are sorted by priority (higher first) before processing in `CheckQueue`.
+- **Feature**: Stale exclude authors. New `exclude_authors` field in `[stale]` config prevents specific authors (e.g. bots) from being marked stale.
+- **Feature**: Bitbucket full webhook support. Bitbucket webhooks now parse PR created/merged/closed/declined events in addition to comment events.
 
 ## v20260617DEV > v20260621DEV
 
