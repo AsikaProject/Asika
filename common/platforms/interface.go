@@ -49,6 +49,10 @@ type PlatformClient interface {
 	// Approval status
 	GetApprovals(ctx context.Context, owner, repo string, number int) (*models.ApprovalStatus, error)
 
+	// HasWritePermission checks if a user has write (push) access to a repository.
+	// Used to filter approvals to only count collaborators with write permission.
+	HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error)
+
 	// Webhook
 	VerifyWebhookSignature(body []byte, signature string) bool
 

@@ -179,6 +179,10 @@ func (m *MockPlatformClient) GetFileContent(ctx context.Context, owner, repo, pa
 	return "", m.Err
 }
 
+func (m *MockPlatformClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
+	return true, nil
+}
+
 func (m *MockPlatformClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
 	if m.Err != nil {
 		return nil, m.Err

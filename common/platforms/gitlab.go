@@ -543,3 +543,19 @@ func (c *GitLabClient) GetFileContent(ctx context.Context, owner, repo, path str
 	}
 	return file.Content, nil
 }
+
+func (c *GitLabClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
+	project := owner + "/" + repo
+	members, _, err := c.client.ProjectMembers.ListProjectMembers(project, &gitlab.ListProjectMembersOptions{
+		Query: &username,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to list project members: %w", err)
+	}
+	for _, m := range members {
+		if m.Username == username && m.AccessLevel >= gitlab.DeveloperPermissions {
+			return true, nil
+		}
+	}
+	return false, nil
+}

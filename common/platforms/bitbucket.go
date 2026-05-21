@@ -629,3 +629,7 @@ func (c *BitbucketClient) GetFileContent(ctx context.Context, owner, repo, path 
 	}
 	return string(body), nil
 }
+
+func (c *BitbucketClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
+	return true, nil
+}

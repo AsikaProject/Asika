@@ -134,3 +134,80 @@ func (s *mongoStorage) ListNotificationPrefs(usernames []string) ([]models.Notif
 	}
 	return prefs, nil
 }
+
+func (s *mongoStorage) PutPendingPR(pr *PendingPR) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	doc := bson.M{
+		"_id":           fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber),
+		"pr_id":         pr.PRID,
+		"repo_group":    pr.RepoGroup,
+		"platform":      pr.Platform,
+		"pr_number":     pr.PRNumber,
+		"title":         pr.Title,
+		"author":        pr.Author,
+		"approval_count": pr.ApprovalCount,
+		"added_at":      pr.AddedAt,
+		"last_checked":  pr.LastChecked,
+	}
+	_, err := s.coll(BucketPendingPRs).ReplaceOne(ctx, bson.M{"_id": doc["_id"]}, doc, options.Replace().SetUpsert(true))
+	return err
+}
+
+func (s *mongoStorage) GetPendingPR(repoGroup, platform string, prNumber int) (*PendingPR, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	key := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
+	var doc bson.M
+	err := s.coll(BucketPendingPRs).FindOne(ctx, bson.M{"_id": key}).Decode(&doc)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &PendingPR{
+		PRID:          doc["pr_id"].(string),
+		RepoGroup:     doc["repo_group"].(string),
+		Platform:      doc["platform"].(string),
+		PRNumber:      int(doc["pr_number"].(int32)),
+		Title:         doc["title"].(string),
+		Author:        doc["author"].(string),
+		ApprovalCount: int(doc["approval_count"].(int32)),
+	}, nil
+}
+
+func (s *mongoStorage) DeletePendingPR(repoGroup, platform string, prNumber int) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	key := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
+	_, err := s.coll(BucketPendingPRs).DeleteOne(ctx, bson.M{"_id": key})
+	return err
+}
+
+func (s *mongoStorage) ListPendingPRs() ([]*PendingPR, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketPendingPRs).Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var prs []*PendingPR
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		prs = append(prs, &PendingPR{
+			PRID:          doc["pr_id"].(string),
+			RepoGroup:     doc["repo_group"].(string),
+			Platform:      doc["platform"].(string),
+			PRNumber:      int(doc["pr_number"].(int32)),
+			Title:         doc["title"].(string),
+			Author:        doc["author"].(string),
+			ApprovalCount: int(doc["approval_count"].(int32)),
+		})
+	}
+	return prs, nil
+}

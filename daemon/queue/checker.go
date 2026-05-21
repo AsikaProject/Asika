@@ -73,7 +73,10 @@ func (c *Checker) IsReadyToMerge(pr *models.PRRecord) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	approvals := approvalStatus.Approvers
+	approvals, err := c.filterWritePermission(ctx, pr, group, approvalStatus.Approvers)
+	if err != nil {
+		return false, err
+	}
 
 	if len(approvals) < mq.RequiredApprovals {
 		slog.Info("PR does not meet approval requirement, skipping enqueue",
@@ -174,7 +177,10 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 		return false, err
 	}
 
-	approvals := approvalStatus.Approvers
+	approvals, err := c.filterWritePermission(ctx, pr, group, approvalStatus.Approvers)
+	if err != nil {
+		return false, err
+	}
 	coreApproved := 0
 	coreSet := make(map[string]bool, len(mq.CoreContributors))
 	for _, cc := range mq.CoreContributors {
@@ -298,6 +304,35 @@ func (c *Checker) fetchApprovals(ctx context.Context, pr *models.PRRecord, group
 		return nil, &TransientError{Err: err}
 	}
 	return status, nil
+}
+
+func (c *Checker) filterWritePermission(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup, approvers []string) ([]string, error) {
+	if len(approvers) == 0 {
+		return approvers, nil
+	}
+	client := c.clients[platforms.PlatformType(pr.Platform)]
+	if client == nil {
+		return approvers, nil
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+	if owner == "" || repo == "" {
+		return approvers, nil
+	}
+	var filtered []string
+	for _, username := range approvers {
+		hasWrite, err := client.HasWritePermission(ctx, owner, repo, username)
+		if err != nil {
+			slog.Warn("failed to check write permission, keeping approver", "username", username, "error", err)
+			filtered = append(filtered, username)
+			continue
+		}
+		if hasWrite {
+			filtered = append(filtered, username)
+		} else {
+			slog.Info("approver filtered: no write permission", "username", username, "pr_id", pr.ID)
+		}
+	}
+	return filtered, nil
 }
 
 // checkCI checks if CI passed

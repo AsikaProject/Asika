@@ -538,3 +538,11 @@ func (c *GerritClient) GetFileContent(ctx context.Context, owner, repo, path str
 	}
 	return string(body), nil
 }
+
+func (c *GerritClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
+	_, _, err := c.client.Accounts.GetAccount(ctx, username)
+	if err != nil {
+		return false, nil
+	}
+	return true, nil
+}

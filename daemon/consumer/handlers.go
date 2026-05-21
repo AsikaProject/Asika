@@ -162,15 +162,18 @@ func (c *Consumer) handlePRApproved(event events.Event) {
 			slog.Error("failed to check merge readiness", "error", err, "pr_id", pr.ID)
 			return
 		}
-		if !ready {
-			slog.Info("PR not ready for merge queue, skipping", "pr_id", pr.ID, "repo_group", pr.RepoGroup)
+		if ready {
+			if err := c.queue.AddToQueue(pr); err != nil {
+				slog.Error("failed to add PR to queue", "error", err, "pr_id", pr.ID)
+			} else {
+				slog.Info("PR added to merge queue", "pr_id", pr.ID, "repo_group", pr.RepoGroup)
+			}
 			return
 		}
-		if err := c.queue.AddToQueue(pr); err != nil {
-			slog.Error("failed to add PR to queue", "error", err, "pr_id", pr.ID)
-		} else {
-			slog.Info("PR added to merge queue", "pr_id", pr.ID, "repo_group", pr.RepoGroup)
+		if c.pendingQueue != nil {
+			c.pendingQueue.AddPending(pr, 0)
 		}
+		slog.Info("PR not ready for merge queue, added to pending queue", "pr_id", pr.ID, "repo_group", pr.RepoGroup)
 	}
 }
 

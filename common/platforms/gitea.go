@@ -588,3 +588,11 @@ func (c *GiteaClient) GetFileContent(ctx context.Context, owner, repo, path stri
 	}
 	return "", nil
 }
+
+func (c *GiteaClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
+	isCollab, _, err := c.client.IsCollaborator(owner, repo, username)
+	if err != nil {
+		return false, fmt.Errorf("failed to check collaborator status for %s: %w", username, err)
+	}
+	return isCollab, nil
+}

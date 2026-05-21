@@ -33,6 +33,7 @@ type Consumer struct {
 	queue        *queue.Manager
 	staleMgr     *stale.Manager
 	autoMerge    *automerge.Evaluator
+	pendingQueue *queue.PendingQueue
 	stop         chan struct{}
 	ctx          context.Context
 	cancel       context.CancelFunc
@@ -84,6 +85,7 @@ func NewConsumerWithClients(cfg *models.Config, clients map[platforms.PlatformTy
 		spamDetector:   sd,
 		queue:          q,
 		autoMerge:      am,
+		pendingQueue:   queue.NewPendingQueue(q),
 		stop:           make(chan struct{}),
 		writer:         newWriterActor(256),
 		workers:        newWorkerPool(poolCfg),
@@ -194,6 +196,13 @@ func (c *Consumer) UpdateWorkerPoolConfig(cfg models.WorkerPoolConfig) {
 // SetStaleManager sets the stale manager for activity detection
 func (c *Consumer) SetStaleManager(mgr *stale.Manager) {
 	c.staleMgr = mgr
+}
+
+// StartPendingQueue starts the pending queue background worker.
+func (c *Consumer) StartPendingQueue() {
+	if c.pendingQueue != nil {
+		c.pendingQueue.Start()
+	}
 }
 
 // updatePR serializes the PR and writes it through the writer actor.

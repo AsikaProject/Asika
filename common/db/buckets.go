@@ -20,6 +20,7 @@ const (
 	BucketNotificationPrefs  = "notification_prefs"
 	BucketNotificationDedup  = "notification_dedup"
 	BucketNotificationDigest = "notification_digest"
+	BucketPendingPRs        = "pending_prs"
 	BucketTeamSpaces         = "team_spaces"
 	BucketSpaceMembers       = "space_members"
 	BucketSpaceSettings      = "space_settings"

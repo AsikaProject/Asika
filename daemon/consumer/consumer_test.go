@@ -259,12 +259,18 @@ func TestHandlePRApproved(t *testing.T) {
 
 	events.Init()
 
+	mockClient := testutil.NewMockPlatformClient()
+	mockClient.Approvals = []string{"reviewer1"}
+	mockClient.CIStatus = "success"
+
 	cfg := &models.Config{
 		RepoGroups: []models.RepoGroupConfig{
-			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
+			{Name: "test-group", GitHub: "org/repo", MergeQueue: models.MergeQueueConfig{RequiredApprovals: 1}},
 		},
 	}
-	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	clients := map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: mockClient,
+	}
 	c := NewConsumerWithClients(cfg, clients)
 
 	pr := &models.PRRecord{
@@ -284,7 +290,7 @@ func TestHandlePRApproved(t *testing.T) {
 		PR:        pr,
 	})
 
-	// Verify PR was added to queue
+	// Verify PR was added to queue (conditions met: 1 approval, CI success)
 	items, err := c.queue.GetQueueItems("test-group")
 	if err != nil {
 		t.Fatalf("GetQueueItems failed: %v", err)
@@ -294,6 +300,63 @@ func TestHandlePRApproved(t *testing.T) {
 	}
 	if items[0].PRID != "pr-approve-1" {
 		t.Errorf("queue item PRID = %q, want pr-approve-1", items[0].PRID)
+	}
+}
+
+func TestHandlePRApproved_NotReady(t *testing.T) {
+	dir := t.TempDir()
+	db.Init(dir + "/test.db")
+	t.Cleanup(func() { db.Close() })
+
+	events.Init()
+
+	mockClient := testutil.NewMockPlatformClient()
+	mockClient.Approvals = []string{}
+	mockClient.CIStatus = "success"
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", GitHub: "org/repo", MergeQueue: models.MergeQueueConfig{RequiredApprovals: 1}},
+		},
+	}
+	clients := map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: mockClient,
+	}
+	c := NewConsumerWithClients(cfg, clients)
+
+	pr := &models.PRRecord{
+		ID:        "pr-approve-2",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  31,
+		Title:     "Not ready PR",
+		Author:    "dev2",
+		State:     "open",
+	}
+
+	c.handlePRApproved(events.Event{
+		Type:      events.EventPRApproved,
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PR:        pr,
+	})
+
+	// Verify PR was NOT added to queue (no approvals)
+	items, err := c.queue.GetQueueItems("test-group")
+	if err != nil {
+		t.Fatalf("GetQueueItems failed: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("expected 0 queue items, got %d", len(items))
+	}
+
+	// Verify PR was added to pending queue
+	pending, err := db.ListPendingPRs()
+	if err != nil {
+		t.Fatalf("ListPendingPRs failed: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Errorf("expected 1 pending PR, got %d", len(pending))
 	}
 }
 
@@ -895,8 +958,18 @@ func TestNewConsumerWithQueue(t *testing.T) {
 	db.Init(dir + "/test.db")
 	t.Cleanup(func() { db.Close() })
 
-	cfg := &models.Config{}
-	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	mockClient := testutil.NewMockPlatformClient()
+	mockClient.Approvals = []string{"reviewer1"}
+	mockClient.CIStatus = "success"
+
+	cfg := &models.Config{
+		RepoGroups: []models.RepoGroupConfig{
+			{Name: "test-group", GitHub: "org/repo", MergeQueue: models.MergeQueueConfig{RequiredApprovals: 1}},
+		},
+	}
+	clients := map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: mockClient,
+	}
 	c := NewConsumerWithClients(cfg, clients)
 
 	pr := &models.PRRecord{
@@ -1153,12 +1226,18 @@ func TestConsumerEventFlow_OpenedThenApprovedThenClosed(t *testing.T) {
 
 	events.Init()
 
+	mockClient := testutil.NewMockPlatformClient()
+	mockClient.Approvals = []string{"reviewer1"}
+	mockClient.CIStatus = "success"
+
 	cfg := &models.Config{
 		RepoGroups: []models.RepoGroupConfig{
-			{Name: "flow-full", Mode: "multi", GitHub: "org/repo"},
+			{Name: "flow-full", Mode: "multi", GitHub: "org/repo", MergeQueue: models.MergeQueueConfig{RequiredApprovals: 1}},
 		},
 	}
-	clients := make(map[platforms.PlatformType]platforms.PlatformClient)
+	clients := map[platforms.PlatformType]platforms.PlatformClient{
+		platforms.PlatformGitHub: mockClient,
+	}
 	c := NewConsumerWithClients(cfg, clients)
 
 	pr := &models.PRRecord{

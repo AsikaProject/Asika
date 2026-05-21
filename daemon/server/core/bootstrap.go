@@ -163,6 +163,11 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 	})
 	handlers.InitPoller(ic.Poller)
 
+	// Pending queue worker: promotes approved-but-not-ready PRs when conditions are met
+	if ic.EventConsumer != nil {
+		ic.EventConsumer.StartPendingQueue()
+	}
+
 	InitNotifiers(cfg, clients)
 	handlers.SetNotifyUrgentFunc(SendNotificationUrgentSync)
 

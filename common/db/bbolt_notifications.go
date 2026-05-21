@@ -121,3 +121,55 @@ func (s *bboltStorage) ListNotificationPrefs(usernames []string) ([]models.Notif
 	})
 	return prefs, err
 }
+
+type PendingPR struct {
+	PRID         string    `json:"pr_id"`
+	RepoGroup    string    `json:"repo_group"`
+	Platform     string    `json:"platform"`
+	PRNumber     int       `json:"pr_number"`
+	Title        string    `json:"title"`
+	Author       string    `json:"author"`
+	ApprovalCount int     `json:"approval_count"`
+	AddedAt      time.Time `json:"added_at"`
+	LastChecked  time.Time `json:"last_checked"`
+}
+
+func (s *bboltStorage) PutPendingPR(pr *PendingPR) error {
+	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+	data, err := json.Marshal(pr)
+	if err != nil {
+		return err
+	}
+	return s.Put(BucketPendingPRs, key, data)
+}
+
+func (s *bboltStorage) GetPendingPR(repoGroup, platform string, prNumber int) (*PendingPR, error) {
+	key := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
+	data, err := s.Get(BucketPendingPRs, key)
+	if err != nil {
+		return nil, err
+	}
+	var pr PendingPR
+	if err := json.Unmarshal(data, &pr); err != nil {
+		return nil, err
+	}
+	return &pr, nil
+}
+
+func (s *bboltStorage) DeletePendingPR(repoGroup, platform string, prNumber int) error {
+	key := fmt.Sprintf("%s#%s#%d", repoGroup, platform, prNumber)
+	return s.Delete(BucketPendingPRs, key)
+}
+
+func (s *bboltStorage) ListPendingPRs() ([]*PendingPR, error) {
+	var prs []*PendingPR
+	err := s.ForEach(BucketPendingPRs, func(key, value []byte) error {
+		var pr PendingPR
+		if err := json.Unmarshal(value, &pr); err != nil {
+			return nil
+		}
+		prs = append(prs, &pr)
+		return nil
+	})
+	return prs, err
+}

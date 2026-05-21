@@ -55,6 +55,10 @@ type Storage interface {
 	AppendNotificationDigest(username, notifier, title, body string) error
 	ListNotificationDigests() (map[string][]DigestEntry, error)
 	DeleteNotificationDigests(username string) error
+	PutPendingPR(pr *PendingPR) error
+	GetPendingPR(repoGroup, platform string, prNumber int) (*PendingPR, error)
+	DeletePendingPR(repoGroup, platform string, prNumber int) error
+	ListPendingPRs() ([]*PendingPR, error)
 	ListNotificationPrefs(usernames []string) ([]models.NotificationPreferences, error)
 	PutTeamSpace(space *models.TeamSpace) error
 	GetTeamSpace(name string) (*models.TeamSpace, error)
@@ -235,6 +239,18 @@ func ListNotificationDigests() (map[string][]DigestEntry, error) {
 }
 func DeleteNotificationDigests(username string) error {
 	return mustStorage().DeleteNotificationDigests(username)
+}
+func PutPendingPR(pr *PendingPR) error {
+	return mustStorage().PutPendingPR(pr)
+}
+func GetPendingPR(repoGroup, platform string, prNumber int) (*PendingPR, error) {
+	return mustStorage().GetPendingPR(repoGroup, platform, prNumber)
+}
+func DeletePendingPR(repoGroup, platform string, prNumber int) error {
+	return mustStorage().DeletePendingPR(repoGroup, platform, prNumber)
+}
+func ListPendingPRs() ([]*PendingPR, error) {
+	return mustStorage().ListPendingPRs()
 }
 func ListNotificationPrefs(usernames []string) ([]models.NotificationPreferences, error) {
 	return mustStorage().ListNotificationPrefs(usernames)

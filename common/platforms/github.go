@@ -593,3 +593,12 @@ func (c *GitHubClient) GetFileContent(ctx context.Context, owner, repo, path str
 	}
 	return "", nil
 }
+
+func (c *GitHubClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
+	perm, _, err := c.client.Repositories.GetPermissionLevel(ctx, owner, repo, username)
+	if err != nil {
+		return false, fmt.Errorf("failed to get permission level for %s: %w", username, err)
+	}
+	p := perm.GetPermission()
+	return p == "admin" || p == "maintain" || p == "push" || p == "triage", nil
+}
