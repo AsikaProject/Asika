@@ -158,6 +158,13 @@ func (m *Manager) AddToQueueScheduled(pr *models.PRRecord, scheduleAt time.Time)
 	return db.Put(db.BucketQueueItems, key, data)
 }
 
+// IsReadyToMerge checks if a PR currently satisfies all merge conditions
+// without requiring a QueueItem. Used by the consumer to decide whether
+// to enqueue a PR immediately after approval.
+func (m *Manager) IsReadyToMerge(pr *models.PRRecord) (bool, error) {
+	return m.checker.IsReadyToMerge(pr)
+}
+
 // CheckQueue checks all items in the queue
 func (m *Manager) CheckQueue() {
 	m.checkMu.Lock()

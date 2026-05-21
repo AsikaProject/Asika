@@ -42,6 +42,102 @@ func (e *TransientError) Unwrap() error {
 	return e.Err
 }
 
+// IsReadyToMerge checks if a PR currently satisfies all merge conditions
+// (approvals, CI, conflicts) without requiring a QueueItem. Used by the
+// consumer to decide whether to enqueue a PR immediately after approval.
+func (c *Checker) IsReadyToMerge(pr *models.PRRecord) (bool, error) {
+	if pr == nil || pr.State != "open" || pr.IsDraft {
+		return false, nil
+	}
+
+	group := config.GetRepoGroupByName(c.cfg, pr.RepoGroup)
+	if group == nil {
+		return false, nil
+	}
+
+	mq := group.MergeQueue
+
+	if pr.HasConflict && mq.Expression == "" {
+		slog.Info("PR has merge conflicts, skipping enqueue", "pr_id", pr.ID, "title", pr.Title)
+		return false, nil
+	}
+	if pr.HasConflict && mq.Expression != "" && !mq.AllowExpressionOverrideCI {
+		slog.Info("PR has merge conflicts, hard gate blocking", "pr_id", pr.ID, "title", pr.Title)
+		return false, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	approvalStatus, err := c.fetchApprovals(ctx, pr, group)
+	if err != nil {
+		return false, err
+	}
+	approvals := approvalStatus.Approvers
+
+	if len(approvals) < mq.RequiredApprovals {
+		slog.Info("PR does not meet approval requirement, skipping enqueue",
+			"pr_id", pr.ID, "approvals", len(approvals), "required", mq.RequiredApprovals)
+		return false, nil
+	}
+
+	if mq.CICheckRequired && group.CIProvider != "none" && group.CIProvider != "" {
+		passed, status, err := c.checkCI(ctx, pr, group)
+		if err != nil {
+			return false, err
+		}
+		if !passed {
+			slog.Info("PR CI not passed, skipping enqueue",
+				"pr_id", pr.ID, "ci_status", status)
+			return false, nil
+		}
+	}
+
+	if mq.Expression != "" {
+		labelSet := make(map[string]bool)
+		for _, l := range pr.Labels {
+			labelSet[l] = true
+		}
+		coreContribMap := make(map[string]bool)
+		for _, cc := range mq.CoreContributors {
+			coreContribMap[cc] = true
+		}
+		coreApproved := 0
+		for _, a := range approvals {
+			if coreContribMap[a] {
+				coreApproved++
+			}
+		}
+		ageHours := 0.0
+		if !pr.CreatedAt.IsZero() {
+			ageHours = time.Since(pr.CreatedAt).Hours()
+		}
+		evalCtx := EvalContext{
+			Approvals:        len(approvals),
+			Required:         mq.RequiredApprovals,
+			CIStatus:         "success",
+			HasConflict:      pr.HasConflict,
+			IsDraft:          pr.IsDraft,
+			CoreApproved:     coreApproved,
+			Author:           pr.Author,
+			CoreContributors: coreContribMap,
+			AgeHours:         ageHours,
+			Labels:           labelSet,
+		}
+		result, err := Eval(mq.Expression, evalCtx)
+		if err != nil {
+			slog.Error("merge expression evaluation failed", "error", err, "expression", mq.Expression, "pr_id", pr.ID)
+			return false, nil
+		}
+		if !result {
+			slog.Info("PR does not match merge expression, skipping enqueue", "pr_id", pr.ID)
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 // ShouldMerge checks if a queue item should be merged
 func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
