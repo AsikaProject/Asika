@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"gitlab.com/gitlab-org/api/client-go"
 
@@ -54,12 +53,6 @@ func NewGitLabClient(token string, baseURL string, webhookSecret string) *GitLab
 	}
 }
 
-// strPtr returns a pointer to the given string
-func strPtr(s string) *string { return &s }
-
-// boolPtr returns a pointer to the given bool
-func boolPtr(b bool) *bool { return &b }
-
 // GetPR retrieves a merge request
 func (c *GitLabClient) GetPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
 	project := owner + "/" + repo
@@ -98,111 +91,6 @@ func (c *GitLabClient) ListPRs(ctx context.Context, owner, repo string, state st
 	}
 
 	return result, nil
-}
-
-func gitLabMRToRecord(mr *gitlab.MergeRequest) *models.PRRecord {
-	labels := make([]string, 0)
-	for _, l := range mr.Labels {
-		labels = append(labels, l)
-	}
-
-	var author string
-	if mr.Author != nil {
-		author = mr.Author.Username
-	}
-
-	var createdAt, updatedAt time.Time
-	if mr.CreatedAt != nil {
-		createdAt = *mr.CreatedAt
-	}
-	if mr.UpdatedAt != nil {
-		updatedAt = *mr.UpdatedAt
-	}
-
-	var mergedAt time.Time
-	if mr.MergedAt != nil {
-		mergedAt = *mr.MergedAt
-	}
-
-	return &models.PRRecord{
-		ID:             fmt.Sprintf("%d", mr.ID),
-		Platform:       "gitlab",
-		PRNumber:       int(mr.IID),
-		Title:          mr.Title,
-		Author:         author,
-		State:          gitLabState(mr.State),
-		Labels:         labels,
-		MergeCommitSHA: mr.MergeCommitSHA,
-		SpamFlag:       false,
-		CreatedAt:      createdAt,
-		UpdatedAt:      updatedAt,
-		Events:         []models.PREvent{},
-		IsDraft:        mr.WorkInProgress,
-		HasConflict:    gitLabHasConflict(mr),
-		HTMLURL:        mr.WebURL,
-		MergedAt:       mergedAt,
-		BranchInfo: &models.PRBranchInfo{
-			HeadBranch: mr.SourceBranch,
-			BaseBranch: mr.TargetBranch,
-		},
-	}
-}
-
-func gitLabBasicMRToRecord(mr *gitlab.BasicMergeRequest) *models.PRRecord {
-	labels := make([]string, 0)
-	for _, l := range mr.Labels {
-		labels = append(labels, l)
-	}
-
-	var author string
-	if mr.Author != nil {
-		author = mr.Author.Username
-	}
-
-	var createdAt, updatedAt time.Time
-	if mr.CreatedAt != nil {
-		createdAt = *mr.CreatedAt
-	}
-	if mr.UpdatedAt != nil {
-		updatedAt = *mr.UpdatedAt
-	}
-
-	return &models.PRRecord{
-		ID:             fmt.Sprintf("%d", mr.ID),
-		Platform:       "gitlab",
-		PRNumber:       int(mr.IID),
-		Title:          mr.Title,
-		Author:         author,
-		State:          gitLabState(mr.State),
-		Labels:         labels,
-		MergeCommitSHA: mr.MergeCommitSHA,
-		SpamFlag:       false,
-		CreatedAt:      createdAt,
-		UpdatedAt:      updatedAt,
-		Events:         []models.PREvent{},
-		HTMLURL:        mr.WebURL,
-		BranchInfo: &models.PRBranchInfo{
-			HeadBranch: mr.SourceBranch,
-			BaseBranch: mr.TargetBranch,
-		},
-	}
-}
-
-func gitLabHasConflict(mr *gitlab.MergeRequest) bool {
-	return mr.HasConflicts
-}
-
-func gitLabState(state string) string {
-	switch strings.ToLower(state) {
-	case "merged":
-		return "merged"
-	case "closed":
-		return "closed"
-	case "opened":
-		return "open"
-	default:
-		return state
-	}
 }
 
 // ApprovePR approves a merge request

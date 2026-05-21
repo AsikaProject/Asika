@@ -519,71 +519,6 @@ func (c *GiteaClient) GetPRBranchInfo(ctx context.Context, owner, repo string, n
 	return info, nil
 }
 
-// parseDiffFiles extracts file names from a raw diff
-func parseDiffFiles(diff string) []string {
-	files := make([]string, 0)
-	lines := strings.Split(diff, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "diff --git a/") {
-			// Format: "diff --git a/path/to/file b/path/to/file"
-			parts := strings.SplitN(line, " b/", 2)
-			if len(parts) == 2 {
-				filePath := strings.TrimPrefix(parts[0], "diff --git a/")
-				files = append(files, filePath)
-			}
-		}
-	}
-	return files
-}
-
-// parseDiffFileContents extracts file diffs with patch content from a raw diff
-func parseDiffFileContents(diff string) []models.DiffFile {
-	files := make([]models.DiffFile, 0)
-	lines := strings.Split(diff, "\n")
-	var currentFile *models.DiffFile
-	var patchLines []string
-
-	for _, line := range lines {
-		if strings.HasPrefix(line, "diff --git a/") {
-			// Save previous file
-			if currentFile != nil {
-				currentFile.Patch = strings.Join(patchLines, "\n")
-				files = append(files, *currentFile)
-			}
-			// Start new file
-			parts := strings.SplitN(line, " b/", 2)
-			if len(parts) == 2 {
-				filePath := strings.TrimPrefix(parts[0], "diff --git a/")
-				currentFile = &models.DiffFile{
-					Filename: filePath,
-					Status:   "modified",
-				}
-				patchLines = make([]string, 0)
-			}
-		} else if currentFile != nil {
-			if strings.HasPrefix(line, "new file") {
-				currentFile.Status = "added"
-			} else if strings.HasPrefix(line, "deleted file") {
-				currentFile.Status = "removed"
-			} else if strings.HasPrefix(line, "rename from") {
-				currentFile.Status = "renamed"
-			}
-			patchLines = append(patchLines, line)
-			if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-				currentFile.Additions++
-			} else if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
-				currentFile.Deletions++
-			}
-		}
-	}
-	// Save last file
-	if currentFile != nil {
-		currentFile.Patch = strings.Join(patchLines, "\n")
-		files = append(files, *currentFile)
-	}
-	return files
-}
-
 // GetPRDiff gets the diff content for each file in a PR
 func (c *GiteaClient) GetPRDiff(ctx context.Context, owner, repo string, number int) ([]models.DiffFile, error) {
 	diff, _, err := c.client.GetPullRequestDiff(owner, repo, int64(number))
@@ -605,18 +540,6 @@ func (c *GiteaClient) CommentPRLine(ctx context.Context, owner, repo string, num
 		return fmt.Errorf("failed to create comment: %w", err)
 	}
 	return nil
-}
-
-// NewForgejoClient creates a Forgejo client (reuses GiteaClient since Forgejo is a Gitea fork).
-func NewForgejoClient(baseURL, token string, webhookSecret string) *GiteaClient {
-	return NewGiteaClient(baseURL, token, webhookSecret)
-}
-
-// NewCodebergClient creates a Codeberg client (Codeberg is a hosted Forgejo instance).
-// Uses https://codeberg.org as the default base URL.
-// Note: Codeberg client is created via NewForgejoClient in bootstrap to allow URL override.
-func NewCodebergClient(token string, webhookSecret string) *GiteaClient {
-	return NewForgejoClient("https://codeberg.org", token, webhookSecret)
 }
 
 // RequestReview requests reviewers for a PR on Gitea/Forgejo via a comment note.
