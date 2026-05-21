@@ -237,8 +237,13 @@ Per-user notification preferences are stored in `notification_prefs` bucket (key
 - `EventPrefs` — Per-event-type enable/disable map (e.g. `{"pr_opened": true, "pr_closed": false}`)
 - `DigestMode` — `"realtime"`, `"hourly"`, or `"daily"`
 - `QuietHoursOverride` — Per-user quiet hours that override the global config
+- `LabelSubs` — Subscribed PR labels (e.g. `["bug", "area/*"]`). Empty/nil = subscribe to all labels (backward compatible). Supports glob patterns via `path.Match` (e.g. `"area/*"` matches `"area/frontend"`).
 
-The `sendNotificationInternal` function checks `isNotifierEnabledForAnyUser()` before sending, which iterates all user preferences to determine if at least one user wants the notification.
+The `sendNotificationInternal` function checks two filters before sending:
+1. `isNotifierEnabledForAnyUser()` — checks `Enabled`, `EnabledNotifiers`, and `EventPrefs`
+2. `isLabelSubscribedForAnyUser()` — checks `LabelSubs` against the PR's labels. When `prLabels` is nil (not provided), the check is skipped. When no users have `LabelSubs` configured, all notifications pass through (backward compatible).
+
+Label subscription notifications are triggered by the consumer's `handlePRLabeled` handler via `handlers.NotifyLabelSubscribers`, which calls the core notifier's `SendNotificationWithLabels` with the PR's labels. The labeler also publishes `pr_labeled` events after auto-labeling to ensure label subscriptions work for auto-applied labels.
 
 Management endpoints:
 - `GET/PUT /api/v1/users/:username/notifications` — Get/update preferences (requires self or admin)

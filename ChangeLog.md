@@ -1,5 +1,11 @@
 # ChangeLog for Asika
 
+## v20260521DEV
+
+### Features
+
+- **Feature**: Label-based PR subscription notifications. Users can now subscribe to specific PR labels via `LabelSubs` in their notification preferences. When a PR is labeled (manually, via auto-labeler, or via webhook), only users subscribed to matching labels receive notifications. Supports glob patterns (e.g. `"area/*"` matches `"area/frontend"`). Empty/nil `LabelSubs` subscribes to all labels (backward compatible).
+
 ## v20260617DEV > v20260621DEV
 
 ### Security Fixes

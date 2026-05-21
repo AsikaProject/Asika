@@ -9,6 +9,7 @@ import (
 
 	"asika/common/config"
 	"asika/common/db"
+	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
 	"asika/testutil"
@@ -18,6 +19,7 @@ func setupLabelerTest(t *testing.T) (*Labeler, *testutil.MockPlatformClient) {
 	t.Helper()
 
 	testutil.NewTestDB(t)
+	events.Init()
 
 	mock := testutil.NewMockPlatformClient()
 	clients := map[platforms.PlatformType]platforms.PlatformClient{

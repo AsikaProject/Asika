@@ -301,6 +301,216 @@ func TestSendNotification_ConcurrentWithInit(t *testing.T) {
 	wg.Wait()
 }
 
+func TestLabelMatchesSub(t *testing.T) {
+	tests := []struct {
+		pattern string
+		label   string
+		want    bool
+	}{
+		{"bug", "bug", true},
+		{"bug", "feature", false},
+		{"area/*", "area/frontend", true},
+		{"area/*", "area/backend/api", false},
+		{"area/*", "other", false},
+		{"*", "anything", true},
+		{"*", "", true},
+		{"urgent", "urgent", true},
+		{"urgent", "not-urgent", false},
+		{"a?c", "abc", true},
+		{"a?c", "axc", true},
+		{"a?c", "abbc", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.pattern+"_"+tt.label, func(t *testing.T) {
+			got := labelMatchesSub(tt.pattern, tt.label)
+			if got != tt.want {
+				t.Errorf("labelMatchesSub(%q, %q) = %v, want %v", tt.pattern, tt.label, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsLabelSubscribedForAnyUser_NoPrefs(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	result := isLabelSubscribedForAnyUser("pr_labeled", []string{"bug"})
+	if !result {
+		t.Error("expected true when no prefs exist")
+	}
+}
+
+func TestIsLabelSubscribedForAnyUser_NilLabels(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	result := isLabelSubscribedForAnyUser("pr_labeled", nil)
+	if !result {
+		t.Error("expected true when prLabels is nil (check skipped)")
+	}
+}
+
+func TestIsLabelSubscribedForAnyUser_EmptySubs(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username:  "alice",
+		Enabled:   true,
+		LabelSubs: []string{},
+	}))
+
+	result := isLabelSubscribedForAnyUser("pr_labeled", []string{"bug"})
+	if !result {
+		t.Error("expected true when user has empty LabelSubs (subscribe to all)")
+	}
+}
+
+func TestIsLabelSubscribedForAnyUser_ExactMatch(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username:  "alice",
+		Enabled:   true,
+		LabelSubs: []string{"bug", "urgent"},
+	}))
+
+	result := isLabelSubscribedForAnyUser("pr_labeled", []string{"bug"})
+	if !result {
+		t.Error("expected true when PR label matches subscription")
+	}
+
+	result = isLabelSubscribedForAnyUser("pr_labeled", []string{"feature"})
+	if result {
+		t.Error("expected false when PR label does not match any subscription")
+	}
+}
+
+func TestIsLabelSubscribedForAnyUser_GlobMatch(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username:  "alice",
+		Enabled:   true,
+		LabelSubs: []string{"area/*", "urgent"},
+	}))
+
+	result := isLabelSubscribedForAnyUser("pr_labeled", []string{"area/frontend"})
+	if !result {
+		t.Error("expected true when PR label matches glob subscription")
+	}
+
+	result = isLabelSubscribedForAnyUser("pr_labeled", []string{"area/backend"})
+	if !result {
+		t.Error("expected true when PR label matches glob subscription (backend)")
+	}
+
+	result = isLabelSubscribedForAnyUser("pr_labeled", []string{"other"})
+	if result {
+		t.Error("expected false when PR label does not match any glob subscription")
+	}
+}
+
+func TestIsLabelSubscribedForAnyUser_DisabledUser(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username:  "alice",
+		Enabled:   false,
+		LabelSubs: []string{"bug"},
+	}))
+
+	result := isLabelSubscribedForAnyUser("pr_labeled", []string{"bug"})
+	if result {
+		t.Error("expected false when user is disabled")
+	}
+}
+
+func TestIsLabelSubscribedForAnyUser_MultipleUsers(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username:  "alice",
+		Enabled:   true,
+		LabelSubs: []string{"bug"},
+	}))
+	db.PutNotificationPrefs("bob", mustMarshalJSON(models.NotificationPreferences{
+		Username:  "bob",
+		Enabled:   true,
+		LabelSubs: []string{"feature"},
+	}))
+
+	result := isLabelSubscribedForAnyUser("pr_labeled", []string{"bug"})
+	if !result {
+		t.Error("expected true: alice subscribes to bug")
+	}
+
+	result = isLabelSubscribedForAnyUser("pr_labeled", []string{"feature"})
+	if !result {
+		t.Error("expected true: bob subscribes to feature")
+	}
+
+	result = isLabelSubscribedForAnyUser("pr_labeled", []string{"docs"})
+	if result {
+		t.Error("expected false: no one subscribes to docs")
+	}
+}
+
+func TestIsLabelSubscribedForAnyUser_MixedSubsAndNoSubs(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username:  "alice",
+		Enabled:   true,
+		LabelSubs: []string{"bug"},
+	}))
+	db.PutNotificationPrefs("bob", mustMarshalJSON(models.NotificationPreferences{
+		Username: "bob",
+		Enabled:  true,
+	}))
+
+	result := isLabelSubscribedForAnyUser("pr_labeled", []string{"feature"})
+	if !result {
+		t.Error("expected true: bob has no LabelSubs (subscribes to all)")
+	}
+}
+
+func TestSendNotificationWithLabels(t *testing.T) {
+	testutil.NewTestDB(t)
+	defer db.Close()
+	ResetNotifierPrefsCache()
+
+	globalNotifiers = []notifier.Notifier{
+		notifier.NewWebhookNotifier(map[string]interface{}{"url": "http://localhost:19999"}),
+	}
+
+	db.PutNotificationPrefs("alice", mustMarshalJSON(models.NotificationPreferences{
+		Username:  "alice",
+		Enabled:   true,
+		LabelSubs: []string{"bug"},
+	}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	SendNotificationWithLabels(ctx, "test", "body", "pr_labeled", "123", "webhook", []string{"bug"})
+
+	globalNotifiers = nil
+}
+
 func TestFindNotifier_Concurrent(t *testing.T) {
 	testutil.NewTestDB(t)
 	defer db.Close()

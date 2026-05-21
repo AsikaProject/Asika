@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"asika/common/config"
+	"asika/common/events"
 	"asika/common/models"
 	"asika/common/notifier"
 	"asika/common/platforms"
@@ -21,6 +24,9 @@ var notifyFuncMu sync.RWMutex
 
 // notifyUrgentFunc is an optional external urgent notification sender (bypasses quiet hours).
 var notifyUrgentFunc func(title, body string)
+
+// labelNotifyFunc is an optional external notification sender for label-based PR events (set by core).
+var labelNotifyFunc func(title, body, eventType, prID string, prLabels []string)
 
 // resetPrefsCacheFunc resets the notifier preferences cache (set by core).
 var resetPrefsCacheFunc func()
@@ -48,6 +54,29 @@ func SetNotifyUrgentFunc(fn func(title, body string)) {
 	notifyFuncMu.Lock()
 	notifyUrgentFunc = fn
 	notifyFuncMu.Unlock()
+}
+
+// SetLabelNotifyFunc sets the external label-aware notification function.
+func SetLabelNotifyFunc(fn func(title, body, eventType, prID string, prLabels []string)) {
+	notifyFuncMu.Lock()
+	labelNotifyFunc = fn
+	notifyFuncMu.Unlock()
+}
+
+// NotifyLabelSubscribers sends label-subscription notifications for a labeled PR.
+// Called by the consumer after a PR label is updated.
+func NotifyLabelSubscribers(pr *models.PRRecord, repoGroup string) {
+	notifyFuncMu.RLock()
+	fn := labelNotifyFunc
+	notifyFuncMu.RUnlock()
+	if fn == nil || pr == nil || len(pr.Labels) == 0 {
+		return
+	}
+	prID := fmt.Sprintf("%s#%s#%d", repoGroup, pr.Platform, pr.PRNumber)
+	title := fmt.Sprintf("🏷 PR #%d labeled: %s", pr.PRNumber, strings.Join(pr.Labels, ", "))
+	body := fmt.Sprintf("PR #%d \"%s\" in %s now has labels: %s\nAuthor: %s\nURL: %s",
+		pr.PRNumber, pr.Title, repoGroup, strings.Join(pr.Labels, ", "), pr.Author, pr.HTMLURL)
+	fn(title, body, string(events.EventPRLabeled), prID, pr.Labels)
 }
 
 var globalNotifiers []notifier.Notifier

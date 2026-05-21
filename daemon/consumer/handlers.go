@@ -215,6 +215,8 @@ func (c *Consumer) handlePRLabeled(event events.Event) {
 		Actor:     "system",
 	})
 	c.updatePR(event, pr)
+
+	handlers.NotifyLabelSubscribers(pr, event.RepoGroup)
 }
 
 func (c *Consumer) handlePRReopened(event events.Event) {

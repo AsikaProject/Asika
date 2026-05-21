@@ -8,6 +8,7 @@ type NotificationPreferences struct {
 	EventPrefs         map[string]bool   `json:"event_prefs"`                    // event_type -> enabled
 	DigestMode         string            `json:"digest_mode"`                    // "realtime" | "hourly" | "daily"
 	QuietHoursOverride *QuietHoursConfig `json:"quiet_hours_override,omitempty"` // per-user quiet hours
+	LabelSubs          []string          `json:"label_subs,omitempty"`           // subscribed labels — empty = all labels
 }
 
 // QuietHoursConfig defines notification quiet hours and escalation rules.

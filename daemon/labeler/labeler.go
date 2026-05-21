@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"asika/common/config"
+	"asika/common/events"
 	"asika/common/models"
 	"asika/common/platforms"
 )
@@ -69,7 +70,9 @@ func (l *Labeler) HandlePROpened(pr *models.PRRecord, repoGroup string) {
 			}
 			if err := client.AddLabel(ctx, owner, repo, pr.PRNumber, rule.Label, color); err != nil {
 				slog.Error("failed to add label", "error", err, "label", rule.Label)
+				continue
 			}
+			events.PublishPR(events.EventPRLabeled, repoGroup, pr.Platform, pr, rule.Label)
 			if rule.Exclusive {
 				slog.Info("exclusive rule matched, stopping further labeling", "label", rule.Label, "pr", pr.PRNumber)
 				break
@@ -114,7 +117,9 @@ func (l *Labeler) ApplyRules(pr *models.PRRecord, repoGroup string, files []stri
 			}
 			if err := client.AddLabel(ctx, owner, repo, pr.PRNumber, rule.Label, color); err != nil {
 				slog.Error("failed to add label", "error", err, "label", rule.Label)
+				continue
 			}
+			events.PublishPR(events.EventPRLabeled, repoGroup, pr.Platform, pr, rule.Label)
 			if rule.Exclusive {
 				break
 			}

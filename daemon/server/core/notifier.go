@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -47,20 +49,30 @@ func InitNotifiers(cfg *models.Config, clients map[platforms.PlatformType]platfo
 
 	handlers.SetNotifyFunc(SendNotificationSync)
 	handlers.SetResetPrefsCacheFunc(resetNotifierPrefsCache)
+	handlers.SetLabelNotifyFunc(func(title, body, eventType, prID string, prLabels []string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		SendNotificationWithLabels(ctx, title, body, eventType, prID, "", prLabels)
+	})
 	slog.Info("notifiers initialized", "count", len(globalNotifiers))
 }
 
 // SendNotification sends a notification through all configured notifiers.
 func SendNotification(ctx context.Context, title, body string) {
-	sendNotificationInternal(ctx, title, body, "", "", "")
+	sendNotificationInternal(ctx, title, body, "", "", "", nil)
 }
 
 // SendNotificationWithContext sends a notification with event context for dedup and preferences.
 func SendNotificationWithContext(ctx context.Context, title, body, eventType, prID, notifierType string) {
-	sendNotificationInternal(ctx, title, body, eventType, prID, notifierType)
+	sendNotificationInternal(ctx, title, body, eventType, prID, notifierType, nil)
 }
 
-func sendNotificationInternal(ctx context.Context, title, body, eventType, prID, notifierType string) {
+// SendNotificationWithLabels sends a notification with PR label info for label-based subscription filtering.
+func SendNotificationWithLabels(ctx context.Context, title, body, eventType, prID, notifierType string, prLabels []string) {
+	sendNotificationInternal(ctx, title, body, eventType, prID, notifierType, prLabels)
+}
+
+func sendNotificationInternal(ctx context.Context, title, body, eventType, prID, notifierType string, prLabels []string) {
 	cfg := config.Current()
 	quiet := cfg != nil && notifier.IsQuietHours(cfg)
 
@@ -79,8 +91,12 @@ func sendNotificationInternal(ctx context.Context, title, body, eventType, prID,
 			slog.Info("notification disabled by all users", "notifier", nt, "event", eventType)
 			continue
 		}
+		if !isLabelSubscribedForAnyUser(eventType, prLabels) {
+			slog.Info("notification filtered: no label subscription match", "notifier", nt, "event", eventType, "pr", prID)
+			continue
+		}
 		if eventType != "" && prID != "" {
-			entry, buffered := appendToDedupBuffer(eventType, prID, nt, title, body)
+			entry, buffered := appendToDedupBuffer(eventType, prID, nt, title, body, prLabels)
 			if buffered {
 				slog.Info("notification buffered for digest", "notifier", nt, "event", eventType, "pr", prID)
 				continue
@@ -178,11 +194,64 @@ func isNotifierEnabledForAnyUser(notifierType, eventType string) bool {
 	return false
 }
 
+// isLabelSubscribedForAnyUser checks if any enabled user's label subscriptions
+// match the given PR's labels. Returns true if at least one user is subscribed
+// to any of the PR's labels, or if no users have label subscriptions configured
+// (backward compatible: empty/nil LabelSubs = subscribe to all).
+// When prLabels is nil (not provided), the check is skipped (returns true).
+func isLabelSubscribedForAnyUser(eventType string, prLabels []string) bool {
+	if prLabels == nil {
+		return true
+	}
+	prefs, err := cachedNotificationPrefs()
+	if err != nil || len(prefs) == 0 {
+		return true
+	}
+	hasAnyLabelSubs := false
+	for _, p := range prefs {
+		if len(p.LabelSubs) > 0 {
+			hasAnyLabelSubs = true
+		}
+		if !p.Enabled {
+			continue
+		}
+		if len(p.LabelSubs) == 0 {
+			return true
+		}
+		for _, sub := range p.LabelSubs {
+			for _, prLabel := range prLabels {
+				if labelMatchesSub(sub, prLabel) {
+					return true
+				}
+			}
+		}
+	}
+	if !hasAnyLabelSubs {
+		return true
+	}
+	return false
+}
+
+// labelMatchesSub checks if a PR label matches a subscription pattern.
+// Supports exact match and glob patterns via path.Match (e.g. "area/*").
+func labelMatchesSub(pattern, label string) bool {
+	if pattern == label {
+		return true
+	}
+	if strings.ContainsAny(pattern, "*?[") {
+		if ok, _ := path.Match(pattern, label); ok {
+			return true
+		}
+	}
+	return false
+}
+
 type dedupEntry struct {
 	PRID       string    `json:"pr_id"`
 	Notifier   string    `json:"notifier"`
 	Events     []string  `json:"events"`
 	Titles     []string  `json:"titles"`
+	Labels     []string  `json:"labels,omitempty"`
 	FirstSeen  time.Time `json:"first_seen"`
 	LastSeen   time.Time `json:"last_seen"`
 	Dispatched bool      `json:"dispatched"`
@@ -197,7 +266,7 @@ func dedupBufferKey(prID, notifierType string) string {
 	return fmt.Sprintf("%s:%s", prID, notifierType)
 }
 
-func appendToDedupBuffer(eventType, prID, notifierType, title, body string) (*dedupEntry, bool) {
+func appendToDedupBuffer(eventType, prID, notifierType, title, body string, prLabels []string) (*dedupEntry, bool) {
 	key := dedupBufferKey(prID, notifierType)
 	now := time.Now()
 
@@ -212,6 +281,9 @@ func appendToDedupBuffer(eventType, prID, notifierType, title, body string) (*de
 				entry.Events = append(entry.Events, eventType)
 				entry.Titles = append(entry.Titles, title)
 				entry.LastSeen = now
+				if len(entry.Labels) == 0 && len(prLabels) > 0 {
+					entry.Labels = prLabels
+				}
 				db.PutNotificationDedup(key, mustMarshal(entry))
 				if len(entry.Events) == 1 {
 					scheduleDigestDispatch(key, entry)
@@ -226,6 +298,7 @@ func appendToDedupBuffer(eventType, prID, notifierType, title, body string) (*de
 		Notifier:  notifierType,
 		Events:    []string{eventType},
 		Titles:    []string{title},
+		Labels:    prLabels,
 		FirstSeen: now,
 		LastSeen:  now,
 	}
@@ -261,6 +334,11 @@ func scheduleDigestDispatch(key string, entry dedupEntry) {
 }
 
 func sendDigest(ctx context.Context, notifierType string, n notifier.Notifier, entry *dedupEntry) {
+	if !isLabelSubscribedForAnyUser("", entry.Labels) {
+		slog.Info("digest notification filtered: no label subscription match", "notifier", notifierType, "pr", entry.PRID)
+		return
+	}
+
 	if len(entry.Events) <= 1 {
 		sendCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
