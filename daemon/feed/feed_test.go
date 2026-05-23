@@ -254,11 +254,11 @@ func TestRingBufferOverflow(t *testing.T) {
 		t.Fatalf("expected 3 items (maxItems), got %d", len(items))
 	}
 
-	if items[0].PRNumber != 3 {
-		t.Errorf("expected oldest remaining PRNumber 3, got %d", items[0].PRNumber)
+	if items[0].PRNumber != 5 {
+		t.Errorf("expected newest PRNumber 5 first, got %d", items[0].PRNumber)
 	}
-	if items[2].PRNumber != 5 {
-		t.Errorf("expected newest PRNumber 5, got %d", items[2].PRNumber)
+	if items[2].PRNumber != 3 {
+		t.Errorf("expected oldest remaining PRNumber 3 last, got %d", items[2].PRNumber)
 	}
 }
 
