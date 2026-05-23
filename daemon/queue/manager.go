@@ -172,7 +172,7 @@ func (m *Manager) AddToQueueScheduled(pr *models.PRRecord, scheduleAt time.Time)
 // without requiring a QueueItem. Used by the consumer to decide whether
 // to enqueue a PR immediately after approval.
 func (m *Manager) IsReadyToMerge(pr *models.PRRecord) (bool, error) {
-	slog.Debug("DEBUG Manager.IsReadyToMerge", "pr_id", pr.ID, "checker_nil", m.checker == nil)
+	slog.Debug("Manager.IsReadyToMerge", "pr_id", pr.ID, "checker_nil", m.checker == nil)
 	return m.checker.IsReadyToMerge(pr)
 }
 

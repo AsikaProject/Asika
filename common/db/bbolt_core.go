@@ -8,9 +8,12 @@ import (
 	"log/slog"
 	"time"
 
-	"asika/common/models"
 	"go.etcd.io/bbolt"
+
+	"asika/common/models"
 )
+
+var _ Storage = (*bboltStorage)(nil)
 
 type bboltStorage struct {
 	db *bbolt.DB

@@ -125,12 +125,18 @@ func TestEncryptDecryptTokensInConfig(t *testing.T) {
 }
 
 func TestGenerateMasterKey(t *testing.T) {
-	key := GenerateMasterKey()
+	key, err := GenerateMasterKey()
+	if err != nil {
+		t.Fatalf("GenerateMasterKey() error: %v", err)
+	}
 	if len(key) != 64 {
 		t.Errorf("Master key length = %d, want 64", len(key))
 	}
 
-	key2 := GenerateMasterKey()
+	key2, err := GenerateMasterKey()
+	if err != nil {
+		t.Fatalf("GenerateMasterKey() error: %v", err)
+	}
 	if key == key2 {
 		t.Error("Generated keys should be unique")
 	}

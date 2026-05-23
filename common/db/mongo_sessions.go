@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"asika/common/models"
@@ -34,6 +35,9 @@ func (s *mongoStorage) GetSession(id string) (*models.Session, error) {
 	var session models.Session
 	err := s.coll(BucketSessions).FindOne(ctx, bson.M{"_id": id}).Decode(&session)
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &session, nil

@@ -58,7 +58,9 @@ func FetchPRTemplate(repoGroup, platform string) (*models.PRTemplate, error) {
 			Content:      content,
 			HasChecklist: hasChecklist,
 		}
-		db.PutPRTemplate(tpl)
+		if err := db.PutPRTemplate(tpl); err != nil {
+			slog.Warn("failed to store PR template", "repo_group", repoGroup, "platform", platform, "error", err)
+		}
 		return tpl, nil
 	}
 
@@ -196,7 +198,9 @@ func SyncDependencies(c *gin.Context) {
 	}
 
 	for _, dep := range deps {
-		db.PutPRDependency(&dep)
+		if err := db.PutPRDependency(&dep); err != nil {
+			slog.Error("failed to store PR dependency", "pr_id", dep.PRID, "error", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "dependencies synced", "count": len(deps)})

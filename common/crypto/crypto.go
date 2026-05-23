@@ -317,10 +317,12 @@ func DecryptTokensInConfig(cfg *models.Config) error {
 	return DecryptSecretsInConfig(cfg)
 }
 
-func GenerateMasterKey() string {
+func GenerateMasterKey() (string, error) {
 	b := make([]byte, keyLength)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate master key: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func collectEncryptedFields(cfg *models.Config) []string {

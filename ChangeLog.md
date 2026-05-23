@@ -1,6 +1,6 @@
 # ChangeLog for Asika
 
-## v20260523DEV
+## v20250517DEV > v20260523DEV
 
 ### Security Fixes
 
@@ -105,8 +105,6 @@
 - **Feature**: Stale exclude authors. New `exclude_authors` field in `[stale]` config prevents specific authors (e.g. bots) from being marked stale.
 - **Feature**: Bitbucket full webhook support. Bitbucket webhooks now parse PR created/merged/closed/declined events in addition to comment events.
 
-## v20260617DEV > v20260621DEV
-
 ### Security Fixes
 
 - **Security**: Telegram/Slack/Discord bots returned `admin=true` for any user when allowlists were empty. Now defaults to reject-all with warning log, consistent with Feishu.
@@ -181,8 +179,6 @@
 - **Refactor**: Updated `pr_index_by_id` bucket key format from `{prID}` to `{repoGroup}:{prID}`.
 - **Refactor**: Config snapshots now store `{config, created_at}` wrapper for accurate timestamps.
 - **Refactor**: Bot `isAdmin()` in Telegram/Slack/Discord now defaults to reject-all (was allow-all).
-
-## v20260517DEV > v20260617DEV
 
 ### UX Improvements
 

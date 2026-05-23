@@ -73,9 +73,20 @@ func RetrySync(c *gin.Context) {
 
 	slog.Info("retrying sync", "sync_id", syncID, "pr_id", record.PRID, "target", record.TargetPlatform)
 
-	// Update the sync record status
-	data, _ = json.Marshal(record)
-	db.Put(db.BucketSyncHistory, syncID, data)
+	// Update the sync record status to retrying
+	record.Status = "retrying"
+	record.Timestamp = time.Now()
+	data, err = json.Marshal(record)
+	if err != nil {
+		slog.Error("failed to marshal sync record", "sync_id", syncID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update sync record"})
+		return
+	}
+	if err := db.Put(db.BucketSyncHistory, syncID, data); err != nil {
+		slog.Error("failed to store sync record", "sync_id", syncID, "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update sync record"})
+		return
+	}
 
 	// Trigger the sync
 	go func() {

@@ -132,11 +132,12 @@ func CreateStack(c *gin.Context) {
 	}
 
 	username, _ := c.Get("username")
+	usernameStr, _ := username.(string)
 	stack := &models.PRStack{
 		ID:          uuid.New().String(),
 		Name:        req.Name,
 		Description: req.Description,
-		Author:      username.(string),
+		Author:      usernameStr,
 		State:       "open",
 		Members:     []models.StackMember{},
 		CreatedAt:   time.Now(),
@@ -165,7 +166,8 @@ func ListStacks(c *gin.Context) {
 		stacks = []*models.PRStack{}
 	}
 	if role != nil && role.(string) != "admin" {
-		userSpaces, _ := db.GetUserSpaces(username.(string))
+		usernameStr, _ := username.(string)
+		userSpaces, _ := db.GetUserSpaces(usernameStr)
 		spaceMap := make(map[string]bool)
 		for _, s := range userSpaces {
 			spaceMap[s] = true
@@ -362,7 +364,9 @@ func UpdateStackMemberStateOnMerge(pr *models.PRRecord) {
 	}
 	stack.UpdatedAt = time.Now()
 	stack.State = calculateStackState(stack)
-	db.PutPRStack(stack)
+	if err := db.PutPRStack(stack); err != nil {
+		slog.Error("failed to update stack", "stack_id", stack.ID, "error", err)
+	}
 	slog.Info("stack member state updated", "stack_id", stack.ID, "pr_id", pr.ID, "new_state", stack.State)
 }
 
@@ -391,10 +395,11 @@ func SyncStackFromPR(c *gin.Context) {
 	existingStack, _ := FindStackByPR(pr.ID)
 	if existingStack == nil {
 		username, _ := c.Get("username")
+		usernameStr, _ := username.(string)
 		existingStack = &models.PRStack{
 			ID:        uuid.New().String(),
 			Name:      fmt.Sprintf("Stack for PR #%d", pr.PRNumber),
-			Author:    username.(string),
+			Author:    usernameStr,
 			State:     "open",
 			Members:   []models.StackMember{},
 			CreatedAt: time.Now(),

@@ -52,21 +52,3 @@ func (s *mongoStorage) ReleaseSyncLock(repoGroup, holderID string) error {
 	return err
 }
 
-func (s *mongoStorage) isSyncLocked(repoGroup string) (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	key := "lock:" + repoGroup
-	var result bson.M
-	err := s.coll(BucketSyncLocks).FindOne(ctx, bson.M{"_id": key}).Decode(&result)
-	if err == mongo.ErrNoDocuments {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	expiresAt, ok := result["expires_at"].(time.Time)
-	if !ok {
-		return true, nil
-	}
-	return time.Time(expiresAt).After(time.Now()), nil
-}
