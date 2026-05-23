@@ -106,6 +106,10 @@ func (s *Syncer) syncTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 		return
 	}
 	if targetPR == nil {
+		slog.Warn("syncPRState: no matching target PR found, skipping sync",
+			"target", targetPlatform, "source_pr", pr.PRNumber)
+		s.notifySyncFailure(pr, targetPlatform,
+			fmt.Sprintf("no matching PR found on %s by branch or SHA — sync skipped", targetPlatform))
 		return
 	}
 

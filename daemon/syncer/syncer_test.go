@@ -813,3 +813,59 @@ func TestSyncTargetPR_RetryOnFailure(t *testing.T) {
 	group := &models.RepoGroup{GitHub: "org/repo", SyncPRState: true}
 	s.syncTargetPR(context.Background(), pr, group, "github")
 }
+
+func TestSyncTargetPR_NoMatch_NotifiesAdmin(t *testing.T) {
+	s, mock, cleanup := setupSyncerTest(t)
+	defer cleanup()
+
+	var notifiedMu sync.Mutex
+	var notifiedTitle, notifiedBody string
+	s.SetNotifyFunc(func(title, body string) {
+		notifiedMu.Lock()
+		notifiedTitle = title
+		notifiedBody = body
+		notifiedMu.Unlock()
+	})
+
+	pr := &models.PRRecord{
+		ID:        "nomatch-source",
+		RepoGroup: "test-group",
+		Platform:  "gitlab",
+		PRNumber:  42,
+		Title:     "Feature with no match",
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: "feature-no-match",
+			BaseBranch: "main",
+			HeadSHA:    "sha-unique",
+		},
+	}
+
+	mock.PRs["org/repo#10"] = &models.PRRecord{
+		ID:        "other-pr",
+		RepoGroup: "test-group",
+		Platform:  "github",
+		PRNumber:  10,
+		Title:     "Different PR",
+		State:     "open",
+		BranchInfo: &models.PRBranchInfo{
+			HeadBranch: "feature-other",
+			BaseBranch: "main",
+			HeadSHA:    "sha-other",
+		},
+	}
+
+	group := &models.RepoGroup{GitHub: "org/repo", SyncPRState: true}
+	s.syncTargetPR(context.Background(), pr, group, "github")
+
+	notifiedMu.Lock()
+	defer notifiedMu.Unlock()
+	if notifiedTitle == "" {
+		t.Error("expected notifyFn to be called when no matching target PR found, but it was not")
+	}
+	if !strings.Contains(notifiedBody, "no matching PR found") {
+		t.Errorf("expected notification body to contain 'no matching PR found', got: %s", notifiedBody)
+	}
+	if !strings.Contains(notifiedBody, "github") {
+		t.Errorf("expected notification body to mention target platform 'github', got: %s", notifiedBody)
+	}
+}
