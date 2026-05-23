@@ -99,10 +99,24 @@ func GetLogs(c *gin.Context) {
 			return
 		}
 	} else {
+		const defaultLogLimit = 500
+		const maxLogLimit = 10000
+		scanLimit := defaultLogLimit
+		if limit > 0 {
+			scanLimit = limit
+		}
+		if scanLimit > maxLogLimit {
+			scanLimit = maxLogLimit
+		}
+		scanned := 0
 		err := db.ForEach(db.BucketLogs, func(key, value []byte) error {
 			var log models.AuditLog
 			if err := json.Unmarshal(value, &log); err != nil {
 				return nil
+			}
+			scanned++
+			if scanned > scanLimit {
+				return errStopLogs
 			}
 			if level != "" && log.Level != level {
 				return nil
@@ -126,9 +140,6 @@ func GetLogs(c *gin.Context) {
 				return nil
 			}
 			logs = append(logs, log)
-			if limit > 0 && len(logs) >= limit {
-				return errStopLogs
-			}
 			return nil
 		})
 		if err != nil && err != errStopLogs {
@@ -163,11 +174,17 @@ func ExportLogs(c *gin.Context) {
 		}
 	}
 
+	const maxExportLogs = 50000
 	logs := make([]models.AuditLog, 0)
+	exportCount := 0
 	err := db.ForEach(db.BucketLogs, func(key, value []byte) error {
 		var log models.AuditLog
 		if err := json.Unmarshal(value, &log); err != nil {
 			return nil
+		}
+		exportCount++
+		if exportCount > maxExportLogs {
+			return errStopLogs
 		}
 		if level != "" && log.Level != level {
 			return nil

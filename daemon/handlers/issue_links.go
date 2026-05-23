@@ -13,7 +13,7 @@ import (
 	"asika/common/models"
 )
 
-var issueRefPattern = regexp.MustCompile(`(?i)(?:fixes|closes|resolves|references?)\s*:?\s*(?:([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+))?#(\d+)`)
+var issueRefPattern = regexp.MustCompile(`(?i)(?:fixes|closes|resolves|references?|refs?)\s*:?\s*(?:([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+))?#(\d+)`)
 
 // ParseIssueLinks extracts issue references from a PR description.
 // Returns a list of IssuePRLink for each matched reference.
@@ -114,10 +114,20 @@ func GetIssueLinks(c *gin.Context) {
 
 // GetPRLinks handles GET /api/v1/repos/:repo_group/prs/:pr_id/issues
 func GetPRLinks(c *gin.Context) {
+	repoGroup := c.Param("repo_group")
 	prID := c.Param("pr_id")
 	if prID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "pr_id required"})
 		return
+	}
+
+	prData, err := db.GetPRByIndex(prID, "", 0)
+	if err == nil && prData != nil {
+		var pr models.PRRecord
+		if json.Unmarshal(prData, &pr) == nil && pr.RepoGroup != repoGroup {
+			c.JSON(http.StatusNotFound, gin.H{"error": "PR not found in this repo group"})
+			return
+		}
 	}
 
 	links, err := db.GetIssuePRLinksByPR(prID)
@@ -134,24 +144,21 @@ func SyncIssueLinks(c *gin.Context) {
 	repoGroup := c.Param("repo_group")
 	prID := c.Param("pr_id")
 
-	var pr *models.PRRecord
-	db.ForEach(db.BucketPRs, func(key, value []byte) error {
-		var record models.PRRecord
-		if err := json.Unmarshal(value, &record); err != nil {
-			return nil
-		}
-		if record.RepoGroup == repoGroup && record.ID == prID {
-			pr = &record
-		}
-		return nil
-	})
-
-	if pr == nil {
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
+	if err != nil || data == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
 		return
 	}
-
-	links := ParseIssueLinks(pr)
+	var prRecord models.PRRecord
+	if err := json.Unmarshal(data, &prRecord); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
+		return
+	}
+	if prRecord.RepoGroup != repoGroup {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found in this repo group"})
+		return
+	}
+	links := ParseIssueLinks(&prRecord)
 	if len(links) == 0 {
 		c.JSON(http.StatusOK, gin.H{"message": "no issue links found"})
 		return

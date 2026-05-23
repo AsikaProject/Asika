@@ -70,6 +70,19 @@ func (s *bboltStorage) GetWebhookDedup(deliveryID string) ([]byte, error) {
 	return s.Get(BucketWebhookDedup, deliveryID)
 }
 
+func (s *bboltStorage) DeleteWebhookDedup(deliveryID string) error {
+	return s.Delete(BucketWebhookDedup, deliveryID)
+}
+
+func (s *bboltStorage) ListWebhookDedup() (map[string][]byte, error) {
+	result := make(map[string][]byte)
+	err := s.ForEach(BucketWebhookDedup, func(key, value []byte) error {
+		result[string(key)] = value
+		return nil
+	})
+	return result, err
+}
+
 func (s *bboltStorage) ListWebhookHealth() (map[string]time.Time, error) {
 	result := make(map[string]time.Time)
 	err := s.ForEach(BucketWebhookHealth, func(key, value []byte) error {

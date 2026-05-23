@@ -55,7 +55,7 @@ func setupAuthHandlerTest(t *testing.T) (*gin.Engine, func()) {
 	cfg := &models.Config{
 		Server:   models.ServerConfig{Listen: ":8080", Mode: "debug"},
 		Database: models.DatabaseConfig{Path: "./test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "auth-handler-test-secret", TokenExpiry: "72h"},
+		Auth:     models.AuthConfig{JWTSecret: "auth-handler-test-secret-value!!", TokenExpiry: "72h"},
 	}
 	config.Store(cfg)
 

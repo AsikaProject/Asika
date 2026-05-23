@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -19,8 +21,10 @@ import (
 // Login handles POST /api/v1/auth/login (8.1)
 func Login(c *gin.Context) {
 	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username  string `json:"username"`
+		Password  string `json:"password"`
+		TOTPCode  string `json:"totp_code"`
+		SessionID string `json:"session_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -53,7 +57,68 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	token, err := auth.GenerateJWT(user.Username, user.Role)
+	needsTOTP := user.TOTPEnabled || cfg.Auth.TOTPRequired
+	if needsTOTP && req.SessionID == "" && req.TOTPCode == "" {
+		sessionID := auth.GenerateSessionID()
+		totpSession := models.Session{
+			ID:         sessionID,
+			Username:   user.Username,
+			IssuedAt:   time.Now(),
+			LastUsedAt: time.Now(),
+			ExpiresAt:  time.Now().Add(5 * time.Minute),
+			IPAddress:  c.ClientIP(),
+			UserAgent:  c.Request.UserAgent(),
+		}
+		if err := db.PutSession(&totpSession); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"two_factor_required": true,
+			"session_id":          sessionID,
+		})
+		return
+	}
+
+	if needsTOTP && req.SessionID != "" && req.TOTPCode != "" {
+		session, err := db.GetSession(req.SessionID)
+		if err != nil || session == nil || session.Username != user.Username {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid session"})
+			return
+		}
+		if session.ExpiresAt.Before(time.Now()) {
+			db.DeleteSession(session.ID)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "session expired"})
+			return
+		}
+		if !validateTOTPCode(user.TOTPSecret, req.TOTPCode) {
+			if !consumeBackupCode(user.Username, req.TOTPCode, user.BackupCodes) {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid TOTP code"})
+				return
+			}
+		}
+		db.DeleteSession(session.ID)
+	}
+
+	sessionID := auth.GenerateSessionID()
+	now := time.Now()
+	expiry := config.GenerateTokenExpiry(cfg.Auth.TokenExpiry)
+	session := &models.Session{
+		ID:          sessionID,
+		Username:    user.Username,
+		TokenPrefix: "",
+		IssuedAt:    now,
+		LastUsedAt:  now,
+		ExpiresAt:   now.Add(expiry),
+		IPAddress:   c.ClientIP(),
+		UserAgent:   c.Request.UserAgent(),
+	}
+	if err := db.PutSession(session); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
+		return
+	}
+
+	token, err := auth.GenerateJWTWithSession(user.Username, user.Role, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 		return
@@ -62,7 +127,7 @@ func Login(c *gin.Context) {
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
 		"asika_token", token,
-		int(config.GenerateTokenExpiry(cfg.Auth.TokenExpiry).Seconds()),
+		int(expiry.Seconds()),
 		"/", "", true, true,
 	)
 
@@ -74,6 +139,11 @@ func Logout(c *gin.Context) {
 	token := extractLogoutToken(c)
 	if token != "" {
 		auth.BlacklistToken(token)
+		if claims, err := auth.ValidateJWT(token); err == nil {
+			if sid, ok := claims["sid"].(string); ok && sid != "" {
+				db.DeleteSession(sid)
+			}
+		}
 	}
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("asika_token", "", -1, "/", "", true, true)
@@ -97,6 +167,20 @@ func extractLogoutToken(c *gin.Context) string {
 
 // ListUsers handles GET /api/v1/users (8.1)
 func ListUsers(c *gin.Context) {
+	limit := 0
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	if o := c.Query("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+	}
+	if limit < 0 {
+		limit = 0
+	}
+	if offset < 0 {
+		offset = 0
+	}
 	var users []models.User
 	err := db.ForEach(db.BucketUsers, func(key, value []byte) error {
 		var user models.User
@@ -111,7 +195,18 @@ func ListUsers(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list users"})
 		return
 	}
-	c.JSON(http.StatusOK, users)
+	start := offset
+	if start > len(users) {
+		start = len(users)
+	}
+	end := len(users)
+	if limit > 0 {
+		end = start + limit
+		if end > len(users) {
+			end = len(users)
+		}
+	}
+	c.JSON(http.StatusOK, users[start:end])
 }
 
 // CreateUser handles POST /api/v1/users (8.1)
@@ -140,6 +235,12 @@ func CreateUser(c *gin.Context) {
 	validRoles := map[string]bool{"viewer": true, "operator": true, "admin": true}
 	if !validRoles[req.Role] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role: must be viewer, operator, or admin"})
+		return
+	}
+
+	existing, err := db.Get(db.BucketUsers, req.Username)
+	if err == nil && existing != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
 		return
 	}
 
@@ -231,7 +332,12 @@ func UpdateUser(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role: must be viewer, operator, or admin"})
 			return
 		}
-		user.Role = *req.Role
+		if user.Role != *req.Role {
+			user.Role = *req.Role
+			if err := db.DeleteUserSessions(username); err != nil {
+				slog.Warn("failed to revoke sessions on role change", "username", username, "error", err)
+			}
+		}
 		if *req.Role == "viewer" {
 			user.Permissions = models.UserPermissions{}
 		}
@@ -292,6 +398,34 @@ func DeleteUser(c *gin.Context) {
 	if username == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "username required"})
 		return
+	}
+
+	if err := db.DeleteUserSessions(username); err != nil {
+		slog.Warn("failed to delete user sessions", "username", username, "error", err)
+	}
+
+	keys, err := db.ListAPIKeys(0, 0)
+	if err != nil {
+		slog.Warn("failed to list API keys for user deletion", "username", username, "error", err)
+	} else {
+		for _, k := range keys {
+			if k.CreatedBy == username {
+				if err := db.DeleteAPIKey(k.ID); err != nil {
+					slog.Warn("failed to delete API key", "key_id", k.ID, "error", err)
+				}
+			}
+		}
+	}
+
+	links, err := db.ListOIDCLinks(username)
+	if err != nil {
+		slog.Warn("failed to list OIDC links for user deletion", "username", username, "error", err)
+	} else {
+		for _, l := range links {
+			if err := db.DeleteOIDCLink(l.Provider, l.Subject); err != nil {
+				slog.Warn("failed to delete OIDC link", "provider", l.Provider, "subject", l.Subject, "error", err)
+			}
+		}
 	}
 
 	if err := db.Delete(db.BucketUsers, username); err != nil {
@@ -371,9 +505,25 @@ func CreateTempToken(c *gin.Context) {
 		}
 	}
 
-	token, err := auth.GenerateTempToken(username.(string), currentRole, d, req.Permissions)
+	token, sessionID, err := auth.GenerateTempToken(username.(string), currentRole, d, req.Permissions)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
+	now := time.Now()
+	session := &models.Session{
+		ID:          sessionID,
+		Username:    username.(string),
+		TokenPrefix: "temp",
+		IssuedAt:    now,
+		LastUsedAt:  now,
+		ExpiresAt:   now.Add(d),
+		IPAddress:   c.ClientIP(),
+		UserAgent:   c.Request.UserAgent(),
+	}
+	if err := db.PutSession(session); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store temp session"})
 		return
 	}
 
@@ -382,6 +532,47 @@ func CreateTempToken(c *gin.Context) {
 		"expires_in":  d.Seconds(),
 		"permissions": req.Permissions,
 	})
+}
+
+func validateTOTP(secret string, code string, backupCodes []string) bool {
+	if validateTOTPCode(secret, code) {
+		return true
+	}
+	for _, hash := range backupCodes {
+		if hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), []byte(code)) == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func consumeBackupCode(username string, code string, backupCodes []string) bool {
+	for i, hash := range backupCodes {
+		if hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), []byte(code)) == nil {
+			backupCodes[i] = ""
+			data, err := db.Get(db.BucketUsers, username)
+			if err != nil {
+				return true
+			}
+			var user models.User
+			if err := json.Unmarshal(data, &user); err != nil {
+				return true
+			}
+			var cleaned []string
+			for _, h := range backupCodes {
+				if h != "" {
+					cleaned = append(cleaned, h)
+				}
+			}
+			user.BackupCodes = cleaned
+			updated, _ := json.Marshal(user)
+			if err := db.Put(db.BucketUsers, username, updated); err != nil {
+				slog.Warn("failed to save consumed backup code", "username", username, "error", err)
+			}
+			return true
+		}
+	}
+	return false
 }
 
 // SetLocale handles POST /api/v1/locale

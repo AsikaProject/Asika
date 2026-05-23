@@ -1,40 +1,56 @@
 package feishu
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func (b *Bot) handleAddUser(senderID string, parts []string) string {
 	if !b.isAdmin(senderID) {
 		return "Access denied. Admin only."
 	}
-	if len(parts) < 4 {
-		return "Usage: adduser <username> <password> <role> [group1,group2,...]\nRole: admin, operator, viewer"
+	if len(parts) < 3 {
+		return "Usage: adduser <username> <role> [group1,group2,...]\nRole: admin, operator, viewer"
 	}
 	username := parts[1]
-	password := parts[2]
-	role := parts[3]
+	role := parts[2]
 	validRoles := map[string]bool{"admin": true, "operator": true, "viewer": true}
 	if !validRoles[role] {
 		return fmt.Sprintf("Invalid role: %s. Must be admin, operator, or viewer.", role)
 	}
+
+	password := generateFeishuRandomPassword(16)
+
 	body := map[string]interface{}{
 		"username": username,
 		"password": password,
 		"role":     role,
 	}
-	if len(parts) > 4 {
-		groups := strings.Split(parts[4], ",")
+	if len(parts) > 3 {
+		groups := strings.Split(parts[3], ",")
 		for i := range groups {
 			groups[i] = strings.TrimSpace(groups[i])
 		}
 		body["allowed_repo_groups"] = groups
 	}
-	return b.doUserAPI("POST", "/api/v1/users", body, "User created")
+	reply := b.doUserAPI("POST", "/api/v1/users", body, "User created")
+	b.sendDM(senderID, "Temporary password for "+username+": "+password+"\nUser must change password on first login.")
+	return reply
+}
+
+func generateFeishuRandomPassword(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	bb := make([]byte, length)
+	rand.Read(bb)
+	for i := range bb {
+		bb[i] = charset[int(bb[i])%len(charset)]
+	}
+	return string(bb)
 }
 
 func (b *Bot) handleDelUser(senderID string, parts []string) string {
@@ -54,7 +70,8 @@ func (b *Bot) handleListUsers(senderID string) string {
 	url := fmt.Sprintf("http://localhost%s/api/v1/users", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+b.internalToken)
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Sprintf("Failed to fetch users: %v", err)
 	}
@@ -95,7 +112,8 @@ func (b *Bot) doUserAPI(method, path string, bodyData interface{}, successMsg st
 	if bodyData != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Sprintf("Failed: %v", err)
 	}
@@ -150,7 +168,8 @@ func (b *Bot) handleAPIKeyList() string {
 	url := fmt.Sprintf("http://localhost%s/api/v1/apikeys", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+b.internalToken)
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Sprintf("Failed: %v", err)
 	}
@@ -192,7 +211,8 @@ func (b *Bot) doAPIKeyAPI(method, path string, bodyData interface{}, successMsg 
 	if bodyData != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Sprintf("Failed: %v", err)
 	}

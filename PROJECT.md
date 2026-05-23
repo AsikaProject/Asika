@@ -140,7 +140,7 @@ Request processing order:
 5. **MetricsMiddleware** — Request counting and latency tracking
 6. **CORS** — Cross-origin resource sharing
 7. **RateLimit** — Per-IP token bucket (optional)
-8. **AuthMiddleware** — JWT/cookie authentication
+8. **AuthMiddleware** — JWT/cookie authentication + session validity check (verifies session exists in DB; rejects revoked sessions)
 9. **FingerprintMiddleware** — Optional HMAC fingerprint verification (when `auth.fingerprint_enabled`)
 
 Route-specific middleware:
@@ -171,6 +171,7 @@ Three-tier role hierarchy with six granular permissions:
 | Label PRs | ❌ | Configurable | ✅ |
 | User Management | ❌ | ❌ | ✅ |
 | Config Management | ❌ | ❌ | ✅ |
+| Account Management | — | Self only | All users |
 
 Non-admin users can be assigned to specific repo groups and repos:
 - `AllowedRepoGroups []string` — empty = access to all groups (backward compatible)
@@ -197,6 +198,55 @@ Fingerprint tokens provide a lightweight HMAC-based device identity mechanism, s
 - **Context**: On successful verification, sets `fingerprint_user` and `fingerprint_verified` in gin context
 - **Init**: `auth.InitFingerprint(secret, expiry)` called during bootstrap when enabled
 
+### Two-Factor Authentication (TOTP)
+
+TOTP-based 2FA (RFC 6238) using HMAC-SHA1, compatible with Google Authenticator / Authy:
+
+- **Config**: `[auth]` section: `totp_required` (bool, default false) — when true, all users must complete 2FA to log in
+- **User fields**: `TOTPSecret` (base32-encoded), `TOTPEnabled` (bool), `BackupCodes` (bcrypt-hashed, 10 codes)
+- **Endpoints** (all require JWT auth):
+  - `GET /api/v1/auth/2fa` — Check 2FA status for current user
+  - `POST /api/v1/auth/2fa/enroll` — Generate TOTP secret, return QR code URL
+  - `POST /api/v1/auth/2fa/verify` — Verify TOTP code and enable 2FA (returns backup codes)
+  - `POST /api/v1/auth/2fa/disable` — Disable 2FA (requires current password)
+  - `POST /api/v1/auth/2fa/codes` — Regenerate backup codes (requires current password)
+- **Login flow**: When 2FA is enabled/required, password verification returns `{"two_factor_required": true, "session_id": "..."}`. Client submits TOTP code + session_id to complete login.
+- **Backup codes**: 10 single-use codes generated on enable/regenerate. Stored as bcrypt hashes. Plain codes shown once to user.
+- **Implementation**: Pure standard library (HMAC-SHA1 + base32), no external TOTP dependency
+
+### Session Management
+
+JWT-based session tracking with database-backed revocation:
+
+- **Config**: `[auth]` section: `session_inactivity_timeout` (default `720h`/30d), `session_cleanup_interval` (default `1h`)
+- **JWT claims**: `jti` (JWT ID, UUID), `sid` (Session ID) — added via `GenerateJWTWithSession()`
+- **Session record**: `id`, `username`, `token_prefix`, `issued_at`, `last_used_at`, `expires_at`, `ip_address`, `user_agent`
+- **Storage**: `sessions` bucket (key: sessionID) + `sessions_by_user` index (key: `username:sessionID`)
+- **Middleware**: `AuthMiddleware` validates session existence in DB after JWT validation. Revoked sessions are rejected with 401.
+- **Endpoints** (all require JWT auth):
+  - `GET /api/v1/auth/sessions` — List current user's active sessions
+  - `DELETE /api/v1/auth/sessions/:id` — Revoke a specific session
+  - `DELETE /api/v1/auth/sessions` — Revoke all other sessions (keeps current)
+- **Login/Logout**: Login creates a session record; Logout deletes it
+- **Cleanup worker**: Periodically removes sessions inactive longer than `session_inactivity_timeout`
+- **WebUI**: `/account` page shows active sessions with revoke buttons
+
+### OIDC/SSO Authentication
+
+OAuth2 Authorization Code Flow for external identity providers:
+
+- **Config**: `[[auth.oidc_providers]]` array with fields: `name`, `display_name`, `client_id`, `client_secret`, `issuer_url`, `scopes`, `auth_url`, `token_url`, `user_info_url`, `auto_create`, `default_role`
+- **Endpoints** (public):
+  - `GET /api/v1/auth/oidc/login/:provider` — Redirect to provider's auth URL
+  - `GET /api/v1/auth/oidc/callback/:provider` — Handle OAuth2 callback, create/link user, issue JWT
+- **Endpoints** (require JWT auth):
+  - `GET /api/v1/auth/oidc/links` — List current user's linked OIDC accounts
+  - `POST /api/v1/auth/oidc/link` — Link an OIDC identity to current user
+  - `DELETE /api/v1/auth/oidc/link?provider=&subject=` — Unlink an OIDC identity
+- **Auto-create**: When `auto_create = true`, first-time OIDC login automatically creates an asika user with `default_role` (default `operator`)
+- **Link mapping**: `oidc_links` bucket maps `provider:subject` → `username`
+- **2FA integration**: OIDC-authenticated users with 2FA enabled still require TOTP verification
+
 ### Background Workers
 
 - **Queue Checker** — Every 30s, checks all queue items for merge readiness (approvals, CI, conflicts). Items with a future `ScheduleAt` time are skipped until the scheduled time arrives.
@@ -213,6 +263,7 @@ Fingerprint tokens provide a lightweight HMAC-based device identity mechanism, s
 - **Feed Subscriber** — Subscribes to the event bus, feeds PR events (opened/merged/closed/approved/reopened) into the in-memory ring buffer for RSS generation.
 - **Cross-Platform Syncer** — On PR merge, syncs the merge commit to all configured target platforms (GitHub/GitLab/Gitea/Forgejo/Codeberg/Bitbucket/Gerrit). Uses cherry-pick strategy with retry (3 attempts, exponential backoff). Publishes `sync_completed`/`sync_failed` events. Sync failure triggers notifier alert.
 - **Auto-Rebase Worker** — Periodically checks for open PRs with conflicts and rebases them automatically. Configurable via `[auto_rebase]` section: `enabled`, `exclude_labels`, `exclude_authors`.
+- **Session Cleanup Worker** — Periodically removes sessions inactive longer than `session_inactivity_timeout`. Configurable via `[auth]` section. Logs count of removed sessions.
 
 ### Reviewer Auto-Assignment
 
@@ -334,7 +385,7 @@ The project supports two database backends via a pluggable `Storage` interface (
 
 The active backend is selected at startup via `models.DatabaseConfig.Type` (`"bbolt"` or `"mongo"`). Cross-engine migration is available via `MigrateBboltToMongo()` / `MigrateMongoToBbolt()`.
 
-Buckets (33 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
+Buckets (36 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
 
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
@@ -368,6 +419,9 @@ Buckets (33 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `escalation_rules` | `{prID}` or `"default"` | Escalation state (JSON); last escalation timestamp or level |
 | `pr_stacks` | `{stackID}` | PRStack (JSON); cross-platform PR chain tracking |
 | `notification_digest` | `{username}:{notifier}:{nanotime}` | DigestEntry (JSON); buffered notifications for digest mode |
+| `sessions` | `{sessionID}` | Session (JSON); active user sessions with IP, user agent, timestamps |
+| `sessions_by_user` | `{username}:{sessionID}` → index | → `sessions` bucket key; enables per-user session listing |
+| `oidc_links` | `{provider}:{subject}` | OIDCLink (JSON); maps OIDC provider+subject to asika username |
 
 Performance optimizations:
 - Index-based PR lookups via `PutPRWithIndex` / `GetPRByIndex` (O(1) vs O(n) scan)
@@ -485,7 +539,7 @@ graph TB
 
     subgraph daemon["daemon/"]
         SRV[server/ → HTTP/bootstrap]
-         HAND[handlers/ → API routes]
+         HAND[handlers/ → API routes + auth/2fa/oidc/sessions]
          PR_H[handlers/pr/ → PR handlers]
          HOOK[handlers/webhook/ → Webhook parsing]
          ASSIGN[handlers/assign.go → Reviewer assignment]

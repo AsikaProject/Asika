@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"time"
 
@@ -466,7 +467,12 @@ func (c *GiteaClient) VerifyWebhookSignature(body []byte, signature string) bool
 	mac.Write(body)
 	expectedMAC := hex.EncodeToString(mac.Sum(nil))
 
-	return hmac.Equal([]byte(signature), []byte(expectedMAC))
+	sig := signature
+	if strings.HasPrefix(sig, "sha256=") {
+		sig = sig[len("sha256="):]
+	}
+
+	return hmac.Equal([]byte(sig), []byte(expectedMAC))
 }
 
 // GetPRCommits gets the commits in a PR
@@ -551,23 +557,10 @@ func (c *GiteaClient) RequestReview(ctx context.Context, owner, repo string, num
 	return err
 }
 
-// RevertPR creates a revert PR for a merged PR on Gitea/Forgejo.
+// RevertPR is not supported on Gitea/Forgejo via the SDK.
+// The Gitea SDK does not provide a revert API endpoint.
 func (c *GiteaClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
-	opts := gitea.CreatePullRequestOption{
-		Title: fmt.Sprintf("Revert #%d", number),
-		Head:  fmt.Sprintf("revert-%d", number),
-		Base:  "",
-		Body:  fmt.Sprintf("Revert of PR #%d", number),
-	}
-	revertPR, _, err := c.client.CreatePullRequest(owner, repo, opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create revert PR on gitea: %w", err)
-	}
-	return &models.PRRecord{
-		Title:    revertPR.Title,
-		PRNumber: int(revertPR.Index),
-		State:    "open",
-	}, nil
+	return nil, fmt.Errorf("revert is not supported on gitea/forgejo via the SDK")
 }
 
 func (c *GiteaClient) GetPRBody(ctx context.Context, owner, repo string, number int) (string, error) {
@@ -587,6 +580,15 @@ func (c *GiteaClient) GetFileContent(ctx context.Context, owner, repo, path stri
 		return *content.Content, nil
 	}
 	return "", nil
+}
+
+// pathEscapeSegments escapes each segment of a path individually, preserving / separators.
+func pathEscapeSegments(path string) string {
+	segments := strings.Split(path, "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+	return strings.Join(segments, "/")
 }
 
 func (c *GiteaClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {

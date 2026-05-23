@@ -141,18 +141,55 @@ func (c *BitbucketClient) GetPR(ctx context.Context, owner, repo string, number 
 }
 
 func (c *BitbucketClient) ListPRs(ctx context.Context, owner, repo string, state string) ([]*models.PRRecord, error) {
-	opts := &bitbucket.PullRequestsOptions{
-		Owner:    owner,
-		RepoSlug: repo,
-	}
+	const maxPRs = 1000
+	stateParam := ""
 	if state != "" {
-		opts.States = []string{strings.ToUpper(state)}
+		stateParam = strings.ToUpper(state)
 	}
-	result, err := c.client.Repositories.PullRequests.List(opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list PRs: %w", err)
+	var allRecords []*models.PRRecord
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests?pagelen=50", owner, repo)
+	if stateParam != "" {
+		endpoint += "&state=" + stateParam
 	}
-	return c.prListToRecords(result, owner, repo), nil
+	for endpoint != "" && len(allRecords) < maxPRs {
+		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create PR list request: %w", err)
+		}
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		resp, err := c.client.HttpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list PRs: %w", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			return nil, fmt.Errorf("bitbucket ListPRs: unexpected status %d", resp.StatusCode)
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<22))
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read PR list response: %w", err)
+		}
+		var pageResult struct {
+			Values []json.RawMessage `json:"values"`
+			Next   string            `json:"next"`
+		}
+		if err := json.Unmarshal(body, &pageResult); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal PR list response: %w", err)
+		}
+		for _, raw := range pageResult.Values {
+			var prMap map[string]interface{}
+			if err := json.Unmarshal(raw, &prMap); err != nil {
+				continue
+			}
+			allRecords = append(allRecords, c.prToRecord(prMap, owner, repo))
+		}
+		endpoint = pageResult.Next
+	}
+	if len(allRecords) > maxPRs {
+		allRecords = allRecords[:maxPRs]
+	}
+	return allRecords, nil
 }
 
 func (c *BitbucketClient) prListToRecords(result interface{}, owner, repo string) []*models.PRRecord {
@@ -609,7 +646,7 @@ func (c *BitbucketClient) GetPRBody(ctx context.Context, owner, repo string, num
 }
 
 func (c *BitbucketClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
-	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/src/HEAD/%s", owner, repo, url.PathEscape(path))
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/src/HEAD/%s", owner, repo, pathEscapeSegments(path))
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return "", err
@@ -631,5 +668,39 @@ func (c *BitbucketClient) GetFileContent(ctx context.Context, owner, repo, path 
 }
 
 func (c *BitbucketClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
-	return true, nil
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/permissions-config/users?q=username=%q", owner, repo, url.QueryEscape(username))
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create permission request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	resp, err := c.client.HttpClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("failed to query bitbucket permissions: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("bitbucket permissions API returned status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return false, fmt.Errorf("failed to read permission response: %w", err)
+	}
+	var result struct {
+		Values []struct {
+			User struct {
+				Username string `json:"username"`
+			} `json:"user"`
+			Permission string `json:"permission"`
+		} `json:"values"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return false, fmt.Errorf("failed to unmarshal permission response: %w", err)
+	}
+	for _, v := range result.Values {
+		if v.User.Username == username {
+			return v.Permission == "admin" || v.Permission == "write", nil
+		}
+	}
+	return false, nil
 }

@@ -81,7 +81,7 @@ func TestSerialWorker_FindPRByID(t *testing.T) {
 	data, _ := json.Marshal(pr)
 	db.PutPRWithIndex("default#github#42", data, "test-pr-1", "default", 42)
 
-	found, err := FindPRByID("test-pr-1")
+	found, err := FindPRByID("test-pr-1", "default")
 	if err != nil {
 		t.Fatalf("FindPRByID failed: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestSerialWorker_FindPRByID(t *testing.T) {
 		t.Errorf("ID = %q, want %q", found.ID, "test-pr-1")
 	}
 
-	_, err = FindPRByID("nonexistent")
+	_, err = FindPRByID("nonexistent", "")
 	if err == nil {
 		t.Error("Expected error for nonexistent PR")
 	}

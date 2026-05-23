@@ -38,7 +38,7 @@ type Storage interface {
 	PutAPIKey(key *models.APIKey) error
 	GetAPIKey(id string) (*models.APIKey, error)
 	DeleteAPIKey(id string) error
-	ListAPIKeys() ([]*models.APIKey, error)
+	ListAPIKeys(limit, offset int) ([]*models.APIKey, error)
 	PutSpamAuthor(author *models.SpamAuthor) error
 	GetSpamAuthor(author, platform string) (*models.SpamAuthor, error)
 	ListSpamAuthors() ([]*models.SpamAuthor, error)
@@ -84,8 +84,22 @@ type Storage interface {
 	DeletePRStack(id string) error
 	PutWebhookDedup(deliveryID string, ts []byte) error
 	GetWebhookDedup(deliveryID string) ([]byte, error)
+	DeleteWebhookDedup(deliveryID string) error
+	ListWebhookDedup() (map[string][]byte, error)
 	AcquireSyncLock(repoGroup, holderID string, ttl time.Duration) (bool, error)
 	ReleaseSyncLock(repoGroup, holderID string) error
+	PutSession(session *models.Session) error
+	GetSession(id string) (*models.Session, error)
+	DeleteSession(id string) error
+	ListUserSessions(username string) ([]*models.Session, error)
+	ListAllSessions() ([]*models.Session, error)
+	DeleteUserSessions(username string) error
+	DeleteInactiveSessions(before time.Time) (int, error)
+	UpdateSessionActivity(id string) error
+	PutOIDCLink(link *models.OIDCLink) error
+	GetOIDCLink(provider, subject string) (*models.OIDCLink, error)
+	DeleteOIDCLink(provider, subject string) error
+	ListOIDCLinks(username string) ([]*models.OIDCLink, error)
 }
 
 // ConfigSnapshotEntry represents a stored config version.
@@ -192,10 +206,12 @@ func AppendAuditLog(level, message string, ctx map[string]interface{}) error {
 func AppendAuditLogEx(entry models.AuditLog) error {
 	return mustStorage().AppendAuditLogEx(entry)
 }
-func PutAPIKey(key *models.APIKey) error            { return mustStorage().PutAPIKey(key) }
-func GetAPIKey(id string) (*models.APIKey, error)   { return mustStorage().GetAPIKey(id) }
-func DeleteAPIKey(id string) error                  { return mustStorage().DeleteAPIKey(id) }
-func ListAPIKeys() ([]*models.APIKey, error)        { return mustStorage().ListAPIKeys() }
+func PutAPIKey(key *models.APIKey) error          { return mustStorage().PutAPIKey(key) }
+func GetAPIKey(id string) (*models.APIKey, error) { return mustStorage().GetAPIKey(id) }
+func DeleteAPIKey(id string) error                { return mustStorage().DeleteAPIKey(id) }
+func ListAPIKeys(limit, offset int) ([]*models.APIKey, error) {
+	return mustStorage().ListAPIKeys(limit, offset)
+}
 func PutSpamAuthor(author *models.SpamAuthor) error { return mustStorage().PutSpamAuthor(author) }
 func GetSpamAuthor(author, platform string) (*models.SpamAuthor, error) {
 	return mustStorage().GetSpamAuthor(author, platform)
@@ -327,6 +343,12 @@ func PutWebhookDedup(deliveryID string, ts []byte) error {
 func GetWebhookDedup(deliveryID string) ([]byte, error) {
 	return mustStorage().GetWebhookDedup(deliveryID)
 }
+func DeleteWebhookDedup(deliveryID string) error {
+	return mustStorage().DeleteWebhookDedup(deliveryID)
+}
+func ListWebhookDedup() (map[string][]byte, error) {
+	return mustStorage().ListWebhookDedup()
+}
 
 // AcquireSyncLock attempts to acquire a sync lock for the given repo group.
 // Returns true if acquired, false if already locked by another process.
@@ -337,4 +359,52 @@ func AcquireSyncLock(repoGroup, holderID string, ttl time.Duration) (bool, error
 // ReleaseSyncLock releases the sync lock for the given repo group if held by the given holder.
 func ReleaseSyncLock(repoGroup, holderID string) error {
 	return mustStorage().ReleaseSyncLock(repoGroup, holderID)
+}
+
+func PutSession(session *models.Session) error {
+	return mustStorage().PutSession(session)
+}
+
+func GetSession(id string) (*models.Session, error) {
+	return mustStorage().GetSession(id)
+}
+
+func DeleteSession(id string) error {
+	return mustStorage().DeleteSession(id)
+}
+
+func ListUserSessions(username string) ([]*models.Session, error) {
+	return mustStorage().ListUserSessions(username)
+}
+
+func ListAllSessions() ([]*models.Session, error) {
+	return mustStorage().ListAllSessions()
+}
+
+func DeleteUserSessions(username string) error {
+	return mustStorage().DeleteUserSessions(username)
+}
+
+func DeleteInactiveSessions(before time.Time) (int, error) {
+	return mustStorage().DeleteInactiveSessions(before)
+}
+
+func UpdateSessionActivity(id string) error {
+	return mustStorage().UpdateSessionActivity(id)
+}
+
+func PutOIDCLink(link *models.OIDCLink) error {
+	return mustStorage().PutOIDCLink(link)
+}
+
+func GetOIDCLink(provider, subject string) (*models.OIDCLink, error) {
+	return mustStorage().GetOIDCLink(provider, subject)
+}
+
+func DeleteOIDCLink(provider, subject string) error {
+	return mustStorage().DeleteOIDCLink(provider, subject)
+}
+
+func ListOIDCLinks(username string) ([]*models.OIDCLink, error) {
+	return mustStorage().ListOIDCLinks(username)
 }

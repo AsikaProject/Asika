@@ -10,6 +10,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
+
+	"asika/common/config"
 )
 
 var configCmd = &cobra.Command{
@@ -102,12 +104,35 @@ var configReloadCmd = &cobra.Command{
 	},
 }
 
+var configValidateCmd = &cobra.Command{
+	Use:   "validate",
+	Short: "Validate configuration file",
+	Run: func(cmd *cobra.Command, args []string) {
+		path, _ := cmd.Flags().GetString("path")
+		if path == "" {
+			path = "asika.toml"
+		}
+		cfg, warnings, err := config.ValidateFile(path)
+		_ = cfg
+		for _, w := range warnings {
+			fmt.Printf("Warning: %s\n", w)
+		}
+		if err != nil {
+			fmt.Printf("Config invalid: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Config is valid")
+	},
+}
+
 func init() {
 	configCmd.AddCommand(configShowCmd)
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configReloadCmd)
+	configCmd.AddCommand(configValidateCmd)
 
 	configSetCmd.Flags().String("file", "", "Path to TOML config file (if not provided, reads from stdin)")
+	configValidateCmd.Flags().String("path", "asika.toml", "Path to TOML config file")
 
 	RootCmd.AddCommand(configCmd)
 }

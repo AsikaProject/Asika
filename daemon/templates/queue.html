@@ -83,32 +83,45 @@
                 return;
             }
              tbody.innerHTML = items.map(item => {
-                 const statusText = {
-                     'waiting': '<span style="color: #ffc107;">{{t "queue.status.waiting"}}</span>',
-                     'checking': '<span style="color: #17a2b8;">{{t "queue.status.checking"}}</span>',
-                     'done': '<span style="color: #28a745;">{{t "queue.status.ready"}}</span>',
-                     'failed': '<span style="color: #dc3545;">{{t "queue.status.failed"}} ' + escapeHtml(item.failure_reason || '') + '</span>'
-                 }[item.status] || item.status;
+                 const statusLabels = {
+                     'waiting': '{{t "queue.status.waiting"}}',
+                     'checking': '{{t "queue.status.checking"}}',
+                     'done': '{{t "queue.status.ready"}}',
+                     'failed': '{{t "queue.status.failed"}}'
+                 };
+                 const statusColors = {
+                     'waiting': '#ffc107',
+                     'checking': '#17a2b8',
+                     'done': '#28a745',
+                     'failed': '#dc3545'
+                 };
+                 const statusLabel = statusLabels[item.status] || escapeHtml(item.status);
+                 const statusColor = statusColors[item.status] || '';
+                 const statusHtml = item.status === 'failed'
+                     ? '<span style="color:' + statusColor + ';">' + statusLabel + ' ' + escapeHtml(item.failure_reason || '') + '</span>'
+                     : '<span style="color:' + statusColor + ';">' + statusLabel + '</span>';
 
                  const approvals = (item.criteria && item.criteria.approved_by)
                      ? item.criteria.approved_by.map(v => escapeHtml(v)).join(', ')
                      : '-';
 
                  const ciStatus = item.criteria ? escapeHtml(item.criteria.ci_status) : '-';
+                 const safePrId = escapeJs(item.pr_id);
+                 const safeStatus = escapeHtml(item.status);
 
                  return '<tr>' +
-                     '<td>#' + item.pr_id + '</td>' +
+                     '<td>#' + escapeHtml(item.pr_id) + '</td>' +
                      '<td>' + escapeHtml(item.title || 'PR #' + item.pr_id) + '</td>' +
-                     '<td class="status-' + escapeHtml(item.status) + '">' + escapeHtml(item.status) + '</td>' +
+                     '<td class="status-' + safeStatus + '">' + safeStatus + '</td>' +
                      '<td>' + approvals + '</td>' +
                      '<td>' + ciStatus + '</td>' +
-                     '<td>' + statusText + '</td>' +
-                     '<td><button class="btn btn-danger" style="padding:2px 6px;font-size:11px;" onclick="removeQueueItem(\'' + escapeHtml(item.pr_id) + '\')">✕</button></td>' +
+                     '<td>' + statusHtml + '</td>' +
+                     '<td><button class="btn btn-danger" style="padding:2px 6px;font-size:11px;" onclick="removeQueueItem(\'' + safePrId + '\')">✕</button></td>' +
                      '</tr>';
              }).join('');
         } catch (e) {
             console.error(e);
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">Failed to load queue: ' + e.message + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">' + escapeHtml('Failed to load queue: ' + e.message) + '</td></tr>';
         }
     }
      async function removeQueueItem(prID) {
@@ -117,7 +130,7 @@
          try {
              const resp = await apiRequest('/api/v1/queue/' + repoGroup + '/' + prID, {method:'DELETE'});
              if (resp.ok) { loadQueue(); } else { alert('Failed to remove item'); }
-         } catch(e) { alert('Failed: ' + e.message); }
+          } catch(e) { alert('Failed: ' + escapeJs(e.message)); }
      }
      async function clearQueue() {
          const repoGroup = document.getElementById('repoGroupSelect').value;
@@ -139,7 +152,7 @@
             const resp = await apiRequest('/api/v1/queue/' + repoGroup + '/recheck', {method:'POST'});
          if(resp.ok){ alert('Queue recheck triggered!'); setTimeout(loadQueue, 1000); }
              else { alert('Nothing to recheck'); }
-         } catch(e){ alert('Failed to trigger recheck: ' + escapeHtml(e.message)); }
+         } catch(e){ alert('Failed to trigger recheck: ' + escapeJs(e.message)); }
      }
      loadRepoGroups().then(() => loadQueue());
 </script>

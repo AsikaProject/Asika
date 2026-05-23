@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -55,20 +56,48 @@ func GenerateJWT(username, role string) (string, error) {
 	return token.SignedString(jwtSecret)
 }
 
+// GenerateJWTWithSession generates a JWT token with session tracking claims (jti, sid)
+func GenerateJWTWithSession(username, role, sessionID string) (string, error) {
+	claims := jwt.MapClaims{
+		"username": username,
+		"role":     role,
+		"exp":      time.Now().Add(tokenExpiry).Unix(),
+		"iat":      time.Now().Unix(),
+		"jti":      uuid.New().String(),
+		"sid":      sessionID,
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(jwtSecret)
+}
+
+// GenerateSessionID generates a unique session identifier
+func GenerateSessionID() string {
+	return uuid.New().String()
+}
+
 // GenerateTempToken generates a short-lived temporary token for privilege escalation.
 // The token is valid for the specified duration and includes the target permissions.
-func GenerateTempToken(username, role string, duration time.Duration, permissions map[string]bool) (string, error) {
+// The token is stored in the sessions bucket with a temp flag so it can be revoked.
+func GenerateTempToken(username, role string, duration time.Duration, permissions map[string]bool) (string, string, error) {
+	sessionID := GenerateSessionID()
 	claims := jwt.MapClaims{
 		"username":    username,
 		"role":        role,
 		"exp":         time.Now().Add(duration).Unix(),
 		"iat":         time.Now().Unix(),
+		"jti":         uuid.New().String(),
+		"sid":         sessionID,
 		"temp":        true,
 		"permissions": permissions,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(jwtSecret)
+	tokenStr, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return "", "", err
+	}
+	return tokenStr, sessionID, nil
 }
 
 // IsTempToken checks if a claims set belongs to a temporary token.

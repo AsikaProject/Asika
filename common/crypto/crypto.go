@@ -105,40 +105,48 @@ func Decrypt(ciphertext string) (string, error) {
 	return string(plaintext), nil
 }
 
+func encryptToken(field *string) error {
+	if *field == "" {
+		return nil
+	}
+	encrypted, err := Encrypt(*field)
+	if err != nil {
+		return err
+	}
+	*field = encrypted
+	return nil
+}
+
 func EncryptSecretsInConfig(cfg *models.Config) error {
 	if !IsEncryptionEnabled() {
 		return nil
 	}
 
 	var err error
-	cfg.Tokens.GitHub, err = Encrypt(cfg.Tokens.GitHub)
-	if err != nil {
+	if err = encryptToken(&cfg.Tokens.GitHub); err != nil {
 		return fmt.Errorf("encrypt github token: %w", err)
 	}
-	cfg.Tokens.GitLab, err = Encrypt(cfg.Tokens.GitLab)
-	if err != nil {
+	if err = encryptToken(&cfg.Tokens.GitLab); err != nil {
 		return fmt.Errorf("encrypt gitlab token: %w", err)
 	}
-	cfg.Tokens.Gitea, err = Encrypt(cfg.Tokens.Gitea)
-	if err != nil {
+	if err = encryptToken(&cfg.Tokens.Gitea); err != nil {
 		return fmt.Errorf("encrypt gitea token: %w", err)
 	}
-	cfg.Tokens.Forgejo, err = Encrypt(cfg.Tokens.Forgejo)
-	if err != nil {
+	if err = encryptToken(&cfg.Tokens.Forgejo); err != nil {
 		return fmt.Errorf("encrypt forgejo token: %w", err)
 	}
-	cfg.Tokens.Codeberg, err = Encrypt(cfg.Tokens.Codeberg)
-	if err != nil {
+	if err = encryptToken(&cfg.Tokens.Codeberg); err != nil {
 		return fmt.Errorf("encrypt codeberg token: %w", err)
 	}
-	cfg.Tokens.Bitbucket, err = Encrypt(cfg.Tokens.Bitbucket)
-	if err != nil {
+	if err = encryptToken(&cfg.Tokens.Bitbucket); err != nil {
 		return fmt.Errorf("encrypt bitbucket token: %w", err)
 	}
 
-	cfg.Tokens.Gerrit.Password, err = Encrypt(cfg.Tokens.Gerrit.Password)
-	if err != nil {
-		return fmt.Errorf("encrypt gerrit password: %w", err)
+	if cfg.Tokens.Gerrit.Password != "" {
+		cfg.Tokens.Gerrit.Password, err = Encrypt(cfg.Tokens.Gerrit.Password)
+		if err != nil {
+			return fmt.Errorf("encrypt gerrit password: %w", err)
+		}
 	}
 
 	cfg.Auth.JWTSecret, err = Encrypt(cfg.Auth.JWTSecret)
@@ -207,6 +215,10 @@ func EncryptTokensInConfig(cfg *models.Config) error {
 
 func DecryptSecretsInConfig(cfg *models.Config) error {
 	if !IsEncryptionEnabled() {
+		encFields := collectEncryptedFields(cfg)
+		if len(encFields) > 0 {
+			return fmt.Errorf("ASIKA_MASTER_KEY not set but found encrypted values in fields: %s", strings.Join(encFields, ", "))
+		}
 		return nil
 	}
 
@@ -309,4 +321,62 @@ func GenerateMasterKey() string {
 	b := make([]byte, keyLength)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+func collectEncryptedFields(cfg *models.Config) []string {
+	var fields []string
+	if strings.HasPrefix(cfg.Tokens.GitHub, prefix) {
+		fields = append(fields, "tokens.github")
+	}
+	if strings.HasPrefix(cfg.Tokens.GitLab, prefix) {
+		fields = append(fields, "tokens.gitlab")
+	}
+	if strings.HasPrefix(cfg.Tokens.Gitea, prefix) {
+		fields = append(fields, "tokens.gitea")
+	}
+	if strings.HasPrefix(cfg.Tokens.Forgejo, prefix) {
+		fields = append(fields, "tokens.forgejo")
+	}
+	if strings.HasPrefix(cfg.Tokens.Codeberg, prefix) {
+		fields = append(fields, "tokens.codeberg")
+	}
+	if strings.HasPrefix(cfg.Tokens.Bitbucket, prefix) {
+		fields = append(fields, "tokens.bitbucket")
+	}
+	if strings.HasPrefix(cfg.Tokens.Gerrit.Password, prefix) {
+		fields = append(fields, "tokens.gerrit.password")
+	}
+	if strings.HasPrefix(cfg.Auth.JWTSecret, prefix) {
+		fields = append(fields, "auth.jwt_secret")
+	}
+	if strings.HasPrefix(cfg.Auth.FingerprintSecret, prefix) {
+		fields = append(fields, "auth.fingerprint_secret")
+	}
+	if strings.HasPrefix(cfg.Events.WebhookSecret, prefix) {
+		fields = append(fields, "events.webhook_secret")
+	}
+	if strings.HasPrefix(cfg.Feishu.AppSecret, prefix) {
+		fields = append(fields, "feishu.app_secret")
+	}
+	if strings.HasPrefix(cfg.Feishu.EncryptKey, prefix) {
+		fields = append(fields, "feishu.encrypt_key")
+	}
+	if strings.HasPrefix(cfg.Telegram.Token, prefix) {
+		fields = append(fields, "telegram.token")
+	}
+	if strings.HasPrefix(cfg.Discord.Token, prefix) {
+		fields = append(fields, "discord.token")
+	}
+	if strings.HasPrefix(cfg.Slack.Token, prefix) {
+		fields = append(fields, "slack.token")
+	}
+	if strings.HasPrefix(cfg.Slack.AppToken, prefix) {
+		fields = append(fields, "slack.app_token")
+	}
+	for i, p := range cfg.Auth.OIDCProviders {
+		if strings.HasPrefix(p.ClientSecret, prefix) {
+			fields = append(fields, fmt.Sprintf("oidc_providers[%d].client_secret", i))
+		}
+	}
+	return fields
 }

@@ -48,14 +48,27 @@ cd asika
 bash build.sh
 
 # Or use specific commands:
-bash build.sh build     # Build binaries (default, stripped)
-bash build.sh dep       # Download dependencies
-bash build.sh test      # Run all tests
-bash build.sh clean     # Remove build artifacts
-bash build.sh distclean # Deep clean (includes Go cache)
+bash build.sh build          # Build stripped binaries (default)
+bash build.sh build-debug    # Debug build (preserves symbols)
+bash build.sh dep            # Download dependencies
+bash build.sh lint           # Run go fmt and go vet
+bash build.sh test           # Run lint + all tests
+bash build.sh test -race     # Run tests with race detector
+bash build.sh test -short    # Run tests, skip long-running ones
+bash build.sh clean          # Remove build artifacts
+bash build.sh distclean      # Deep clean (includes Go cache)
+bash build.sh cross          # Cross-compile for all platforms → dist/
+bash build.sh version        # Show toolchain and version info
+bash build.sh help           # Show full usage
 ```
 
 Binaries: `asika` (CLI) and `asikad` (daemon). Version is auto-generated from date.
+
+Build version suffixes (via `SUFFIX` env var):
+- `SUFFIX=HF` → hotfix build
+- `SUFFIX=CVE` → security fix build
+- `SUFFIX=DEV` → development build (default)
+- `SUFFIX=DEP` → dependency update build
 
 ### 2. Configure
 

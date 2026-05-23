@@ -73,16 +73,8 @@ func (s *Syncer) findTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 			}
 		}
 	}
-	// Fallback: match by title when branch/SHA matching fails (different forks, renamed branches)
-	if pr.Title != "" {
-		for _, tpr := range targetPRs {
-			if tpr.Title == pr.Title {
-				slog.Info("findTargetPR: matched by title fallback",
-					"target", targetPlatform, "pr", tpr.PRNumber, "title", pr.Title)
-				return tpr, nil
-			}
-		}
-	}
+	slog.Warn("findTargetPR: no matching PR found by branch or SHA",
+		"target", targetPlatform, "source_pr", pr.PRNumber, "head_branch", pr.BranchInfo.HeadBranch)
 	return nil, nil
 }
 
@@ -136,23 +128,20 @@ func (s *Syncer) syncTargetPR(ctx context.Context, pr *models.PRRecord, group *m
 		}
 
 		if err := client.MergePR(ctx, owner, repo, targetPR.PRNumber, "merge"); err != nil {
-			slog.Warn("syncPRState: merge failed on target, trying close",
-				"target", targetPlatform, "pr", targetPR.PRNumber, "attempt", attempt, "error", err)
-			if closeErr := client.ClosePR(ctx, owner, repo, targetPR.PRNumber); closeErr != nil {
-				lastErr = fmt.Errorf("merge=%v, close=%v", err, closeErr)
-				if attempt < syncMaxRetries {
-					delay := syncRetryBaseDelay * time.Duration(1<<uint(attempt-1))
-					slog.Info("syncPRState: retrying after delay", "target", targetPlatform, "delay", delay, "attempt", attempt)
-					time.Sleep(delay)
-					continue
-				}
-				slog.Error("syncPRState: all retries exhausted",
-					"target", targetPlatform, "pr", targetPR.PRNumber, "error", lastErr)
-				s.notifySyncFailure(pr, targetPlatform,
-					fmt.Sprintf("failed to sync PR state for #%d on %s after %d attempts: %v",
-						targetPR.PRNumber, targetPlatform, syncMaxRetries, lastErr))
-				return
+			lastErr = err
+			if attempt < syncMaxRetries {
+				delay := syncRetryBaseDelay * time.Duration(1<<uint(attempt-1))
+				slog.Warn("syncPRState: merge failed, retrying",
+					"target", targetPlatform, "pr", targetPR.PRNumber, "attempt", attempt, "error", err)
+				time.Sleep(delay)
+				continue
 			}
+			slog.Error("syncPRState: merge failed on target after all retries",
+				"target", targetPlatform, "pr", targetPR.PRNumber, "error", lastErr)
+			s.notifySyncFailure(pr, targetPlatform,
+				fmt.Sprintf("failed to merge PR #%d on %s after %d attempts: %v",
+					targetPR.PRNumber, targetPlatform, syncMaxRetries, lastErr))
+			return
 		}
 
 		go s.verifyPRState(targetPR, group, targetPlatform, pr)

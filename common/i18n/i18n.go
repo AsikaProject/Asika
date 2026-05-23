@@ -8,15 +8,17 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 //go:embed locales/*
 var localeFS embed.FS
 
 var (
-	mu       sync.RWMutex
-	current  = "en"
-	messages = map[string]map[string]string{
+	mu            sync.RWMutex
+	current       = "en"
+	requestLocale atomic.Value
+	messages      = map[string]map[string]string{
 		"en": {},
 	}
 )
@@ -58,10 +60,44 @@ func SetLocale(locale string) {
 	current = locale
 }
 
+// SetRequestLocale sets the locale for the current request only (no global mutation).
+func SetRequestLocale(locale string) {
+	if _, ok := messages[locale]; !ok {
+		slog.Warn("locale not found, falling back to en", "locale", locale)
+		locale = "en"
+	}
+	requestLocale.Store(locale)
+}
+
+// ClearRequestLocale clears the per-request locale.
+func ClearRequestLocale() {
+	requestLocale.Store("")
+}
+
+// TRequest translates a key using the request-scoped locale if set, otherwise falls back to global.
+func TRequest(key string, args ...interface{}) string {
+	v := requestLocale.Load()
+	if v != nil {
+		if loc, ok := v.(string); ok && loc != "" {
+			return TWithLocale(loc, key, args...)
+		}
+	}
+	return T(key, args...)
+}
+
 // GetLocale returns the message for the given key using the current global locale.
 // For request-scoped locale, use TWithLocale instead.
 func GetLocaleMessage(key string, args ...interface{}) string {
 	return T(key, args...)
+}
+
+// RequestLocale returns the current request-scoped locale (empty string if not set).
+func RequestLocale() string {
+	v := requestLocale.Load()
+	if v == nil {
+		return ""
+	}
+	return v.(string)
 }
 
 // Locale returns the current global locale.

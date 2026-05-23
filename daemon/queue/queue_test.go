@@ -279,7 +279,7 @@ func TestFindPRByID(t *testing.T) {
 	db.Put(db.BucketPRs, "main#github#1", data)
 
 	// Find PR
-	found, err := FindPRByID("test-pr-id")
+	found, err := FindPRByID("test-pr-id", "main")
 	if err != nil {
 		t.Fatalf("FindPRByID failed: %v", err)
 	}
@@ -621,7 +621,7 @@ func TestFindPRByID_NotFound(t *testing.T) {
 	db.Init(dir + "/test.db")
 	t.Cleanup(func() { db.Close() })
 
-	_, err := FindPRByID("nonexistent")
+	_, err := FindPRByID("nonexistent", "")
 	if err == nil {
 		t.Error("FindPRByID should return error for nonexistent PR")
 	}

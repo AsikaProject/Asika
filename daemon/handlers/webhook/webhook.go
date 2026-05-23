@@ -98,7 +98,11 @@ func WebhookHandler(c *gin.Context) {
 		return
 	}
 
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
+	maxBodySize := int64(1 << 20)
+	if cfg := config.Current(); cfg != nil && cfg.WebhookMaxBodySize > 0 {
+		maxBodySize = cfg.WebhookMaxBodySize
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBodySize)
 	body, err := c.GetRawData()
 	if err != nil {
 		slog.Warn("failed to read webhook body", "error", err, "platform", platform)
@@ -120,6 +124,7 @@ func WebhookHandler(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "webhook already processed", "duplicate": true})
 		return
 	}
+	markWebhookProcessed(platform, repoGroup, deliveryID)
 	dedupMu.Unlock()
 
 	webhookID := uuid.New().String()
@@ -148,8 +153,6 @@ func WebhookHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to process webhook"})
 		return
 	}
-
-	markWebhookProcessed(platform, repoGroup, deliveryID)
 
 	if eventType == "" {
 		slog.Info("webhook processed with no actionable event, cleaning up retry record", "webhook_id", webhookID, "platform", platform)

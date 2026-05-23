@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"log/slog"
 
+	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
 )
@@ -78,7 +79,31 @@ func detectPlatformFromURL(url string) string {
 }
 
 func detectRepoGroupFromURL(url, fallback string) string {
+	cfg := config.Current()
+	if cfg == nil {
+		return fallback
+	}
+	for _, rg := range cfg.RepoGroups {
+		for _, repoURL := range []string{rg.GitHub, rg.GitLab, rg.Gitea, rg.Forgejo, rg.Codeberg, rg.Bitbucket, rg.Gerrit} {
+			if repoURL == "" {
+				continue
+			}
+			repoURL = strings.TrimSuffix(repoURL, "/")
+			if strings.HasPrefix(url, repoURL) || strings.Contains(url, getHostFromURL(repoURL)) {
+				return rg.Name
+			}
+		}
+	}
 	return fallback
+}
+
+func getHostFromURL(rawURL string) string {
+	rawURL = strings.TrimPrefix(rawURL, "https://")
+	rawURL = strings.TrimPrefix(rawURL, "http://")
+	if idx := strings.Index(rawURL, "/"); idx >= 0 {
+		return rawURL[:idx]
+	}
+	return rawURL
 }
 
 func FindStackByPR(prID string) (*models.PRStack, error) {
@@ -129,6 +154,8 @@ func CreateStack(c *gin.Context) {
 }
 
 func ListStacks(c *gin.Context) {
+	username, _ := c.Get("username")
+	role, _ := c.Get("role")
 	stacks, err := db.ListPRStacks()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list stacks"})
@@ -136,6 +163,34 @@ func ListStacks(c *gin.Context) {
 	}
 	if stacks == nil {
 		stacks = []*models.PRStack{}
+	}
+	if role != nil && role.(string) != "admin" {
+		userSpaces, _ := db.GetUserSpaces(username.(string))
+		spaceMap := make(map[string]bool)
+		for _, s := range userSpaces {
+			spaceMap[s] = true
+		}
+		spaceCache := make(map[string]string)
+		spaces, _ := db.ListTeamSpaces()
+		for _, sp := range spaces {
+			for _, rg := range sp.RepoGroups {
+				spaceCache[rg] = sp.Name
+			}
+		}
+		var filtered []*models.PRStack
+		for _, s := range stacks {
+			stackSpace := ""
+			for _, m := range s.Members {
+				if sp, ok := spaceCache[m.RepoGroup]; ok {
+					stackSpace = sp
+					break
+				}
+			}
+			if stackSpace == "" || spaceMap[stackSpace] {
+				filtered = append(filtered, s)
+			}
+		}
+		stacks = filtered
 	}
 	c.JSON(http.StatusOK, stacks)
 }
@@ -315,22 +370,17 @@ func SyncStackFromPR(c *gin.Context) {
 	repoGroup := c.Param("repo_group")
 	prID := c.Param("pr_id")
 
-	var pr *models.PRRecord
-	db.ForEach(db.BucketPRs, func(key, value []byte) error {
-		var record models.PRRecord
-		if err := json.Unmarshal(value, &record); err != nil {
-			return nil
-		}
-		if record.RepoGroup == repoGroup && record.ID == prID {
-			pr = &record
-		}
-		return nil
-	})
-
-	if pr == nil {
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
+	if err != nil || data == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
 		return
 	}
+	var prRecord models.PRRecord
+	if err := json.Unmarshal(data, &prRecord); err != nil || prRecord.RepoGroup != repoGroup {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
+		return
+	}
+	pr := &prRecord
 
 	members := DetectStackLinks(pr)
 	if len(members) == 0 {

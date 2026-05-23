@@ -31,6 +31,11 @@ func GetFeed(c *gin.Context) {
 
 	repoGroup := c.Query("repo_group")
 
+	if !cfg.PublicFeed && repoGroup == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "repo_group parameter is required"})
+		return
+	}
+
 	baseURL := fmt.Sprintf("http://%s", c.Request.Host)
 	if c.Request.TLS != nil {
 		baseURL = fmt.Sprintf("https://%s", c.Request.Host)

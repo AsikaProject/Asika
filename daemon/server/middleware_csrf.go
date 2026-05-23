@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,6 +49,18 @@ func CSRFProtect() gin.HandlerFunc {
 
 		username, _ := c.Get("username")
 		if username == nil || username.(string) == "" {
+			c.Next()
+			return
+		}
+
+		if authHeader := c.GetHeader("Authorization"); authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+				c.Next()
+				return
+			}
+		}
+		if c.GetHeader("X-API-Key") != "" {
 			c.Next()
 			return
 		}

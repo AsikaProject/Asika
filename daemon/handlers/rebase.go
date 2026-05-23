@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"log/slog"
@@ -275,7 +276,33 @@ func CherryPickSinglePR(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+func isValidBranchName(branch string) bool {
+	if branch == "" {
+		return false
+	}
+	if strings.HasPrefix(branch, "/") || strings.HasSuffix(branch, "/") ||
+		strings.HasSuffix(branch, ".lock") {
+		return false
+	}
+	for _, c := range branch {
+		if c < 0x20 || c == 0x7f || c == ':' || c == '~' || c == '^' || c == '?' || c == '*' || c == '[' || c == '\\' {
+			return false
+		}
+	}
+	badPatterns := []string{"..", "//", "@{"}
+	for _, p := range badPatterns {
+		if strings.Contains(branch, p) {
+			return false
+		}
+	}
+	return true
+}
+
 func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, prID, targetBranch string, cfg *models.Config) (*CherryPickResponse, error) {
+	if !isValidBranchName(targetBranch) {
+		return nil, fmt.Errorf("invalid target branch name: %s", targetBranch)
+	}
+
 	pr, err := findPRForRebaseInGroup(prID, repoGroup)
 	if err != nil {
 		return nil, fmt.Errorf("PR not found: %s", prID)

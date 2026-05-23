@@ -11,6 +11,7 @@ import (
 
 	"asika/common/db"
 	"asika/common/models"
+	"asika/daemon/queue"
 )
 
 // StatsResponse holds DORA metrics and general stats
@@ -41,6 +42,10 @@ func GetStats(c *gin.Context) {
 			periodDays = 30
 		}
 	}
+	if periodDays > 365 {
+		periodDays = 365
+	}
+	repoGroupFilter := c.Query("repo_group")
 
 	cutoff := time.Now().AddDate(0, 0, -periodDays)
 
@@ -53,11 +58,21 @@ func GetStats(c *gin.Context) {
 	var failedQueueItems, totalQueueItems, syncFailures int
 	openCount, closedCount, spamCount := 0, 0, 0
 
+	const maxStatsScan = 100000
+
 	// Single pass: scan PRs
+	prScanCount := 0
 	db.ForEach(db.BucketPRs, func(key, value []byte) error {
 		var pr models.PRRecord
 		if err := json.Unmarshal(value, &pr); err != nil {
 			return nil
+		}
+		if repoGroupFilter != "" && pr.RepoGroup != repoGroupFilter {
+			return nil
+		}
+		prScanCount++
+		if prScanCount > maxStatsScan {
+			return fmt.Errorf("scan limit reached")
 		}
 		allPRs = append(allPRs, pr)
 		prsByRepoGroup[pr.RepoGroup]++
@@ -72,7 +87,7 @@ func GetStats(c *gin.Context) {
 			return nil
 		}
 		totalQueueItems++
-		if item.Status == "failed" {
+		if item.Status == queue.QueueStatusFailed {
 			failedQueueItems++
 		}
 		return nil
@@ -203,6 +218,9 @@ func GetTeamStats(c *gin.Context) {
 			periodDays = 30
 		}
 	}
+	if periodDays > 365 {
+		periodDays = 365
+	}
 	cutoff := time.Now().AddDate(0, 0, -periodDays)
 
 	type authorData struct {
@@ -318,6 +336,9 @@ func GetBottleneckStats(c *gin.Context) {
 		if n, err := fmt.Sscanf(p, "%d", &periodDays); err != nil || n != 1 || periodDays <= 0 {
 			periodDays = 30
 		}
+	}
+	if periodDays > 365 {
+		periodDays = 365
 	}
 	cutoff := time.Now().AddDate(0, 0, -periodDays)
 

@@ -56,6 +56,7 @@ func StartWebhookRetryWorker() {
 	retryWorkerStopMu.Lock()
 	retryWorkerStop = make(chan struct{})
 	retryWorkerStopMu.Unlock()
+	startDedupCleanupWorker()
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
@@ -100,6 +101,8 @@ func StartWebhookRetryWorker() {
 				}
 
 				slog.Info("webhook retry succeeded", "id", retry.ID)
+				markWebhookProcessed(retry.Platform, retry.RepoGroup, retry.DeliveryID)
+				db.PutWebhookHealth(retry.RepoGroup, retry.Platform, time.Now())
 				db.DeleteWebhookRetry(retry.ID)
 			}
 		}
@@ -113,5 +116,55 @@ func notifyWebhookPermanentFailure(retry *models.WebhookRetry) {
 		retry.FailCount, retry.RepoGroup, retry.Platform, retry.ID, retry.LastError, retry.LastFailed.Format(time.RFC3339))
 	if notifyFn != nil {
 		notifyFn(title, body)
+	}
+}
+
+var (
+	dedupCleanupStop   chan struct{}
+	dedupCleanupStopMu sync.Mutex
+)
+
+func startDedupCleanupWorker() {
+	dedupCleanupStopMu.Lock()
+	defer dedupCleanupStopMu.Unlock()
+	if dedupCleanupStop != nil {
+		select {
+		case <-dedupCleanupStop:
+		default:
+			close(dedupCleanupStop)
+		}
+	}
+	dedupCleanupStop = make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				cleanupExpiredDedup()
+			case <-dedupCleanupStop:
+				return
+			}
+		}
+	}()
+}
+
+func cleanupExpiredDedup() {
+	entries, err := db.ListWebhookDedup()
+	if err != nil {
+		slog.Warn("failed to list webhook dedup entries for cleanup", "error", err)
+		return
+	}
+	cutoff := time.Now().Add(-24 * time.Hour)
+	for key, ts := range entries {
+		t, err := time.Parse(time.RFC3339, string(ts))
+		if err != nil {
+			continue
+		}
+		if t.Before(cutoff) {
+			if err := db.DeleteWebhookDedup(key); err != nil {
+				slog.Warn("failed to delete expired dedup entry", "key", key, "error", err)
+			}
+		}
 	}
 }

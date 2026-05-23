@@ -127,6 +127,10 @@ func Load(path string) (*models.Config, error) {
 		cfg.Tokens.Gitea = token
 	}
 
+	if cfg.WebhookMaxBodySize <= 0 {
+		cfg.WebhookMaxBodySize = 1 << 20
+	}
+
 	if err := validate(cfg); err != nil {
 		return nil, err
 	}
@@ -138,6 +142,121 @@ func Load(path string) (*models.Config, error) {
 	Store(cfg)
 	ConfigPath = path
 	return cfg, nil
+}
+
+func ValidateFile(path string) (*models.Config, []string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	cfg := &models.Config{
+		Server: models.ServerConfig{
+			Listen:                 ":8080",
+			Mode:                   "release",
+			MinProcs:               0,
+			MaxProcs:               0,
+			CORSOrigins:            []string{},
+			RateLimitEnabled:       true,
+			RateLimitRPS:           10,
+			RateLimitBurst:         20,
+			ReadTimeoutSeconds:     30,
+			WriteTimeoutSeconds:    30,
+			ShutdownTimeoutSeconds: 30,
+			MetricsLogInterval:     "5m",
+		},
+		MergeQueue: models.MergeQueueConfig{
+			RequiredApprovals: 1,
+			CICheckRequired:   true,
+		},
+		Updates: models.UpdatesConfig{
+			Check:       false,
+			Interval:    "24h",
+			NotifyOnNew: false,
+		},
+		Stale: models.StaleConfig{
+			Enabled:          false,
+			CheckInterval:    "6h",
+			DaysUntilStale:   21,
+			DaysUntilClose:   0,
+			StaleLabel:       "stale",
+			ExemptLabels:     []string{"long-term"},
+			NotifyOnStale:    true,
+			RemoveOnActivity: true,
+			SkipDraftPRs:     true,
+		},
+		WorkerPool: models.WorkerPoolConfig{
+			MinWorkers:    2,
+			MaxWorkers:    8,
+			ScaleUpPct:    75,
+			ScaleDownPct:  25,
+			CooldownSecs:  30,
+			StatsInterval: "30s",
+		},
+	}
+
+	if err := toml.Unmarshal(data, cfg); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	if cfg.QuietHours.Enabled {
+		if cfg.QuietHours.StartTime == "" {
+			cfg.QuietHours.StartTime = "22:00"
+		}
+		if cfg.QuietHours.EndTime == "" {
+			cfg.QuietHours.EndTime = "08:00"
+		}
+		if cfg.QuietHours.EscalationRole == "" {
+			cfg.QuietHours.EscalationRole = "admin"
+		}
+		if len(cfg.QuietHours.BypassForUrgent) == 0 {
+			cfg.QuietHours.BypassForUrgent = []string{"spam_detected", "sync_failed"}
+		}
+	}
+
+	if cfg.Feed.Title == "" {
+		cfg.Feed.Title = "Asika PR Feed"
+	}
+	if cfg.Feed.MaxItems <= 0 {
+		cfg.Feed.MaxItems = 50
+	}
+
+	if cfg.Events.HealthCheckInterval == "" {
+		cfg.Events.HealthCheckInterval = "2m"
+	}
+	if cfg.Events.HealthCheckThreshold == "" {
+		cfg.Events.HealthCheckThreshold = "5m"
+	}
+
+	if cfg.WebhookMaxBodySize <= 0 {
+		cfg.WebhookMaxBodySize = 1 << 20
+	}
+
+	var warnings []string
+
+	if token := os.Getenv("ASIKA_GITHUB_TOKEN"); token != "" {
+		cfg.Tokens.GitHub = token
+	}
+	if token := os.Getenv("ASIKA_GITLAB_TOKEN"); token != "" {
+		cfg.Tokens.GitLab = token
+	}
+	if token := os.Getenv("ASIKA_GITEA_TOKEN"); token != "" {
+		cfg.Tokens.Gitea = token
+	}
+
+	if err := validate(cfg); err != nil {
+		return nil, warnings, err
+	}
+
+	if os.Getenv("ASIKA_MASTER_KEY") == "" {
+		warnings = append(warnings, "ASIKA_MASTER_KEY not set: encrypted token decryption skipped")
+	} else {
+		if err := crypto.DecryptSecretsInConfig(cfg); err != nil {
+			return nil, warnings, fmt.Errorf("failed to decrypt secrets: %w", err)
+		}
+	}
+
+	return cfg, warnings, nil
 }
 
 func DryRun(patchTOML string) (*models.Config, error) {
@@ -228,6 +347,15 @@ func validate(cfg *models.Config) error {
 	if cfg.Auth.JWTSecret == "" {
 		return fmt.Errorf("auth.jwt_secret is required")
 	}
+	weakSecrets := []string{"change-me", "change-me-please", "secret", "password", "admin", "default", "jwt-secret", "changeme"}
+	for _, ws := range weakSecrets {
+		if strings.EqualFold(cfg.Auth.JWTSecret, ws) {
+			return fmt.Errorf("auth.jwt_secret is a known weak value: %q", cfg.Auth.JWTSecret)
+		}
+	}
+	if len(cfg.Auth.JWTSecret) < 16 {
+		return fmt.Errorf("auth.jwt_secret must be at least 16 characters, got %d", len(cfg.Auth.JWTSecret))
+	}
 
 	if cfg.Auth.FingerprintEnabled {
 		if cfg.Auth.FingerprintSecret == "" {
@@ -238,6 +366,56 @@ func validate(cfg *models.Config) error {
 		}
 		if _, err := time.ParseDuration(cfg.Auth.FingerprintExpiry); err != nil {
 			return fmt.Errorf("invalid auth.fingerprint_expiry: %w", err)
+		}
+	}
+
+	if cfg.Auth.SessionInactivityTimeout != "" {
+		if _, err := time.ParseDuration(cfg.Auth.SessionInactivityTimeout); err != nil {
+			return fmt.Errorf("invalid auth.session_inactivity_timeout: %w", err)
+		}
+	}
+	if cfg.Auth.SessionCleanupInterval != "" {
+		if _, err := time.ParseDuration(cfg.Auth.SessionCleanupInterval); err != nil {
+			return fmt.Errorf("invalid auth.session_cleanup_interval: %w", err)
+		}
+	}
+
+	for i, p := range cfg.Auth.OIDCProviders {
+		if p.Name == "" {
+			return fmt.Errorf("oidc_providers[%d].name is required", i)
+		}
+		if p.ClientID == "" {
+			return fmt.Errorf("oidc_providers[%d].client_id is required", i)
+		}
+		if p.ClientSecret == "" {
+			return fmt.Errorf("oidc_providers[%d].client_secret is required", i)
+		}
+		if p.IssuerURL == "" && (p.AuthURL == "" || p.TokenURL == "") {
+			return fmt.Errorf("oidc_providers[%d]: issuer_url or (auth_url + token_url) is required", i)
+		}
+		if p.DefaultRole == "" {
+			p.DefaultRole = "operator"
+		}
+		cfg.Auth.OIDCProviders[i] = p
+	}
+
+	if cfg.HookPath != "" {
+		if !filepath.IsAbs(cfg.HookPath) {
+			return fmt.Errorf("hook_path must be an absolute path: %s", cfg.HookPath)
+		}
+		if strings.Contains(cfg.HookPath, "..") {
+			return fmt.Errorf("hook_path must not contain .. components: %s", cfg.HookPath)
+		}
+	}
+
+	for _, rg := range cfg.RepoGroups {
+		if rg.HookPath != "" {
+			if !filepath.IsAbs(rg.HookPath) {
+				return fmt.Errorf("hook_path for repo group %s must be an absolute path: %s", rg.Name, rg.HookPath)
+			}
+			if strings.Contains(rg.HookPath, "..") {
+				return fmt.Errorf("hook_path for repo group %s must not contain .. components: %s", rg.Name, rg.HookPath)
+			}
 		}
 	}
 
@@ -277,31 +455,39 @@ func validate(cfg *models.Config) error {
 	return nil
 }
 
+func normalizeRepoGroup(rg *models.RepoGroupConfig) models.RepoGroup {
+	mode := rg.Mode
+	if mode == "" {
+		mode = "multi"
+	}
+	return models.RepoGroup{
+		Name:           rg.Name,
+		Mode:           mode,
+		MirrorPlatform: rg.MirrorPlatform,
+		GitHub:         rg.GitHub,
+		GitLab:         rg.GitLab,
+		Gitea:          rg.Gitea,
+		Forgejo:        rg.Forgejo,
+		Codeberg:       rg.Codeberg,
+		Bitbucket:      rg.Bitbucket,
+		Gerrit:         rg.Gerrit,
+		DefaultBranch:  rg.DefaultBranch,
+		BranchSync:     rg.BranchSync,
+		SyncTags:       rg.SyncTags,
+		SyncPRState:    rg.SyncPRState,
+		ConflictCheck:  rg.ConflictCheck,
+		HookPath:       rg.HookPath,
+		CIProvider:     rg.CIProvider,
+		MergeQueue:     rg.MergeQueue,
+		LabelRules:     rg.LabelRules,
+		ReviewRules:    rg.ReviewRules,
+	}
+}
+
 func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 	groups := make([]models.RepoGroup, len(cfg.RepoGroups))
-	for i, rg := range cfg.RepoGroups {
-		mode := rg.Mode
-		if mode == "" {
-			mode = "multi"
-		}
-		groups[i] = models.RepoGroup{
-			Name:           rg.Name,
-			Mode:           mode,
-			MirrorPlatform: rg.MirrorPlatform,
-			GitHub:         rg.GitHub,
-			GitLab:         rg.GitLab,
-			Gitea:          rg.Gitea,
-			Forgejo:        rg.Forgejo,
-			Codeberg:       rg.Codeberg,
-			Bitbucket:      rg.Bitbucket,
-			Gerrit:         rg.Gerrit,
-			DefaultBranch:  rg.DefaultBranch,
-			HookPath:       rg.HookPath,
-			CIProvider:     rg.CIProvider,
-			MergeQueue:     rg.MergeQueue,
-			LabelRules:     rg.LabelRules,
-			ReviewRules:    rg.ReviewRules,
-		}
+	for i := range cfg.RepoGroups {
+		groups[i] = normalizeRepoGroup(&cfg.RepoGroups[i])
 	}
 	return groups
 }
@@ -309,33 +495,9 @@ func GetRepoGroups(cfg *models.Config) []models.RepoGroup {
 func GetRepoGroupByName(cfg *models.Config, name string) *models.RepoGroup {
 	for i := range cfg.RepoGroups {
 		rg := &cfg.RepoGroups[i]
-		mode := rg.Mode
-		if mode == "" {
-			mode = "multi"
-		}
 		if rg.Name == name {
-			return &models.RepoGroup{
-				Name:           rg.Name,
-				Mode:           mode,
-				MirrorPlatform: rg.MirrorPlatform,
-				GitHub:         rg.GitHub,
-				GitLab:         rg.GitLab,
-				Gitea:          rg.Gitea,
-				Forgejo:        rg.Forgejo,
-				Codeberg:       rg.Codeberg,
-				Bitbucket:      rg.Bitbucket,
-				Gerrit:         rg.Gerrit,
-				DefaultBranch:  rg.DefaultBranch,
-				BranchSync:     rg.BranchSync,
-				SyncTags:       rg.SyncTags,
-				SyncPRState:    rg.SyncPRState,
-				ConflictCheck:  rg.ConflictCheck,
-				HookPath:       rg.HookPath,
-				CIProvider:     rg.CIProvider,
-				MergeQueue:     rg.MergeQueue,
-				LabelRules:     rg.LabelRules,
-				ReviewRules:    rg.ReviewRules,
-			}
+			normalized := normalizeRepoGroup(rg)
+			return &normalized
 		}
 	}
 	return nil
@@ -357,7 +519,7 @@ func GetOwnerRepoFromGroup(group *models.RepoGroup, platform string) (owner, rep
 	case "bitbucket":
 		repoPath = group.Bitbucket
 	case "gerrit":
-		return group.Gerrit, ""
+		repoPath = group.Gerrit
 	}
 	if repoPath == "" {
 		return "", ""

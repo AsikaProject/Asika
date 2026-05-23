@@ -240,7 +240,6 @@ func (c *Consumer) debounce(event events.Event, fn func()) {
 		c.debounceMu.Lock()
 		delete(c.debounceTimers, key)
 		c.debounceMu.Unlock()
-		// Check if workers are still valid before executing
 		c.lifecycleMu.Lock()
 		workers := c.workers
 		c.lifecycleMu.Unlock()

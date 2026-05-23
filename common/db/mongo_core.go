@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -47,9 +46,9 @@ func (s *mongoStorage) ensureIndexes(ctx context.Context) error {
 		name  string
 	}{
 		{BucketPRs, mongo.IndexModel{
-			Keys:    bson.D{{Key: "id", Value: 1}},
+			Keys:    bson.D{{Key: "repo_group", Value: 1}, {Key: "platform", Value: 1}, {Key: "id", Value: 1}},
 			Options: options.Index().SetUnique(true),
-		}, "idx_pr_id"},
+		}, "idx_pr_rg_plat_id"},
 		{BucketPRs, mongo.IndexModel{
 			Keys:    bson.D{{Key: "repo_group", Value: 1}, {Key: "pr_number", Value: 1}},
 			Options: options.Index().SetUnique(true),
@@ -169,8 +168,16 @@ func (s *mongoStorage) ForEach(bucket string, fn func(key, value []byte) error) 
 			continue
 		}
 		key, _ := doc["_id"].(string)
-		val, err := bson.MarshalExtJSON(doc, true, true)
-		if err != nil {
+		var val []byte
+		if dataVal, ok := doc["data"]; ok {
+			switch v := dataVal.(type) {
+			case string:
+				val = []byte(v)
+			case bson.Binary:
+				val = v.Data
+			}
+		}
+		if val == nil {
 			continue
 		}
 		if err := fn([]byte(key), val); err != nil {
@@ -183,7 +190,8 @@ func (s *mongoStorage) ForEach(bucket string, fn func(key, value []byte) error) 
 func (s *mongoStorage) ForEachPrefix(indexBucket, targetBucket, prefix string, fn func(key, value []byte) error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cursor, err := s.coll(indexBucket).Find(ctx, bson.M{"_id": bson.M{"$regex": "^" + regexp.QuoteMeta(prefix)}})
+	prefixEnd := prefix[:len(prefix)-1] + string(prefix[len(prefix)-1]+1)
+	cursor, err := s.coll(indexBucket).Find(ctx, bson.M{"_id": bson.M{"$gte": prefix, "$lt": prefixEnd}})
 	if err != nil {
 		return err
 	}
@@ -202,8 +210,16 @@ func (s *mongoStorage) ForEachPrefix(indexBucket, targetBucket, prefix string, f
 		if err := s.coll(targetBucket).FindOne(ctx, bson.M{"_id": targetKey}).Decode(&targetDoc); err != nil {
 			continue
 		}
-		val, err := bson.MarshalExtJSON(targetDoc, true, true)
-		if err != nil {
+		var val []byte
+		if dataVal, ok := targetDoc["data"]; ok {
+			switch v := dataVal.(type) {
+			case string:
+				val = []byte(v)
+			case bson.Binary:
+				val = v.Data
+			}
+		}
+		if val == nil {
 			continue
 		}
 		if err := fn([]byte(key), val); err != nil {
@@ -216,7 +232,8 @@ func (s *mongoStorage) ForEachPrefix(indexBucket, targetBucket, prefix string, f
 func (s *mongoStorage) BucketForEachPrefix(bucket, prefix string, fn func(key, value []byte) error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cursor, err := s.coll(bucket).Find(ctx, bson.M{"_id": bson.M{"$regex": "^" + regexp.QuoteMeta(prefix)}})
+	prefixEnd := prefix[:len(prefix)-1] + string(prefix[len(prefix)-1]+1)
+	cursor, err := s.coll(bucket).Find(ctx, bson.M{"_id": bson.M{"$gte": prefix, "$lt": prefixEnd}})
 	if err != nil {
 		return err
 	}
@@ -227,8 +244,16 @@ func (s *mongoStorage) BucketForEachPrefix(bucket, prefix string, fn func(key, v
 			continue
 		}
 		key, _ := doc["_id"].(string)
-		val, err := bson.MarshalExtJSON(doc, true, true)
-		if err != nil {
+		var val []byte
+		if dataVal, ok := doc["data"]; ok {
+			switch v := dataVal.(type) {
+			case string:
+				val = []byte(v)
+			case bson.Binary:
+				val = v.Data
+			}
+		}
+		if val == nil {
 			continue
 		}
 		if err := fn([]byte(key), val); err != nil {

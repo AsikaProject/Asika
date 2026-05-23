@@ -97,13 +97,11 @@
 </div>
 
 <script>
-const username = window.location.pathname.split('/').filter(Boolean).pop();
+const username = '{{.username}}';
 
 async function loadPrefs() {
   try {
-    const resp = await fetch(`/api/v1/users/${username}/notifications`, {
-      headers: {'Authorization': 'Bearer ' + (document.cookie.match(/asika_token=([^;]+)/) || [])[1]}
-    });
+    const resp = await fetch(`/api/v1/users/${username}/notifications`);
     const prefs = await resp.json();
     document.getElementById('notif-enabled').checked = prefs.enabled !== false;
     const digest = prefs.digest_mode || 'realtime';
@@ -123,9 +121,7 @@ async function loadPrefs() {
 
 async function loadNotifiers() {
   try {
-    const resp = await fetch('/api/v1/config', {
-      headers: {'Authorization': 'Bearer ' + (document.cookie.match(/asika_token=([^;]+)/) || [])[1]}
-    });
+    const resp = await fetch('/api/v1/config');
     const config = await resp.json();
     const notifiers = config.notify || [];
     const container = document.getElementById('notifier-list');
@@ -162,8 +158,7 @@ document.getElementById('save-prefs').addEventListener('click', async () => {
     const resp = await fetch(`/api/v1/users/${username}/notifications`, {
       method: 'PUT',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (document.cookie.match(/asika_token=([^;]+)/) || [])[1]
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(prefs)
     });

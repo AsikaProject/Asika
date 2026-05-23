@@ -700,7 +700,7 @@ func TestSetRecordWriter_Concurrent(t *testing.T) {
 	wg.Wait()
 }
 
-func TestFindTargetPR_TitleFallback(t *testing.T) {
+func TestFindTargetPR_NoTitleFallback(t *testing.T) {
 	s, mock, cleanup := setupSyncerTest(t)
 	defer cleanup()
 
@@ -735,11 +735,8 @@ func TestFindTargetPR_TitleFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result == nil {
-		t.Fatal("expected match by title fallback, got nil")
-	}
-	if result.PRNumber != 10 {
-		t.Errorf("PRNumber = %d, want 10", result.PRNumber)
+	if result != nil {
+		t.Fatalf("expected nil result when branch/SHA don't match, got PR #%d", result.PRNumber)
 	}
 }
 

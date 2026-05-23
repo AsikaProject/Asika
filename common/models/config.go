@@ -30,11 +30,30 @@ type DatabaseConfig struct {
 
 // AuthConfig represents authentication configuration
 type AuthConfig struct {
-	JWTSecret          string `toml:"jwt_secret"`
-	TokenExpiry        string `toml:"token_expiry"`
-	FingerprintSecret  string `toml:"fingerprint_secret"`
-	FingerprintEnabled bool   `toml:"fingerprint_enabled"`
-	FingerprintExpiry  string `toml:"fingerprint_expiry"`
+	JWTSecret                string         `toml:"jwt_secret"`
+	TokenExpiry              string         `toml:"token_expiry"`
+	FingerprintSecret        string         `toml:"fingerprint_secret"`
+	FingerprintEnabled       bool           `toml:"fingerprint_enabled"`
+	FingerprintExpiry        string         `toml:"fingerprint_expiry"`
+	TOTPRequired             bool           `toml:"totp_required"`
+	SessionInactivityTimeout string         `toml:"session_inactivity_timeout"`
+	SessionCleanupInterval   string         `toml:"session_cleanup_interval"`
+	OIDCProviders            []OIDCProvider `toml:"oidc_providers"`
+}
+
+// OIDCProvider represents an OAuth2/OIDC identity provider configuration
+type OIDCProvider struct {
+	Name         string   `toml:"name"`
+	DisplayName  string   `toml:"display_name"`
+	ClientID     string   `toml:"client_id"`
+	ClientSecret string   `toml:"client_secret"`
+	IssuerURL    string   `toml:"issuer_url"`
+	Scopes       []string `toml:"scopes"`
+	AuthURL      string   `toml:"auth_url"`
+	TokenURL     string   `toml:"token_url"`
+	UserInfoURL  string   `toml:"user_info_url"`
+	AutoCreate   bool     `toml:"auto_create"`
+	DefaultRole  string   `toml:"default_role"`
 }
 
 // EventsConfig represents events configuration

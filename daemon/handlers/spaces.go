@@ -12,6 +12,9 @@ import (
 )
 
 func ListSpaces(c *gin.Context) {
+	username, _ := c.Get("username")
+	role, _ := c.Get("role")
+
 	spaces, err := db.ListTeamSpaces()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list spaces"})
@@ -20,6 +23,26 @@ func ListSpaces(c *gin.Context) {
 	if spaces == nil {
 		spaces = []*models.TeamSpace{}
 	}
+
+	if role != nil && role.(string) != "admin" {
+		userSpaces, err := db.GetUserSpaces(username.(string))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list user spaces"})
+			return
+		}
+		spaceMap := make(map[string]bool)
+		for _, s := range userSpaces {
+			spaceMap[s] = true
+		}
+		var filtered []*models.TeamSpace
+		for _, s := range spaces {
+			if spaceMap[s.Name] {
+				filtered = append(filtered, s)
+			}
+		}
+		spaces = filtered
+	}
+
 	c.JSON(http.StatusOK, spaces)
 }
 

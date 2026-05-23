@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -171,17 +172,33 @@ func (c *GerritClient) GetPR(ctx context.Context, owner, repo string, number int
 }
 
 func (c *GerritClient) ListPRs(ctx context.Context, owner, repo string, state string) ([]*models.PRRecord, error) {
+	const maxPRs = 500
 	query := fmt.Sprintf("project:%s+%s", owner, gerritQueryByState(state))
-	opt := &gerrit.QueryChangeOptions{}
-	opt.Query = []string{query}
-	opt.Limit = 100
-	changes, _, err := c.client.Changes.QueryChanges(ctx, opt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query gerrit changes: %w", err)
-	}
 	var result []*models.PRRecord
-	for i := range *changes {
-		result = append(result, gerritChangeToRecord(&(*changes)[i], owner))
+	start := 0
+	limit := 100
+	for len(result) < maxPRs {
+		opt := &gerrit.QueryChangeOptions{}
+		opt.Query = []string{query}
+		opt.Limit = limit
+		opt.Start = start
+		changes, _, err := c.client.Changes.QueryChanges(ctx, opt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query gerrit changes: %w", err)
+		}
+		if changes == nil || len(*changes) == 0 {
+			break
+		}
+		for i := range *changes {
+			result = append(result, gerritChangeToRecord(&(*changes)[i], owner))
+		}
+		if len(*changes) < limit {
+			break
+		}
+		start += limit
+	}
+	if len(result) > maxPRs {
+		result = result[:maxPRs]
 	}
 	return result, nil
 }
@@ -509,8 +526,8 @@ func (c *GerritClient) GetPRBody(ctx context.Context, owner, repo string, number
 
 func (c *GerritClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
 	project := url.PathEscape(owner)
-	filePath := url.PathEscape(path)
-	endpoint := fmt.Sprintf("%s/projects/%s/files/%s/content", c.baseURL, project, filePath)
+	filePath := pathEscapeSegments(path)
+	endpoint := fmt.Sprintf("%s/projects/%s/files/%s/content?ref=HEAD", c.baseURL, project, filePath)
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return "", err
@@ -540,9 +557,49 @@ func (c *GerritClient) GetFileContent(ctx context.Context, owner, repo, path str
 }
 
 func (c *GerritClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
-	_, _, err := c.client.Accounts.GetAccount(ctx, username)
+	account, _, err := c.client.Accounts.GetAccount(ctx, username)
 	if err != nil {
 		return false, nil
 	}
-	return true, nil
+	accountID := fmt.Sprintf("%d", account.AccountID)
+	project := owner
+	endpoint := fmt.Sprintf("%s/access/?project=%s&user=%s", c.baseURL, url.QueryEscape(project), url.QueryEscape(accountID))
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create gerrit access request: %w", err)
+	}
+	req.SetBasicAuth(c.username, c.password)
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return false, fmt.Errorf("failed to query gerrit access: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("gerrit access API returned status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return false, fmt.Errorf("failed to read gerrit access response: %w", err)
+	}
+	if len(body) > 0 && body[0] == ']' {
+		body = body[1:]
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return false, nil
+	}
+	access, ok := result["access"].(map[string]interface{})
+	if !ok {
+		return false, nil
+	}
+	permissions, ok := access["permissions"].(map[string]interface{})
+	if !ok {
+		return false, nil
+	}
+	if submit, ok := permissions["submit"].(map[string]interface{}); ok {
+		if _, ok := submit["exclusive"]; ok {
+			return true, nil
+		}
+	}
+	return false, nil
 }

@@ -42,6 +42,8 @@ func (s *Server) setupRoutes() {
 	{
 		auth.POST("/login", handlers.Login)
 		auth.POST("/logout", handlers.Logout)
+		auth.GET("/oidc/login/:provider", handlers.OIDCLogin)
+		auth.GET("/oidc/callback/:provider", handlers.OIDCCallback)
 	}
 
 	api.POST("/locale", handlers.SetLocale)
@@ -56,6 +58,8 @@ func (s *Server) setupRoutes() {
 
 	protected := api.Group("")
 	protected.Use(RequireAuth())
+	protected.Use(IssueCSRFToken())
+	protected.Use(CSRFProtect())
 
 	apiKeys := protected.Group("/apikeys")
 	apiKeys.Use(RequireRole("admin"))
@@ -77,6 +81,7 @@ func (s *Server) setupRoutes() {
 		prs := protected.Group("/repos/:repo_group/prs")
 		prs.Use(RequireAnyRole("viewer", "operator", "admin"))
 		prs.Use(RequireRepoGroupAccess())
+		prs.Use(RequireRepoAccess())
 		prs.Use(RequireSpaceAccess())
 		{
 			prs.GET("", handlers.ListPRs)
@@ -149,6 +154,7 @@ func (s *Server) setupRoutes() {
 		queue := protected.Group("/queue/:repo_group")
 		queue.Use(RequireAnyRole("viewer", "operator", "admin"))
 		queue.Use(RequireRepoGroupAccess())
+		queue.Use(RequireRepoAccess())
 		{
 			queue.GET("", handlers.GetQueue)
 
@@ -248,6 +254,7 @@ func (s *Server) setupRoutes() {
 		// Issue-PR links
 		issueLinks := protected.Group("/repos/:repo_group")
 		issueLinks.Use(RequireRepoGroupAccess())
+		issueLinks.Use(RequireRepoAccess())
 		{
 			issueLinks.GET("/issues", handlers.GetIssueLinks)
 			issueLinks.GET("/prs/:pr_id/issues", handlers.GetPRLinks)
@@ -265,6 +272,7 @@ func (s *Server) setupRoutes() {
 		// PR templates
 		prTemplates := protected.Group("/repos/:repo_group")
 		prTemplates.Use(RequireRepoGroupAccess())
+		prTemplates.Use(RequireRepoAccess())
 		{
 			prTemplates.GET("/template", handlers.GetPRTemplate)
 			prTemplates.POST("/template/fetch", handlers.FetchTemplate)
@@ -274,6 +282,7 @@ func (s *Server) setupRoutes() {
 		// PR dependencies
 		prDeps := protected.Group("/repos/:repo_group")
 		prDeps.Use(RequireRepoGroupAccess())
+		prDeps.Use(RequireRepoAccess())
 		{
 			prDeps.GET("/prs/:pr_id/dependencies", handlers.GetPRDependencies)
 			prDeps.GET("/prs/:pr_id/dependents", handlers.GetPRDependents)
@@ -283,6 +292,7 @@ func (s *Server) setupRoutes() {
 		// Cross-space dependencies
 		crossSpaceDeps := protected.Group("/repos/:repo_group")
 		crossSpaceDeps.Use(RequireRepoGroupAccess())
+		crossSpaceDeps.Use(RequireRepoAccess())
 		{
 			crossSpaceDeps.GET("/prs/:pr_id/cross-space-deps", handlers.ListCrossSpaceDeps)
 		}
@@ -312,6 +322,29 @@ func (s *Server) setupRoutes() {
 			}
 		}
 		protected.POST("/auth/temp-token", handlers.CreateTempToken)
+
+		totp := protected.Group("/auth/2fa")
+		{
+			totp.GET("", handlers.TOTPStatus)
+			totp.POST("/enroll", handlers.EnrollTOTP)
+			totp.POST("/verify", handlers.VerifyTOTP)
+			totp.POST("/disable", handlers.DisableTOTP)
+			totp.POST("/codes", handlers.RegenerateBackupCodes)
+		}
+
+		sessions := protected.Group("/auth/sessions")
+		{
+			sessions.GET("", handlers.ListSessions)
+			sessions.DELETE("/:id", handlers.RevokeSession)
+			sessions.DELETE("", handlers.RevokeAllSessions)
+		}
+
+		oidc := protected.Group("/auth/oidc")
+		{
+			oidc.GET("/links", handlers.ListOIDCLinks)
+			oidc.DELETE("/link", handlers.UnlinkOIDC)
+		}
+		auth.GET("/oidc/providers", handlers.GetOIDCProviders)
 
 		fp := protected.Group("/auth/fingerprints")
 		{
@@ -481,6 +514,14 @@ func (s *Server) setupRoutes() {
 			user := c.GetString("username")
 			c.HTML(http.StatusOK, "reports.html", gin.H{
 				"title":    "Reports - Asika",
+				"username": user,
+			})
+		})
+
+		ssr.GET("/account", func(c *gin.Context) {
+			user := c.GetString("username")
+			c.HTML(http.StatusOK, "account.html", gin.H{
+				"title":    "Account - Asika",
 				"username": user,
 			})
 		})

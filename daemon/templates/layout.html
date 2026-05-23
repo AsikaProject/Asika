@@ -165,19 +165,16 @@
         return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
     }
     function apiRequest(url, options) {
-        const token = localStorage.getItem('token');
-        const headers = {
-            'Authorization': 'Bearer ' + token,
-            ...options?.headers
-        };
+        const headers = { ...options?.headers };
         if (!headers['Content-Type'] && options?.body) {
             headers['Content-Type'] = 'application/json';
         }
         return fetch(url, { ...options, headers });
     }
     function logout() {
-        localStorage.removeItem('token');
-        window.location = '/login';
+        fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin' }).finally(function() {
+            window.location = '/login';
+        });
     }
     function toggleMobileMenu() {
         document.querySelector('.header .nav').classList.toggle('open');
@@ -240,8 +237,9 @@
         <a href="/settings"><span data-i18n="nav.settings">{{t "nav.settings"}}</span></a>
         <a href="/config"><span data-i18n="nav.config">{{t "nav.config"}}</span></a>
         <a href="/apikeys"><span data-i18n="nav.apikeys">{{t "nav.apikeys"}}</span></a>
-        <a href="/usage"><span data-i18n="nav.usage">{{t "nav.usage"}}</span></a>
-    </div>
+         <a href="/usage"><span data-i18n="nav.usage">{{t "nav.usage"}}</span></a>
+         <a href="/account"><span data-i18n="nav.account">{{t "nav.account"}}</span></a>
+     </div>
 </div>
 {{end}}
 
@@ -254,9 +252,4 @@
 {{end}}
 
 {{define "client_auth"}}
-<script>
-    if (!localStorage.getItem('token') && window.location.pathname !== '/login') {
-        window.location = '/login';
-    }
-</script>
 {{end}}

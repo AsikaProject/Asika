@@ -26,6 +26,7 @@ var templatePaths = []string{
 
 var checklistPattern = regexp.MustCompile(`(?m)^\s*[-*]\s+\[([ x])\]`)
 var depPattern = regexp.MustCompile(`(?i)depends-on:\s*(https?://\S+)`)
+var depURLExtractPattern = regexp.MustCompile(`https?://([^/]+)/([^/]+)/([^/]+)/(?:pull|merge_requests|pulls)/(\d+)`)
 
 // FetchPRTemplate fetches the PR template from the platform.
 func FetchPRTemplate(repoGroup, platform string) (*models.PRTemplate, error) {
@@ -148,11 +149,25 @@ func ParseDependencies(pr *models.PRRecord) []models.PRDependency {
 	var deps []models.PRDependency
 	for _, m := range matches {
 		url := strings.TrimSpace(m[1])
+		depRepoGroup := pr.RepoGroup
+		depPlatform := pr.Platform
+		var depPRNumber int
+		if urlMatches := depURLExtractPattern.FindStringSubmatch(url); urlMatches != nil {
+			host := urlMatches[1]
+			fmt.Sscanf(urlMatches[4], "%d", &depPRNumber)
+			depPlatform = detectPlatformFromURLHost(host)
+			depRepoGroup = detectRepoGroupFromURL(url, depRepoGroup)
+		}
+		depID := ""
+		if depPRNumber > 0 {
+			depID = fmt.Sprintf("%s:%s:%d", depRepoGroup, depPlatform, depPRNumber)
+		}
 		deps = append(deps, models.PRDependency{
-			PRID:         pr.ID,
-			DependsOnURL: url,
-			RepoGroup:    pr.RepoGroup,
-			Platform:     pr.Platform,
+			PRID:          pr.ID,
+			DependsOnPRID: depID,
+			DependsOnURL:  url,
+			RepoGroup:     pr.RepoGroup,
+			Platform:      pr.Platform,
 		})
 	}
 	return deps
@@ -163,24 +178,18 @@ func SyncDependencies(c *gin.Context) {
 	repoGroup := c.Param("repo_group")
 	prID := c.Param("pr_id")
 
-	var found *models.PRRecord
-	db.ForEach(db.BucketPRs, func(key, value []byte) error {
-		var pr models.PRRecord
-		if err := json.Unmarshal(value, &pr); err != nil {
-			return nil
-		}
-		if pr.RepoGroup == repoGroup && pr.ID == prID {
-			found = &pr
-		}
-		return nil
-	})
-
-	if found == nil {
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
+	if err != nil || data == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
+		return
+	}
+	var pr models.PRRecord
+	if err := json.Unmarshal(data, &pr); err != nil || pr.RepoGroup != repoGroup {
 		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
 		return
 	}
 
-	deps := ParseDependencies(found)
+	deps := ParseDependencies(&pr)
 	if len(deps) == 0 {
 		c.JSON(http.StatusOK, gin.H{"message": "no dependencies found"})
 		return
@@ -195,7 +204,18 @@ func SyncDependencies(c *gin.Context) {
 
 // GetPRDependencies handles GET /api/v1/repos/:repo_group/prs/:pr_id/dependencies
 func GetPRDependencies(c *gin.Context) {
+	repoGroup := c.Param("repo_group")
 	prID := c.Param("pr_id")
+
+	prData, err := db.GetPRByIndex(prID, "", 0)
+	if err == nil && prData != nil {
+		var pr models.PRRecord
+		if json.Unmarshal(prData, &pr) == nil && pr.RepoGroup != repoGroup {
+			c.JSON(http.StatusNotFound, gin.H{"error": "PR not found in this repo group"})
+			return
+		}
+	}
+
 	deps, err := db.GetPRDependenciesByPR(prID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query dependencies"})
@@ -213,4 +233,21 @@ func GetPRDependents(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, deps)
+}
+
+func detectPlatformFromURLHost(host string) string {
+	switch {
+	case strings.Contains(host, "github.com"):
+		return "github"
+	case strings.Contains(host, "gitlab"):
+		return "gitlab"
+	case strings.Contains(host, "gitea"), strings.Contains(host, "forgejo"):
+		return "gitea"
+	case strings.Contains(host, "bitbucket.org"):
+		return "bitbucket"
+	case strings.Contains(host, "codeberg.org"):
+		return "codeberg"
+	default:
+		return "unknown"
+	}
 }

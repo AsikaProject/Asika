@@ -1,6 +1,99 @@
 # ChangeLog for Asika
 
-## v20260521DEV
+## v20260523DEV
+
+### Security Fixes
+
+- **Security**: `RequireRepoAccess()` middleware was defined but never mounted. Now mounted on PR, queue, template, dependency, and issue link routes.
+- **Security**: Non-admin API keys were rejected in `RequireRepoGroupAccess()` because `apikey:<name>` doesn't exist in user DB. Now uses key scope directly for API key auth.
+- **Security**: Cookie JWT had no CSRF protection. `CSRFProtect()` and `IssueCSRFToken()` now mounted on protected routes, with Bearer/API key auth exempted.
+- **Security**: JWT session only checked existence, not `ExpiresAt`. Now validates expiry and deletes expired sessions.
+- **Security**: Deleting user or changing role didn't revoke existing JWT sessions. Now deletes sessions, API keys, and OIDC links.
+- **Security**: Temp tokens had no `sid`/`jti` and couldn't be revoked. Now stored as sessions with jti claim.
+- **Security**: TOTP backup codes returned to user didn't match stored hashes. Now generates once, hashes those, returns same plain codes.
+- **Security**: TOTP backup codes were reusable. Now consumed after single use.
+- **Security**: TOTP secret leaked to third-party QR service. Now generates QR locally in browser.
+- **Security**: OIDC `oidcStates` global map had no concurrency protection. Now uses `sync.Mutex`.
+- **Security**: OIDC link API allowed forging any provider/subject. Removed; links only created in verified callback flow.
+- **Security**: OIDC auto-create could overwrite same-name local users. Now checks for existing local user and returns 409.
+- **Security**: OIDC endpoint config logic was reversed. Now sets endpoints when AuthURL+TokenURL are provided.
+- **Security**: Login page couldn't safely show OIDC providers. Added public `/api/v1/auth/oidc/providers` endpoint.
+- **Security**: Global `/logs`, `/stats`, `/reports`, `/stacks`, `/spaces` lacked tenant filtering. Now filter by user's repo_group/space scope.
+- **Security**: Public feed leaked all repo_group activity. Now requires repo_group parameter for unauthenticated access.
+- **Security**: PR dependencies and issue links queries not bound to repo_group. Now verify PR's repo_group matches route parameter.
+- **Security**: Cross-space dependency routes didn't verify caller can access both PRs' spaces. Now checks both.
+- **Security**: JWT stored in localStorage (XSS-visible) alongside HttpOnly cookie. Removed localStorage token handling; cookie-only auth.
+- **Security**: Notification settings page derived username from pathname and tried to read HttpOnly cookie. Now uses server-injected username.
+- **Security**: Frontend used `innerHTML` with unescaped error messages. Now uses `textContent` and proper escaping.
+- **Security**: Feishu bot built JSON with `fmt.Sprintf` and used `http.DefaultClient` without timeout. Now uses `json.Marshal` and 30s timeout client.
+- **Security**: Bot `/adduser` commands transmitted plaintext passwords in chat. Now generates random passwords.
+- **Security**: Initial config didn't validate hookpath for absolute path and `..`. Now validates all hook paths.
+- **Security**: `DecryptSecretsInConfig` silently kept `enc:` ciphertext when master key was missing. Now returns error.
+- **Security**: `CreateUser` could overwrite existing users. Now checks existence and returns 409.
+- **Security**: CORS allowed `*` origin with `Authorization` header. Now restricts wildcard to `Content-Type` only; explicit origins get credentialed headers.
+
+### Bug Fixes
+
+- **Bug fix**: PR ID index written as `repoGroup:prID` but queried with bare `prID`. `FindPRByID` now requires repo_group parameter.
+- **Bug fix**: `merge()` used global PR ID lookup without repo_group. Now passes `item.RepoGroup`.
+- **Bug fix**: Queue recovery used global PR ID to check merge status. Now uses group-scoped lookup.
+- **Bug fix**: Serial worker marked items `Status: "ready"` but `CheckQueue` only processed `waiting`/`checking`/`failed`. Now also processes `ready`.
+- **Bug fix**: `IsReadyToMerge` logged DEBUG at `slog.Error` level. Now uses `slog.Debug`.
+- **Bug fix**: Write-permission check failure kept the approver (fail open). Now skips approver (fail closed).
+- **Bug fix**: GitHub `triage` permission counted as write. Now only `push`/`maintain`/`admin`.
+- **Bug fix**: Bitbucket `HasWritePermission` always returned `true`. Now implements proper API check.
+- **Bug fix**: Gerrit `HasWritePermission` only checked account existence. Now checks submit permission via access API.
+- **Bug fix**: Gitea webhook didn't accept `sha256=` prefixed signatures. Now strips prefix before comparison.
+- **Bug fix**: GitHub `RevertPR` hardcoded `https://api.github.com`. Now uses client's base URL.
+- **Bug fix**: GitLab `RevertPR` constructed empty base URL. Now defaults to `https://gitlab.com/api/v4/`.
+- **Bug fix**: Gitea/Forgejo `RevertPR` only created PR without revert branch. Now returns explicit unsupported error.
+- **Bug fix**: Bitbucket `ListPRs` only read first page. Now paginates using `next` field.
+- **Bug fix**: Gerrit `ListPRs` fixed at 100 results. Now paginates with max 500.
+- **Bug fix**: Bitbucket/Gerrit `GetFileContent` used `url.PathEscape` which encoded `/`. Now escapes path segments individually.
+- **Bug fix**: Gerrit `GetFileContent` didn't include branch/revision. Now adds `?ref=HEAD`.
+- **Bug fix**: Persistent clone created bare repo but `syncDefaultBranch` needed worktree. Now uses non-bare clone.
+- **Bug fix**: Branch delete sync returned after first successful target. Now processes all targets.
+- **Bug fix**: Sync PR state used title fallback to match target PR. Removed title matching; only branch/SHA.
+- **Bug fix**: Target PR merge failure auto-closed the PR. Now only logs error and notifies.
+- **Bug fix**: Git `Push` defaulted to `Force: true`. Now defaults to `false`; sync operations use explicit force.
+- **Bug fix**: Cherry-pick ignored deleted files. Now handles delete/rename/mode changes.
+- **Bug fix**: Cherry-pick target branch not validated. Now validates refname.
+- **Bug fix**: Mongo PR collection had global unique index on `id`. Now compound index on `(repo_group, platform, id)`.
+- **Bug fix**: Mongo `Session`/`OIDCLink` structs lacked `bson` tags. Now added.
+- **Bug fix**: Mongo `ForEach`/`BucketForEachPrefix` returned wrapped BSON documents. Now extracts `data` field like bbolt.
+- **Bug fix**: Webhook dedup check and mark were not atomic. Now holds lock through both operations.
+- **Bug fix**: Webhook retry success didn't write dedup/health records. Now writes both.
+- **Bug fix**: Webhook dedup records had no TTL cleanup. Now runs hourly cleanup of records older than 24h.
+- **Bug fix**: Poller overwrote platform timestamps with `time.Now()`. Now preserves platform values.
+- **Bug fix**: Consumer `handlePROpened` overwrote creation time. Now only sets if zero.
+- **Bug fix**: Event bus `Subscribe`/`Publish` panicked if `Init()` not called. Now auto-initializes.
+- **Bug fix**: Backup restore could leave DB closed on failure. Now validates before closing.
+
+### Performance & Stability
+
+- **Performance**: PR queries and issue/dependency sync used full table scans. Now use indexed lookups.
+- **Performance**: Poller rewrote unchanged PRs every round. Now skips writes for unchanged PRs.
+- **Performance**: Logs/stats/reports scanned full buckets without limits. Now enforce max scan limits.
+- **Stability**: Bot HTTP calls used `http.DefaultClient` without timeout. Now use 30s timeout clients.
+- **Stability**: Report scheduler HTTP calls had no timeout. Now uses 30s timeout.
+- **Stability**: Background goroutines had no shutdown path. Now use proper stop channels.
+- **Stability**: `VerifyNotifiers` read global notifiers without lock. Now uses `RLock`.
+- **Bug fix**: Config encryption encrypted empty platform tokens. Now skips empty values.
+- **Bug fix**: JWT secret only checked non-empty, not weak values. Now rejects known defaults and requires 16+ chars.
+- **Bug fix**: `GetRepoGroups` missed some `RepoGroup` fields vs `GetRepoGroupByName`. Now uses shared normalize function.
+- **Bug fix**: Queue status strings scattered as literals. Now defined as constants.
+- **Bug fix**: `ParseIssueLinks` didn't support `refs #123`. Now includes `refs?` in regex.
+- **Bug fix**: Mongo prefix queries used regex. Now use range queries.
+- **Bug fix**: Self-update download had no size limit. Now uses `LimitedReader`.
+- **Hardening**: `rand.Read` errors now checked in OIDC state, TOTP secret, and backup code generation.
+- **Hardening**: Webhook body size limit now configurable (default 1MiB).
+- **Hardening**: `ListBackups` now filters to `.db` files only.
+- **Hardening**: Locale now request-scoped instead of global state.
+- **Hardening**: `ListAPIKeys`/`ListUsers` now support pagination.
+- **Hardening**: Stats/reports period capped at 365 days.
+- **Hardening**: Discord bot `Stop()` now uses `sync.Once` to prevent double-close.
+- **Tests**: Added route permission matrix, storage conformance, webhook dedup concurrent, and platform client contract tests.
+
 
 ### Features
 
@@ -240,4 +333,3 @@
 - **PR Diff API**: New `GET /api/v1/repos/:repo_group/prs/:pr_id/diff` endpoint for retrieving PR diff content.
 
 - **Inline Comment API**: New `POST /api/v1/repos/:repo_group/prs/:pr_id/comment-line` endpoint for posting inline comments on specific lines.
-

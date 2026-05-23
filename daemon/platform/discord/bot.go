@@ -3,6 +3,7 @@ package discord
 import (
 	"log/slog"
 	"strings"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 
@@ -27,6 +28,7 @@ type Bot struct {
 	operatorIDs   map[string]bool
 	viewerIDs     map[string]bool
 	stop          chan struct{}
+	stopOnce      sync.Once
 	internalToken string
 }
 
@@ -86,7 +88,9 @@ func (b *Bot) Start() {
 
 // Stop stops the bot gracefully.
 func (b *Bot) Stop() {
-	close(b.stop)
+	b.stopOnce.Do(func() {
+		close(b.stop)
+	})
 	if b.session != nil {
 		b.session.Close()
 	}

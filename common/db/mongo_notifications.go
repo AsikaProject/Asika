@@ -139,16 +139,16 @@ func (s *mongoStorage) PutPendingPR(pr *PendingPR) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	doc := bson.M{
-		"_id":           fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber),
-		"pr_id":         pr.PRID,
-		"repo_group":    pr.RepoGroup,
-		"platform":      pr.Platform,
-		"pr_number":     pr.PRNumber,
-		"title":         pr.Title,
-		"author":        pr.Author,
+		"_id":            fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber),
+		"pr_id":          pr.PRID,
+		"repo_group":     pr.RepoGroup,
+		"platform":       pr.Platform,
+		"pr_number":      pr.PRNumber,
+		"title":          pr.Title,
+		"author":         pr.Author,
 		"approval_count": pr.ApprovalCount,
-		"added_at":      pr.AddedAt,
-		"last_checked":  pr.LastChecked,
+		"added_at":       pr.AddedAt,
+		"last_checked":   pr.LastChecked,
 	}
 	_, err := s.coll(BucketPendingPRs).ReplaceOne(ctx, bson.M{"_id": doc["_id"]}, doc, options.Replace().SetUpsert(true))
 	return err

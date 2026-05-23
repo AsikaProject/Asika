@@ -23,7 +23,7 @@ mode = "debug"
 path = "./test.db"
 
 [auth]
-jwt_secret = "my-secret-key"
+jwt_secret = "my-super-secret-key-12345"
 token_expiry = "24h"
 
 [events]
@@ -66,7 +66,7 @@ github = "org/repo"
 gitlab = "group/repo"
 gitea = "user/repo"
 default_branch = "main"
-hookpath = "hooks/test-hooks"
+	hookpath = "/hooks/test-hooks"
 `
 	os.WriteFile(configPath, []byte(configToml), 0644)
 
@@ -91,8 +91,8 @@ hookpath = "hooks/test-hooks"
 	})
 
 	t.Run("auth config", func(t *testing.T) {
-		if cfg.Auth.JWTSecret != "my-secret-key" {
-			t.Errorf("JWTSecret = %q, want my-secret-key", cfg.Auth.JWTSecret)
+		if cfg.Auth.JWTSecret != "my-super-secret-key-12345" {
+			t.Errorf("JWTSecret = %q, want my-super-secret-key-12345", cfg.Auth.JWTSecret)
 		}
 		if cfg.Auth.TokenExpiry != "24h" {
 			t.Errorf("TokenExpiry = %q, want 24h", cfg.Auth.TokenExpiry)
@@ -164,7 +164,7 @@ listen = ":8080"
 path = "./test.db"
 
 [auth]
-jwt_secret = "env-secret"
+jwt_secret = "env-secret-key-12345"
 token_expiry = "72h"
 
 [events]
@@ -226,7 +226,7 @@ func TestConfigValidate_MissingJWT(t *testing.T) {
 func TestConfigValidate_NoRepoGroups(t *testing.T) {
 	cfg := &models.Config{
 		Database: models.DatabaseConfig{Path: "./test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "secret"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-strong-secret-value!!"},
 	}
 
 	err := validate(cfg)
@@ -238,7 +238,7 @@ func TestConfigValidate_NoRepoGroups(t *testing.T) {
 func TestConfigValidate_InvalidMode(t *testing.T) {
 	cfg := &models.Config{
 		Database: models.DatabaseConfig{Path: "./test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "secret"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-strong-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "main", Mode: "invalid-mode", GitHub: "org/repo"},
 		},
@@ -253,7 +253,7 @@ func TestConfigValidate_InvalidMode(t *testing.T) {
 func TestConfigValidate_SingleModeNoMirror(t *testing.T) {
 	cfg := &models.Config{
 		Database: models.DatabaseConfig{Path: "./test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "secret"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-strong-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "docs", Mode: "single", GitHub: "org/docs"},
 		},
@@ -268,7 +268,7 @@ func TestConfigValidate_SingleModeNoMirror(t *testing.T) {
 func TestConfigValidate_SingleModeWithMirror(t *testing.T) {
 	cfg := &models.Config{
 		Database: models.DatabaseConfig{Path: "./test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "secret"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-strong-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "docs", Mode: "single", MirrorPlatform: "github", GitHub: "org/docs"},
 		},
@@ -283,7 +283,7 @@ func TestConfigValidate_SingleModeWithMirror(t *testing.T) {
 func TestConfigValidate_SpamEnabledNoThreshold(t *testing.T) {
 	cfg := &models.Config{
 		Database: models.DatabaseConfig{Path: "./test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "secret"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-strong-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "main", GitHub: "org/repo"},
 		},
@@ -301,7 +301,7 @@ func TestConfigValidate_SpamEnabledNoThreshold(t *testing.T) {
 func TestConfigValidate_SpamEnabledValid(t *testing.T) {
 	cfg := &models.Config{
 		Database: models.DatabaseConfig{Path: "./test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "secret"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-strong-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "main", GitHub: "org/repo"},
 		},
@@ -382,7 +382,7 @@ func TestDefaultConfigValues(t *testing.T) {
 path = "./db/minimal.db"
 
 [auth]
-jwt_secret = "minimal-secret"
+jwt_secret = "minimal-secret-key-12345"
 
 [[repo_groups]]
 name = "minimal"
@@ -443,7 +443,7 @@ func TestSaveToFile(t *testing.T) {
 	cfg := models.Config{
 		Server:   models.ServerConfig{Listen: ":8080", Mode: "debug"},
 		Database: models.DatabaseConfig{Path: "./db/test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "saved-secret", TokenExpiry: "72h"},
+		Auth:     models.AuthConfig{JWTSecret: "saved-secret-key-12345", TokenExpiry: "72h"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "main", Mode: "multi", GitHub: "org/repo", DefaultBranch: "main"},
 		},
@@ -594,7 +594,7 @@ func TestGetOwnerRepo_InvalidFormat(t *testing.T) {
 func TestValidate_SingleModeValidWithMirrorPlatform(t *testing.T) {
 	cfg := &models.Config{
 		Database: models.DatabaseConfig{Path: "./test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "secret"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-strong-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{
 				Name:           "single-valid",

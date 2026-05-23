@@ -158,3 +158,31 @@ func (s *mongoStorage) GetWebhookDedup(deliveryID string) ([]byte, error) {
 	ts, _ := doc["ts"].(string)
 	return []byte(ts), nil
 }
+
+func (s *mongoStorage) DeleteWebhookDedup(deliveryID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := s.coll(BucketWebhookDedup).DeleteOne(ctx, bson.M{"_id": deliveryID})
+	return err
+}
+
+func (s *mongoStorage) ListWebhookDedup() (map[string][]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cursor, err := s.coll(BucketWebhookDedup).Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	result := make(map[string][]byte)
+	for cursor.Next(ctx) {
+		var doc bson.M
+		if err := cursor.Decode(&doc); err != nil {
+			continue
+		}
+		key, _ := doc["_id"].(string)
+		ts, _ := doc["ts"].(string)
+		result[key] = []byte(ts)
+	}
+	return result, cursor.Err()
+}

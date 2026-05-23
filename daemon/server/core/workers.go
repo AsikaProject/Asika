@@ -162,7 +162,31 @@ func StartWorkers(
 		}
 	}()
 	slog.Info("token blacklist & fingerprint cleanup worker started")
-	_ = cleanupStop
+
+	if cfg.Auth.SessionInactivityTimeout != "" {
+		timeout := utils.ParseDuration(cfg.Auth.SessionInactivityTimeout, 720*time.Hour)
+		cleanupInterval := utils.ParseDuration(cfg.Auth.SessionCleanupInterval, 1*time.Hour)
+		go func() {
+			ticker := time.NewTicker(cleanupInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					before := time.Now().Add(-timeout)
+					count, err := db.DeleteInactiveSessions(before)
+					if err != nil {
+						slog.Warn("session cleanup failed", "error", err)
+					} else if count > 0 {
+						slog.Info("session cleanup completed", "removed", count)
+					}
+				case <-cleanupStop:
+					slog.Info("session cleanup worker stopped")
+					return
+				}
+			}
+		}()
+		slog.Info("session cleanup worker started", "interval", cleanupInterval, "inactivity_timeout", timeout)
+	}
 
 	return
 }
@@ -172,6 +196,8 @@ func startAutoMergeScanner(cfg *models.Config, clients map[platforms.PlatformTyp
 		return
 	}
 	evaluator := automerge.NewEvaluator(cfg, clients)
+	stopCh := make(chan struct{})
+	autoMergeScannerStops = append(autoMergeScannerStops, stopCh)
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
@@ -179,11 +205,16 @@ func startAutoMergeScanner(cfg *models.Config, clients map[platforms.PlatformTyp
 			select {
 			case <-ticker.C:
 				evaluator.EvaluateAll()
+			case <-stopCh:
+				slog.Info("auto-merge scanner stopped")
+				return
 			}
 		}
 	}()
 	slog.Info("auto-merge scanner started", "enabled", cfg.AutoMerge.Enabled)
 }
+
+var autoMergeScannerStops []chan struct{}
 
 func persistSpamClean(cfg *models.Config) {
 	configPath := os.Getenv("ASIKA_CONFIG")
@@ -223,6 +254,7 @@ func startStaleCheck(cfg *models.Config, mgr *stale.Manager) {
 
 	interval := utils.ParseDuration(cfg.Stale.CheckInterval, 6*time.Hour)
 	stopCh := make(chan struct{})
+	staleCheckerStops = append(staleCheckerStops, stopCh)
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -232,33 +264,39 @@ func startStaleCheck(cfg *models.Config, mgr *stale.Manager) {
 			case <-ticker.C:
 				mgr.CheckAllGroups()
 			case <-stopCh:
+				slog.Info("stale checker stopped")
 				return
 			}
 		}
 	}()
-	_ = stopCh // available for future graceful shutdown
 	slog.Info("stale checker started", "interval", interval)
 }
+
+var staleCheckerStops []chan struct{}
 
 func startWebhookHealthChecker(cfg *models.Config, poller *polling.Poller) {
 	healthCheckInterval := utils.ParseDuration(cfg.Events.HealthCheckInterval, 2*time.Minute)
 	threshold := utils.ParseDuration(cfg.Events.HealthCheckThreshold, 5*time.Minute)
 
+	stopCh := make(chan struct{})
+	webhookHealthCheckerStops = append(webhookHealthCheckerStops, stopCh)
 	go func() {
 		ticker := time.NewTicker(healthCheckInterval)
 		defer ticker.Stop()
-		stopCh := make(chan struct{})
 		for {
 			select {
 			case <-ticker.C:
 				checkWebhookHealth(cfg, poller, threshold)
 			case <-stopCh:
+				slog.Info("webhook health checker stopped")
 				return
 			}
 		}
 	}()
 	slog.Info("webhook health checker started", "interval", healthCheckInterval, "threshold", threshold)
 }
+
+var webhookHealthCheckerStops []chan struct{}
 
 func checkWebhookHealth(cfg *models.Config, poller *polling.Poller, threshold time.Duration) {
 	healthData, err := db.ListWebhookHealth()

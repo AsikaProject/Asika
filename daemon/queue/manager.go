@@ -18,6 +18,16 @@ import (
 
 const maxRetryCount = 5
 
+const (
+	QueueStatusWaiting    = "waiting"
+	QueueStatusChecking   = "checking"
+	QueueStatusMerging    = "merging"
+	QueueStatusDone       = "done"
+	QueueStatusFailed     = "failed"
+	QueueStatusReady      = "ready"
+	QueueStatusDeadLetter = "dead-letter"
+)
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -60,7 +70,7 @@ func (m *Manager) Recover() {
 		if err := json.Unmarshal(value, &item); err != nil {
 			return nil
 		}
-		if item.Status == "merging" || item.Status == "checking" {
+		if item.Status == QueueStatusMerging || item.Status == QueueStatusChecking {
 			toReset = append(toReset, struct {
 				key  string
 				item models.QueueItem
@@ -74,7 +84,7 @@ func (m *Manager) Recover() {
 	}
 
 	for _, entry := range toReset {
-		pr, findErr := FindPRByID(entry.item.PRID)
+		pr, findErr := FindPRByID(entry.item.PRID, entry.item.RepoGroup)
 		if findErr == nil && pr != nil && pr.State == "merged" {
 			slog.Info("queue recovery: PR already merged, removing from queue", "pr_id", entry.item.PRID)
 			if delErr := db.Delete(db.BucketQueueItems, entry.key); delErr != nil {
@@ -82,7 +92,7 @@ func (m *Manager) Recover() {
 			}
 			continue
 		}
-		entry.item.Status = "waiting"
+		entry.item.Status = QueueStatusWaiting
 		entry.item.FailureReason = ""
 		data, err := json.Marshal(entry.item)
 		if err != nil {
@@ -162,7 +172,7 @@ func (m *Manager) AddToQueueScheduled(pr *models.PRRecord, scheduleAt time.Time)
 // without requiring a QueueItem. Used by the consumer to decide whether
 // to enqueue a PR immediately after approval.
 func (m *Manager) IsReadyToMerge(pr *models.PRRecord) (bool, error) {
-	slog.Error("DEBUG Manager.IsReadyToMerge", "pr_id", pr.ID, "checker_nil", m.checker == nil)
+	slog.Debug("DEBUG Manager.IsReadyToMerge", "pr_id", pr.ID, "checker_nil", m.checker == nil)
 	return m.checker.IsReadyToMerge(pr)
 }
 
@@ -182,21 +192,21 @@ func (m *Manager) CheckQueue() {
 			return nil
 		}
 		// Collect completed items for cleanup
-		if item.Status == "done" {
+		if item.Status == QueueStatusDone {
 			doneKeys = append(doneKeys, string(key))
 			return nil
 		}
-		if item.Status != "waiting" && item.Status != "checking" && item.Status != "failed" {
+		if item.Status != QueueStatusWaiting && item.Status != QueueStatusChecking && item.Status != QueueStatusFailed && item.Status != QueueStatusReady {
 			return nil
 		}
-		if item.Status == "failed" && item.RetryCount >= maxRetryCount {
+		if item.Status == QueueStatusFailed && item.RetryCount >= maxRetryCount {
 			slog.Warn("queue item exceeded max retries, moving to dead-letter", "pr_id", item.PRID, "repo_group", item.RepoGroup, "retries", item.RetryCount)
-			item.Status = "dead-letter"
+			item.Status = QueueStatusDeadLetter
 			deadData, _ := json.Marshal(item)
 			db.Put(db.BucketQueueItems, string(key), deadData)
 			return nil
 		}
-		if item.Status == "failed" && !item.NextRetryAt.IsZero() && item.NextRetryAt.After(time.Now()) {
+		if item.Status == QueueStatusFailed && !item.NextRetryAt.IsZero() && item.NextRetryAt.After(time.Now()) {
 			return nil
 		}
 		items = append(items, item)
@@ -226,17 +236,17 @@ func (m *Manager) CheckQueue() {
 			continue
 		}
 
-		item.Status = "checking"
+		item.Status = QueueStatusChecking
 		item.LastChecked = now
 
 		shouldMerge, err := m.checker.ShouldMerge(&item)
 		if err != nil {
 			if isTransientError(err) {
 				slog.Warn("transient check error, keeping as waiting", "error", err, "pr_id", item.PRID)
-				item.Status = "waiting"
+				item.Status = QueueStatusWaiting
 			} else {
 				slog.Error("check failed", "error", err, "pr_id", item.PRID)
-				item.Status = "failed"
+				item.Status = QueueStatusFailed
 				item.FailureReason = err.Error()
 				item.RetryCount++
 				item.NextRetryAt = time.Now().Add(time.Duration(1<<uint(min(item.RetryCount, 10))) * time.Second)
@@ -250,9 +260,9 @@ func (m *Manager) CheckQueue() {
 				slog.Error("failed to update queue item", "error", putErr, "pr_id", item.PRID)
 			}
 		} else if shouldMerge {
-			item.Status = "merging"
+			item.Status = QueueStatusMerging
 			if err := m.merge(&item); err != nil {
-				item.Status = "failed"
+				item.Status = QueueStatusFailed
 				item.FailureReason = err.Error()
 				item.RetryCount++
 				item.NextRetryAt = time.Now().Add(time.Duration(1<<uint(min(item.RetryCount, 10))) * time.Second)
@@ -265,14 +275,14 @@ func (m *Manager) CheckQueue() {
 					slog.Error("failed to update queue item", "error", putErr, "pr_id", item.PRID)
 				}
 			} else {
-				item.Status = "done"
+				item.Status = QueueStatusDone
 				slog.Info("removing completed item from queue", "pr_id", item.PRID)
 				if delErr := db.Delete(db.BucketQueueItems, keys[i]); delErr != nil {
 					slog.Error("failed to remove completed queue item", "error", delErr, "pr_id", item.PRID)
 				}
 			}
 		} else {
-			item.Status = "waiting"
+			item.Status = QueueStatusWaiting
 			updated, err := json.Marshal(item)
 			if err != nil {
 				slog.Error("failed to marshal queue item", "error", err, "pr_id", item.PRID)
@@ -291,7 +301,7 @@ func (m *Manager) merge(item *models.QueueItem) error {
 	defer cancel()
 
 	// Find PR in bbolt
-	pr, err := FindPRByID(item.PRID)
+	pr, err := FindPRByID(item.PRID, item.RepoGroup)
 	if err != nil {
 		return err
 	}
@@ -360,8 +370,8 @@ func (m *Manager) merge(item *models.QueueItem) error {
 
 // FindPRByID finds a PR by its ID using the primary index first,
 // then falling back to a full scan only when the index bucket does not exist.
-func FindPRByID(prID string) (*models.PRRecord, error) {
-	data, err := db.GetPRByIndex(prID, "", 0)
+func FindPRByID(prID, repoGroup string) (*models.PRRecord, error) {
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
 	if err == nil && data != nil {
 		var pr models.PRRecord
 		if err := json.Unmarshal(data, &pr); err == nil {

@@ -106,7 +106,7 @@ func (w *SerialWorker) processOne(item *models.QueueItem, key string) {
 }
 
 func (w *SerialWorker) startRebase(item *models.QueueItem, key string) {
-	pr, err := FindPRByID(item.PRID)
+	pr, err := FindPRByID(item.PRID, item.RepoGroup)
 	if err != nil {
 		w.fail(item, key, fmt.Sprintf("PR not found: %v", err))
 		return
@@ -159,7 +159,7 @@ func (w *SerialWorker) checkRebaseStatus(item *models.QueueItem, key string) {
 }
 
 func (w *SerialWorker) waitForCI(item *models.QueueItem, key string) {
-	pr, err := FindPRByID(item.PRID)
+	pr, err := FindPRByID(item.PRID, item.RepoGroup)
 	if err != nil {
 		w.fail(item, key, fmt.Sprintf("PR not found: %v", err))
 		return
@@ -177,21 +177,21 @@ func (w *SerialWorker) waitForCI(item *models.QueueItem, key string) {
 		item.ValidationDetail = "CI running"
 		w.updateItem(item, key)
 	case ciStatus == "success":
-		item.ValidationStatus = "ready"
+		item.ValidationStatus = QueueStatusReady
 		item.ValidationDetail = "CI passed, ready to merge"
 		w.updateItem(item, key)
 		slog.Info("serial: CI passed, marked ready", "pr_id", item.PRID)
 	case ciStatus == "failure" || ciStatus == "error":
 		w.fail(item, key, "CI failed")
 	default:
-		item.ValidationStatus = "ready"
+		item.ValidationStatus = QueueStatusReady
 		item.ValidationDetail = fmt.Sprintf("CI status: %s", ciStatus)
 		w.updateItem(item, key)
 	}
 }
 
 func (w *SerialWorker) pollCIStatus(item *models.QueueItem, key string) {
-	pr, err := FindPRByID(item.PRID)
+	pr, err := FindPRByID(item.PRID, item.RepoGroup)
 	if err != nil {
 		w.fail(item, key, fmt.Sprintf("PR not found: %v", err))
 		return
@@ -204,7 +204,7 @@ func (w *SerialWorker) pollCIStatus(item *models.QueueItem, key string) {
 
 	switch {
 	case ciStatus == "success":
-		item.ValidationStatus = "ready"
+		item.ValidationStatus = QueueStatusReady
 		item.ValidationDetail = "CI passed, ready to merge"
 		w.updateItem(item, key)
 		slog.Info("serial: CI passed", "pr_id", item.PRID)
@@ -242,13 +242,13 @@ func (w *SerialWorker) getCIStatus(pr *models.PRRecord) (string, error) {
 }
 
 func (w *SerialWorker) markMergeable(item *models.QueueItem, key string) {
-	item.Status = "ready"
+	item.Status = QueueStatusReady
 	item.ValidationDetail = "serial validation complete, ready for merge"
 	w.updateItem(item, key)
 	queueItem := &models.QueueItem{
 		PRID:             item.PRID,
 		RepoGroup:        item.RepoGroup,
-		Status:           "ready",
+		Status:           QueueStatusReady,
 		ValidationDetail: item.ValidationDetail,
 		AddedAt:          item.AddedAt,
 	}

@@ -123,15 +123,15 @@ func (s *bboltStorage) ListNotificationPrefs(usernames []string) ([]models.Notif
 }
 
 type PendingPR struct {
-	PRID         string    `json:"pr_id"`
-	RepoGroup    string    `json:"repo_group"`
-	Platform     string    `json:"platform"`
-	PRNumber     int       `json:"pr_number"`
-	Title        string    `json:"title"`
-	Author       string    `json:"author"`
-	ApprovalCount int     `json:"approval_count"`
-	AddedAt      time.Time `json:"added_at"`
-	LastChecked  time.Time `json:"last_checked"`
+	PRID          string    `json:"pr_id"`
+	RepoGroup     string    `json:"repo_group"`
+	Platform      string    `json:"platform"`
+	PRNumber      int       `json:"pr_number"`
+	Title         string    `json:"title"`
+	Author        string    `json:"author"`
+	ApprovalCount int       `json:"approval_count"`
+	AddedAt       time.Time `json:"added_at"`
+	LastChecked   time.Time `json:"last_checked"`
 }
 
 func (s *bboltStorage) PutPendingPR(pr *PendingPR) error {

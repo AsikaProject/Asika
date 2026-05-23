@@ -83,32 +83,51 @@ func cherryPickRegular(repo *git.Repository, sourceCommit *object.Commit, commit
 	appliedFiles := make([]string, 0)
 
 	for _, change := range changes {
-		filename := change.To.Name
-		if filename == "" {
-			filename = change.From.Name
-		}
-		if filename == "" {
+		toName := change.To.Name
+		fromName := change.From.Name
+
+		if toName == "" && fromName == "" {
 			continue
 		}
 
-		if headChanged[filename] {
-			conflictedFiles = append(conflictedFiles, filename)
+		// Handle deleted file
+		if toName == "" {
+			if headChanged[fromName] {
+				conflictedFiles = append(conflictedFiles, fromName)
+				continue
+			}
+			w.Remove(fromName)
 			continue
 		}
 
-		sourceEntry, err := sourceTree.File(filename)
+		// Handle renamed file: remove old, add new
+		name := toName
+		if fromName != "" && fromName != toName {
+			if headChanged[fromName] {
+				conflictedFiles = append(conflictedFiles, fromName)
+				continue
+			}
+			w.Remove(fromName)
+		}
+
+		if headChanged[name] {
+			conflictedFiles = append(conflictedFiles, name)
+			continue
+		}
+
+		sourceEntry, err := sourceTree.File(name)
 		if err != nil {
 			continue
 		}
 		content, err := sourceEntry.Contents()
 		if err != nil {
-			return fmt.Errorf("failed to read file %s: %w", filename, err)
+			return fmt.Errorf("failed to read file %s: %w", name, err)
 		}
 
-		if err := writeFileAndStage(w, filename, content); err != nil {
+		if err := writeFileAndStage(w, name, content); err != nil {
 			return err
 		}
-		appliedFiles = append(appliedFiles, filename)
+		appliedFiles = append(appliedFiles, name)
 	}
 
 	if len(conflictedFiles) > 0 {
@@ -228,32 +247,50 @@ func CherryPickMergeDiff(repo *git.Repository, commitSHA string) error {
 	appliedFiles := make([]string, 0)
 
 	for _, change := range changes {
-		filename := change.To.Name
-		if filename == "" {
-			filename = change.From.Name
-		}
-		if filename == "" {
+		toName := change.To.Name
+		fromName := change.From.Name
+
+		if toName == "" && fromName == "" {
 			continue
 		}
 
-		if headChanged[filename] {
-			conflictedFiles = append(conflictedFiles, filename)
+		// Handle deleted file
+		if toName == "" {
+			if headChanged[fromName] {
+				conflictedFiles = append(conflictedFiles, fromName)
+				continue
+			}
+			w.Remove(fromName)
 			continue
 		}
 
-		mergeEntry, err := mergeTree.File(filename)
+		name := toName
+		if fromName != "" && fromName != toName {
+			if headChanged[fromName] {
+				conflictedFiles = append(conflictedFiles, fromName)
+				continue
+			}
+			w.Remove(fromName)
+		}
+
+		if headChanged[name] {
+			conflictedFiles = append(conflictedFiles, name)
+			continue
+		}
+
+		mergeEntry, err := mergeTree.File(name)
 		if err != nil {
 			continue
 		}
 		content, err := mergeEntry.Contents()
 		if err != nil {
-			return fmt.Errorf("failed to read file %s from merge tree: %w", filename, err)
+			return fmt.Errorf("failed to read file %s from merge tree: %w", name, err)
 		}
 
-		if err := writeFileAndStage(w, filename, content); err != nil {
+		if err := writeFileAndStage(w, name, content); err != nil {
 			return err
 		}
-		appliedFiles = append(appliedFiles, filename)
+		appliedFiles = append(appliedFiles, name)
 	}
 
 	if len(conflictedFiles) > 0 {
@@ -280,11 +317,15 @@ func CherryPickMergeDiff(repo *git.Repository, commitSHA string) error {
 }
 
 func Push(repo *git.Repository, remoteName, branch, token string) error {
+	return PushWithForce(repo, remoteName, branch, token, false)
+}
+
+func PushWithForce(repo *git.Repository, remoteName, branch, token string, force bool) error {
 	opts := &git.PushOptions{
 		RefSpecs: []config.RefSpec{
 			config.RefSpec(fmt.Sprintf("refs/heads/%s:refs/heads/%s", branch, branch)),
 		},
-		Force: true,
+		Force: force,
 	}
 	if token != "" {
 		opts.Auth = &http.BasicAuth{

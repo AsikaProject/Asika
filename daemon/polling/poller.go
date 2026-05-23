@@ -266,16 +266,30 @@ func (p *Poller) pollPlatform(client platforms.PlatformClient, repoGroup, platfo
 				}
 			}
 		} else {
-			pr.CreatedAt = time.Now()
-			pr.UpdatedAt = time.Now()
+			if pr.CreatedAt.IsZero() {
+				pr.CreatedAt = time.Now()
+			}
+			if pr.UpdatedAt.IsZero() {
+				pr.UpdatedAt = time.Now()
+			}
 			events.PublishPR(events.EventPROpened, repoGroup, platform, pr, nil)
 		}
 
+		skipWrite := false
 		if pr.ID == "" {
 			pr.ID = uuid.New().String()
+		} else if data != nil {
+			var existingHash models.PRRecord
+			if err := json.Unmarshal(data, &existingHash); err == nil {
+				if existingHash.UpdatedAt.Equal(pr.UpdatedAt) && existingHash.State == pr.State {
+					skipWrite = true
+				}
+			}
 		}
-		prData, _ := json.Marshal(pr)
-		toWrite = append(toWrite, prSync{pr: pr, key: key, data: prData})
+		if !skipWrite {
+			prData, _ := json.Marshal(pr)
+			toWrite = append(toWrite, prSync{pr: pr, key: key, data: prData})
+		}
 	}
 
 	if len(toWrite) > 0 {

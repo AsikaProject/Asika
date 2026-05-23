@@ -144,9 +144,41 @@ func findPRByGlobalID(prID string) (*models.PRRecord, error) {
 var errStopCrossSpace = fmt.Errorf("stop cross-space scan")
 
 func GetCrossSpaceDeps(c *gin.Context) {
+	username, _ := c.Get("username")
+	role, _ := c.Get("role")
 	sourcePRID := c.Param("source_pr_id")
 	targetPRID := c.Param("target_pr_id")
 	key := fmt.Sprintf("%s:%s", sourcePRID, targetPRID)
+
+	srcPR, err := findPRByGlobalID(sourcePRID)
+	if err != nil || srcPR == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "source PR not found"})
+		return
+	}
+	tgtPR, err := findPRByGlobalID(targetPRID)
+	if err != nil || tgtPR == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "target PR not found"})
+		return
+	}
+
+	if role != nil && role.(string) != "admin" {
+		srcSpaces, _ := db.GetUserSpaces(username.(string))
+		tgtSpaces, _ := db.GetUserSpaces(username.(string))
+		srcMap := make(map[string]bool)
+		for _, s := range srcSpaces {
+			srcMap[s] = true
+		}
+		tgtMap := make(map[string]bool)
+		for _, s := range tgtSpaces {
+			tgtMap[s] = true
+		}
+		srcSpace := getSpaceForPR(srcPR)
+		tgtSpace := getSpaceForPR(tgtPR)
+		if (srcSpace != "" && !srcMap[srcSpace]) || (tgtSpace != "" && !tgtMap[tgtSpace]) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied to one or both PR spaces"})
+			return
+		}
+	}
 
 	data, err := db.Get(db.BucketCrossSpaceDeps, key)
 	if err != nil || data == nil {
@@ -163,9 +195,41 @@ func GetCrossSpaceDeps(c *gin.Context) {
 }
 
 func ResolveCrossSpaceDep(c *gin.Context) {
+	username, _ := c.Get("username")
+	role, _ := c.Get("role")
 	sourcePRID := c.Param("source_pr_id")
 	targetPRID := c.Param("target_pr_id")
 	key := fmt.Sprintf("%s:%s", sourcePRID, targetPRID)
+
+	srcPR, err := findPRByGlobalID(sourcePRID)
+	if err != nil || srcPR == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "source PR not found"})
+		return
+	}
+	tgtPR, err := findPRByGlobalID(targetPRID)
+	if err != nil || tgtPR == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "target PR not found"})
+		return
+	}
+
+	if role != nil && role.(string) != "admin" {
+		srcSpaces, _ := db.GetUserSpaces(username.(string))
+		tgtSpaces, _ := db.GetUserSpaces(username.(string))
+		srcMap := make(map[string]bool)
+		for _, s := range srcSpaces {
+			srcMap[s] = true
+		}
+		tgtMap := make(map[string]bool)
+		for _, s := range tgtSpaces {
+			tgtMap[s] = true
+		}
+		srcSpace := getSpaceForPR(srcPR)
+		tgtSpace := getSpaceForPR(tgtPR)
+		if (srcSpace != "" && !srcMap[srcSpace]) || (tgtSpace != "" && !tgtMap[tgtSpace]) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "access denied to one or both PR spaces"})
+			return
+		}
+	}
 
 	data, err := db.Get(db.BucketCrossSpaceDeps, key)
 	if err != nil || data == nil {

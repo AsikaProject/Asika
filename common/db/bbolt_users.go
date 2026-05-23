@@ -31,7 +31,7 @@ func (s *bboltStorage) DeleteAPIKey(id string) error {
 	return s.Delete(BucketAPIKeys, id)
 }
 
-func (s *bboltStorage) ListAPIKeys() ([]*models.APIKey, error) {
+func (s *bboltStorage) ListAPIKeys(limit, offset int) ([]*models.APIKey, error) {
 	var keys []*models.APIKey
 	err := s.ForEach(BucketAPIKeys, func(key, value []byte) error {
 		var k models.APIKey
@@ -41,7 +41,21 @@ func (s *bboltStorage) ListAPIKeys() ([]*models.APIKey, error) {
 		keys = append(keys, &k)
 		return nil
 	})
-	return keys, err
+	if err != nil {
+		return nil, err
+	}
+	start := offset
+	if start > len(keys) {
+		start = len(keys)
+	}
+	end := len(keys)
+	if limit > 0 {
+		end = start + limit
+		if end > len(keys) {
+			end = len(keys)
+		}
+	}
+	return keys[start:end], nil
 }
 
 func (s *bboltStorage) PutSpamAuthor(author *models.SpamAuthor) error {

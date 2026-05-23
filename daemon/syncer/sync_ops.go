@@ -119,9 +119,9 @@ func (s *Syncer) openOrClone(repoDir string, pr *models.PRRecord, group *models.
 
 	if s.cfg.Git.RepoClonePath != "" {
 		if _, err := os.Stat(repoDir); os.IsNotExist(err) {
-			slog.Info("cloning bare repo cache", "repo_dir", repoDir)
+			slog.Info("cloning repo cache", "repo_dir", repoDir)
 			auth := &http.BasicAuth{Username: "git", Password: sourceToken}
-			_, err := git.PlainClone(repoDir, true, &git.CloneOptions{
+			_, err := git.PlainClone(repoDir, false, &git.CloneOptions{
 				URL:  sourceURL,
 				Auth: auth,
 			})

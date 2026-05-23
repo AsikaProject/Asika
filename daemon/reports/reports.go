@@ -222,7 +222,8 @@ func fetchStats(addr string, period int) (map[string]interface{}, error) {
 		return nil, err
 	}
 	req.Header.Set("X-Internal-Report", "true")
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("stats request failed: %w", err)
 	}
@@ -250,7 +251,8 @@ func fetchTeamStats(addr string, period int) (*models.TeamStats, error) {
 		return nil, err
 	}
 	req.Header.Set("X-Internal-Report", "true")
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

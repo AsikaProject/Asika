@@ -154,7 +154,21 @@ func CreateAPIKey(c *gin.Context) {
 
 // ListAPIKeys handles GET /api/v1/apikeys
 func ListAPIKeys(c *gin.Context) {
-	keys, err := db.ListAPIKeys()
+	limit := 0
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		fmt.Sscanf(l, "%d", &limit)
+	}
+	if o := c.Query("offset"); o != "" {
+		fmt.Sscanf(o, "%d", &offset)
+	}
+	if limit < 0 {
+		limit = 0
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	keys, err := db.ListAPIKeys(limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list API keys"})
 		return
@@ -196,7 +210,7 @@ func computeAPIKeyHMAC(rawKey string) string {
 // ValidateAPIKey checks a raw API key against stored hashes.
 // Uses HMAC pre-check to avoid O(n) bcrypt comparisons.
 func ValidateAPIKey(rawKey string) *models.APIKey {
-	keys, err := db.ListAPIKeys()
+	keys, err := db.ListAPIKeys(0, 0)
 	if err != nil {
 		return nil
 	}

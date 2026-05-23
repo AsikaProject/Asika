@@ -48,6 +48,28 @@ type User struct {
 	AllowedRepoGroups []string        `json:"allowed_repo_groups"`
 	AllowedRepos      []string        `json:"allowed_repos"`
 	Permissions       UserPermissions `json:"permissions"`
+	TOTPSecret        string          `json:"totp_secret,omitempty"`
+	TOTPEnabled       bool            `json:"totp_enabled"`
+	BackupCodes       []string        `json:"backup_codes,omitempty"`
+}
+
+type Session struct {
+	ID          string    `json:"id" bson:"id"`
+	Username    string    `json:"username" bson:"username"`
+	TokenPrefix string    `json:"token_prefix" bson:"token_prefix"`
+	IssuedAt    time.Time `json:"issued_at" bson:"issued_at"`
+	LastUsedAt  time.Time `json:"last_used_at" bson:"last_used_at"`
+	ExpiresAt   time.Time `json:"expires_at" bson:"expires_at"`
+	IPAddress   string    `json:"ip_address" bson:"ip_address"`
+	UserAgent   string    `json:"user_agent" bson:"user_agent"`
+}
+
+type OIDCLink struct {
+	Provider   string    `json:"provider" bson:"provider"`
+	Subject    string    `json:"subject" bson:"subject"`
+	Username   string    `json:"username" bson:"username"`
+	CreatedAt  time.Time `json:"created_at" bson:"created_at"`
+	LastUsedAt time.Time `json:"last_used_at" bson:"last_used_at"`
 }
 
 type RepoGroup struct {
@@ -347,39 +369,40 @@ type AutoMergeConfig struct {
 }
 
 type Config struct {
-	Server         ServerConfig       `toml:"server" json:"server"`
-	Database       DatabaseConfig     `toml:"database" json:"database"`
-	Auth           AuthConfig         `toml:"auth" json:"auth"`
-	Notify         []NotifyConfig     `toml:"notify" json:"notify"`
-	Events         EventsConfig       `toml:"events" json:"events"`
-	Git            GitConfig          `toml:"git" json:"git"`
-	Tokens         TokensConfig       `toml:"tokens" json:"tokens"`
-	LabelRules     []LabelRule        `toml:"label_rules" json:"label_rules"`
-	ReviewRules    []ReviewRule       `toml:"review_rules" json:"review_rules"`
-	Spam           SpamConfig         `toml:"spam" json:"spam"`
-	MergeQueue     MergeQueueConfig   `toml:"merge_queue" json:"merge_queue"`
-	HookPath       string             `toml:"hookpath" json:"hookpath"`
-	RepoGroups     []RepoGroupConfig  `toml:"repo_groups" json:"repo_groups"`
-	SingleRepo     SingleRepoConfig   `toml:"single_repo" json:"single_repo"`
-	GitLabBaseURL  string             `toml:"gitlab_base_url" json:"gitlab_base_url"`
-	GiteaBaseURL   string             `toml:"gitea_base_url" json:"gitea_base_url"`
-	ForgejoBaseURL string             `toml:"forgejo_base_url" json:"forgejo_base_url"`
-	GitHubBaseURL  string             `toml:"github_base_url" json:"github_base_url"`
-	Telegram       TelegramConfig     `toml:"telegram" json:"telegram"`
-	Feishu         FeishuConfig       `toml:"feishu" json:"feishu"`
-	Discord        DiscordConfig      `toml:"discord" json:"discord"`
-	Slack          SlackConfig        `toml:"slack" json:"slack"`
-	Updates        UpdatesConfig      `toml:"updates" json:"updates"`
-	Stale          StaleConfig        `toml:"stale" json:"stale"`
-	Reports        ScheduleConfig     `toml:"reports" json:"reports"`
-	WorkerPool     WorkerPoolConfig   `toml:"worker_pool" json:"worker_pool"`
-	CloseReasons   CloseReasonsConfig `toml:"close_reasons" json:"close_reasons"`
-	QuietHours     QuietHoursConfig   `toml:"quiet_hours" json:"quiet_hours"`
-	Feed           FeedConfig         `toml:"feed" json:"feed"`
-	WebhookFilter  WebhookFilter      `toml:"webhook_filter" json:"webhook_filter"`
-	NotifyRules    NotifyRulesConfig  `toml:"notify_rules" json:"notify_rules"`
-	AutoRebase     AutoRebaseConfig   `toml:"auto_rebase" json:"auto_rebase"`
-	AutoMerge      AutoMergeConfig    `toml:"auto_merge" json:"auto_merge"`
+	Server             ServerConfig       `toml:"server" json:"server"`
+	Database           DatabaseConfig     `toml:"database" json:"database"`
+	Auth               AuthConfig         `toml:"auth" json:"auth"`
+	Notify             []NotifyConfig     `toml:"notify" json:"notify"`
+	Events             EventsConfig       `toml:"events" json:"events"`
+	Git                GitConfig          `toml:"git" json:"git"`
+	Tokens             TokensConfig       `toml:"tokens" json:"tokens"`
+	LabelRules         []LabelRule        `toml:"label_rules" json:"label_rules"`
+	ReviewRules        []ReviewRule       `toml:"review_rules" json:"review_rules"`
+	Spam               SpamConfig         `toml:"spam" json:"spam"`
+	MergeQueue         MergeQueueConfig   `toml:"merge_queue" json:"merge_queue"`
+	HookPath           string             `toml:"hookpath" json:"hookpath"`
+	RepoGroups         []RepoGroupConfig  `toml:"repo_groups" json:"repo_groups"`
+	SingleRepo         SingleRepoConfig   `toml:"single_repo" json:"single_repo"`
+	GitLabBaseURL      string             `toml:"gitlab_base_url" json:"gitlab_base_url"`
+	GiteaBaseURL       string             `toml:"gitea_base_url" json:"gitea_base_url"`
+	ForgejoBaseURL     string             `toml:"forgejo_base_url" json:"forgejo_base_url"`
+	GitHubBaseURL      string             `toml:"github_base_url" json:"github_base_url"`
+	Telegram           TelegramConfig     `toml:"telegram" json:"telegram"`
+	Feishu             FeishuConfig       `toml:"feishu" json:"feishu"`
+	Discord            DiscordConfig      `toml:"discord" json:"discord"`
+	Slack              SlackConfig        `toml:"slack" json:"slack"`
+	Updates            UpdatesConfig      `toml:"updates" json:"updates"`
+	Stale              StaleConfig        `toml:"stale" json:"stale"`
+	Reports            ScheduleConfig     `toml:"reports" json:"reports"`
+	WorkerPool         WorkerPoolConfig   `toml:"worker_pool" json:"worker_pool"`
+	CloseReasons       CloseReasonsConfig `toml:"close_reasons" json:"close_reasons"`
+	QuietHours         QuietHoursConfig   `toml:"quiet_hours" json:"quiet_hours"`
+	Feed               FeedConfig         `toml:"feed" json:"feed"`
+	WebhookFilter      WebhookFilter      `toml:"webhook_filter" json:"webhook_filter"`
+	WebhookMaxBodySize int64              `toml:"webhook_max_body_size" json:"webhook_max_body_size"`
+	NotifyRules        NotifyRulesConfig  `toml:"notify_rules" json:"notify_rules"`
+	AutoRebase         AutoRebaseConfig   `toml:"auto_rebase" json:"auto_rebase"`
+	AutoMerge          AutoMergeConfig    `toml:"auto_merge" json:"auto_merge"`
 }
 
 type ScheduleConfig struct {

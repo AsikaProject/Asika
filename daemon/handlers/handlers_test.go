@@ -615,7 +615,7 @@ func TestConfigHotReload_LabelRules(t *testing.T) {
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "test-group", Mode: "multi", GitHub: "org/repo"},
 		},
-		Auth:     models.AuthConfig{JWTSecret: "test-secret", TokenExpiry: "72h"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-test-secret-value!!", TokenExpiry: "72h"},
 		Database: models.DatabaseConfig{Path: "./test.db"},
 	}
 	config.Store(cfg)

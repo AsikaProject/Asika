@@ -35,6 +35,7 @@ func NewGitLabClient(token string, baseURL string, webhookSecret string) *GitLab
 		client, err = gitlab.NewClient(token, gitlab.WithBaseURL(baseURL))
 	} else {
 		client, err = gitlab.NewClient(token)
+		baseURL = "https://gitlab.com/api/v4/"
 	}
 
 	if err != nil {
@@ -43,6 +44,7 @@ func NewGitLabClient(token string, baseURL string, webhookSecret string) *GitLab
 			slog.Error("failed to create gitlab client", "error", err)
 			return nil
 		}
+		baseURL = "https://gitlab.com/api/v4/"
 	}
 
 	return &GitLabClient{
@@ -528,7 +530,7 @@ func (c *GitLabClient) RevertPR(ctx context.Context, owner, repo string, number 
 
 func (c *GitLabClient) GetPRBody(ctx context.Context, owner, repo string, number int) (string, error) {
 	project := owner + "/" + repo
-	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil)
+	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("failed to get MR: %w", err)
 	}
@@ -537,7 +539,7 @@ func (c *GitLabClient) GetPRBody(ctx context.Context, owner, repo string, number
 
 func (c *GitLabClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
 	project := owner + "/" + repo
-	file, _, err := c.client.RepositoryFiles.GetFile(project, path, nil, nil)
+	file, _, err := c.client.RepositoryFiles.GetFile(project, path, nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("failed to get file: %w", err)
 	}

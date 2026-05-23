@@ -139,7 +139,7 @@ func TestRequireSpaceAccess_NoSpaceOwnership(t *testing.T) {
 	cfg := &models.Config{
 		Server:   models.ServerConfig{Listen: ":8080"},
 		Database: models.DatabaseConfig{Type: "bbolt", Path: "/tmp/test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "test"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-test-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "frontend", GitHub: "org/frontend"},
 		},
@@ -173,7 +173,7 @@ func TestRequireSpaceAccess_MemberAllowed(t *testing.T) {
 	cfg := &models.Config{
 		Server:   models.ServerConfig{Listen: ":8080"},
 		Database: models.DatabaseConfig{Type: "bbolt", Path: "/tmp/test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "test"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-test-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "frontend", GitHub: "org/frontend"},
 		},
@@ -214,7 +214,7 @@ func TestRequireSpaceAccess_NonMemberDenied(t *testing.T) {
 	cfg := &models.Config{
 		Server:   models.ServerConfig{Listen: ":8080"},
 		Database: models.DatabaseConfig{Type: "bbolt", Path: "/tmp/test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "test"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-test-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "frontend", GitHub: "org/frontend"},
 		},
@@ -280,7 +280,7 @@ func TestRequireSpaceAccess_SetsContext(t *testing.T) {
 	cfg := &models.Config{
 		Server:   models.ServerConfig{Listen: ":8080"},
 		Database: models.DatabaseConfig{Type: "bbolt", Path: "/tmp/test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "test"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-test-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "frontend", GitHub: "org/frontend"},
 		},
@@ -329,7 +329,7 @@ func TestRequireSpaceAccess_NoSpaces(t *testing.T) {
 	cfg := &models.Config{
 		Server:   models.ServerConfig{Listen: ":8080"},
 		Database: models.DatabaseConfig{Type: "bbolt", Path: "/tmp/test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "test"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-test-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "frontend", GitHub: "org/frontend"},
 		},
@@ -363,7 +363,7 @@ func TestRequireSpaceAccess_GroupNotInConfig(t *testing.T) {
 	cfg := &models.Config{
 		Server:   models.ServerConfig{Listen: ":8080"},
 		Database: models.DatabaseConfig{Type: "bbolt", Path: "/tmp/test.db"},
-		Auth:     models.AuthConfig{JWTSecret: "test"},
+		Auth:     models.AuthConfig{JWTSecret: "this-is-a-test-secret-value!!"},
 		RepoGroups: []models.RepoGroupConfig{
 			{Name: "backend", GitHub: "org/backend"},
 		},

@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,33 +18,83 @@ func (b *Bot) handleAddUser(c telebot.Context) error {
 	}
 	args := strings.Fields(c.Text())
 	if len(args) < 3 {
-		return c.Send("Usage: /adduser <username> <password> <role> [group1,group2,...]\nRole: admin, operator, viewer")
+		return c.Send("Usage: /adduser <username> <role> [group1,group2,...]\nRole: admin, operator, viewer")
 	}
 	username := args[1]
-	password := args[2]
-	role := args[3]
-	if len(args) > 4 {
-		// backward compat: args[3] might be role
-	}
+	role := args[2]
 	validRoles := map[string]bool{"admin": true, "operator": true, "viewer": true}
 	if !validRoles[role] {
 		return c.Send(fmt.Sprintf("Invalid role: %s. Must be admin, operator, or viewer.", role))
 	}
+
+	password := generateRandomPassword(16)
 
 	body := map[string]interface{}{
 		"username": username,
 		"password": password,
 		"role":     role,
 	}
-	if len(args) > 4 {
-		groups := strings.Split(args[4], ",")
+	if len(args) > 3 {
+		groups := strings.Split(args[3], ",")
 		for i := range groups {
 			groups[i] = strings.TrimSpace(groups[i])
 		}
 		body["allowed_repo_groups"] = groups
 	}
 
-	return b.doUserAPI(c, "POST", "/api/v1/users", body, "User created")
+	reply, err := b.doUserAPIWithResponse("POST", "/api/v1/users", body, "User created")
+	if err != nil {
+		return c.Send("Failed to create user: " + err.Error())
+	}
+	return c.Send(reply + "\nTemporary password: " + password + "\nUser must change password on first login.")
+}
+
+func generateRandomPassword(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	b := make([]byte, length)
+	rand.Read(b)
+	for i := range b {
+		b[i] = charset[int(b[i])%len(charset)]
+	}
+	return string(b)
+}
+
+func (b *Bot) doUserAPIWithResponse(method, path string, bodyData interface{}, successMsg string) (string, error) {
+	url := fmt.Sprintf("http://localhost%s%s", b.cfg.Server.Listen, path)
+	var reqBody io.Reader
+	if bodyData != nil {
+		data, err := json.Marshal(bodyData)
+		if err != nil {
+			return "", err
+		}
+		reqBody = strings.NewReader(string(data))
+	}
+	req, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	if bodyData != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(respBody, &result) != nil {
+		return "", fmt.Errorf("error parsing response")
+	}
+	if resp.StatusCode >= 400 {
+		if errMsg, ok := result["error"].(string); ok {
+			return "", fmt.Errorf("%s", errMsg)
+		}
+		return "", fmt.Errorf("request failed (HTTP %d)", resp.StatusCode)
+	}
+	return successMsg, nil
 }
 
 func (b *Bot) handleDelUser(c telebot.Context) error {
@@ -64,7 +115,8 @@ func (b *Bot) handleListUsers(c telebot.Context) error {
 	url := fmt.Sprintf("http://localhost%s/api/v1/users", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+b.internalToken)
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return c.Send(fmt.Sprintf("Failed to fetch users: %v", err))
 	}
@@ -105,7 +157,8 @@ func (b *Bot) doUserAPI(c telebot.Context, method, path string, bodyData interfa
 	if bodyData != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return c.Send(fmt.Sprintf("Failed: %v", err))
 	}
@@ -203,7 +256,8 @@ func (b *Bot) doAPIKeyAPI(c telebot.Context, method, path string, bodyData inter
 	if bodyData != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return c.Send(fmt.Sprintf("Failed: %v", err))
 	}

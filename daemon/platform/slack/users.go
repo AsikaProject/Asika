@@ -1,11 +1,13 @@
 package slack
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
@@ -15,31 +17,43 @@ func (b *Bot) handleAddUser(ev *slack.MessageEvent, client *socketmode.Client, p
 	if !b.isAdmin(ev.User) {
 		return
 	}
-	if len(parts) < 4 {
-		b.postMessage(client, ev.Channel, "Usage: `adduser <username> <password> <role> [group1,group2,...]`\nRole: admin, operator, viewer")
+	if len(parts) < 3 {
+		b.postMessage(client, ev.Channel, "Usage: `adduser <username> <role> [group1,group2,...]`\nRole: admin, operator, viewer")
 		return
 	}
 	username := parts[1]
-	password := parts[2]
-	role := parts[3]
+	role := parts[2]
 	validRoles := map[string]bool{"admin": true, "operator": true, "viewer": true}
 	if !validRoles[role] {
 		b.postMessage(client, ev.Channel, fmt.Sprintf("Invalid role: %s. Must be admin, operator, or viewer.", role))
 		return
 	}
+
+	password := generateSlackRandomPassword(16)
+
 	body := map[string]interface{}{
 		"username": username,
 		"password": password,
 		"role":     role,
 	}
-	if len(parts) > 4 {
-		groups := strings.Split(parts[4], ",")
+	if len(parts) > 3 {
+		groups := strings.Split(parts[3], ",")
 		for i := range groups {
 			groups[i] = strings.TrimSpace(groups[i])
 		}
 		body["allowed_repo_groups"] = groups
 	}
-	b.doUserAPI(client, ev.Channel, "POST", "/api/v1/users", body, "✅ User `"+username+"` created")
+	b.doUserAPISlack(client, ev.Channel, "POST", "/api/v1/users", body, "✅ User `"+username+"` created", password, ev.User)
+}
+
+func generateSlackRandomPassword(length int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	bb := make([]byte, length)
+	rand.Read(bb)
+	for i := range bb {
+		bb[i] = charset[int(bb[i])%len(charset)]
+	}
+	return string(bb)
 }
 
 func (b *Bot) handleDelUser(ev *slack.MessageEvent, client *socketmode.Client, parts []string) {
@@ -60,7 +74,8 @@ func (b *Bot) handleListUsers(ev *slack.MessageEvent, client *socketmode.Client)
 	url := fmt.Sprintf("http://localhost%s/api/v1/users", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+b.internalToken)
-	resp, err := http.DefaultClient.Do(req)
+	hc := &http.Client{Timeout: 30 * time.Second}
+	resp, err := hc.Do(req)
 	if err != nil {
 		b.postMessage(client, ev.Channel, fmt.Sprintf("Failed to fetch users: %v", err))
 		return
@@ -106,7 +121,8 @@ func (b *Bot) doUserAPI(client *socketmode.Client, channel, method, path string,
 	if bodyData != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := http.DefaultClient.Do(req)
+	hc := &http.Client{Timeout: 30 * time.Second}
+	resp, err := hc.Do(req)
 	if err != nil {
 		b.postMessage(client, channel, fmt.Sprintf("Failed: %v", err))
 		return
@@ -127,6 +143,53 @@ func (b *Bot) doUserAPI(client *socketmode.Client, channel, method, path string,
 		return
 	}
 	b.postMessage(client, channel, successMsg)
+}
+
+func (b *Bot) doUserAPISlack(client *socketmode.Client, channel, method, path string, bodyData interface{}, successMsg string, password string, targetUser string) {
+	url := fmt.Sprintf("http://localhost%s%s", b.cfg.Server.Listen, path)
+	var reqBody io.Reader
+	if bodyData != nil {
+		data, err := json.Marshal(bodyData)
+		if err != nil {
+			b.postMessage(client, channel, fmt.Sprintf("Error: %v", err))
+			return
+		}
+		reqBody = strings.NewReader(string(data))
+	}
+	req, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		b.postMessage(client, channel, fmt.Sprintf("Error: %v", err))
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+b.internalToken)
+	if bodyData != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	hc := &http.Client{Timeout: 30 * time.Second}
+	resp, err := hc.Do(req)
+	if err != nil {
+		b.postMessage(client, channel, fmt.Sprintf("Failed: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	var result map[string]interface{}
+	if json.Unmarshal(respBody, &result) != nil {
+		b.postMessage(client, channel, "Error parsing response")
+		return
+	}
+	if resp.StatusCode >= 400 {
+		if errMsg, ok := result["error"].(string); ok {
+			b.postMessage(client, channel, "Error: "+errMsg)
+			return
+		}
+		b.postMessage(client, channel, fmt.Sprintf("Request failed (HTTP %d)", resp.StatusCode))
+		return
+	}
+	b.postMessage(client, channel, successMsg)
+	if password != "" && b.client != nil && targetUser != "" {
+		b.client.PostMessage(targetUser, slack.MsgOptionText("Temporary password: `"+password+"`\nUser must change password on first login.", false))
+	}
 }
 
 func (b *Bot) handleAPIKey(ev *slack.MessageEvent, client *socketmode.Client, parts []string) {
@@ -162,7 +225,8 @@ func (b *Bot) handleAPIKeyList(ev *slack.MessageEvent, client *socketmode.Client
 	url := fmt.Sprintf("http://localhost%s/api/v1/apikeys", b.cfg.Server.Listen)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Authorization", "Bearer "+b.internalToken)
-	resp, err := http.DefaultClient.Do(req)
+	hc := &http.Client{Timeout: 30 * time.Second}
+	resp, err := hc.Do(req)
 	if err != nil {
 		b.postMessage(client, ev.Channel, fmt.Sprintf("Failed: %v", err))
 		return
@@ -209,7 +273,8 @@ func (b *Bot) doAPIKeyAPI(client *socketmode.Client, channel, method, path strin
 	if bodyData != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	resp, err := http.DefaultClient.Do(req)
+	hc := &http.Client{Timeout: 30 * time.Second}
+	resp, err := hc.Do(req)
 	if err != nil {
 		b.postMessage(client, channel, fmt.Sprintf("Failed: %v", err))
 		return

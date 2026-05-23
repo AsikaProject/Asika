@@ -62,6 +62,9 @@ func InitWithBus(bus *Bus) {
 
 // Subscribe subscribes to events, returns a channel to receive events and a subscription ID.
 func Subscribe() <-chan Event {
+	if globalBus == nil {
+		Init()
+	}
 	ch := make(chan Event, 100)
 	globalBus.mu.Lock()
 	globalBus.subscribers = append(globalBus.subscribers, ch)
@@ -71,6 +74,9 @@ func Subscribe() <-chan Event {
 
 // Unsubscribe removes a subscriber channel from the event bus.
 func Unsubscribe(ch <-chan Event) {
+	if globalBus == nil {
+		return
+	}
 	globalBus.mu.Lock()
 	defer globalBus.mu.Unlock()
 	for i, sub := range globalBus.subscribers {
@@ -85,6 +91,9 @@ func Unsubscribe(ch <-chan Event) {
 // Uses non-blocking send: if a subscriber's channel is full, the event is dropped
 // for that subscriber and logged, preventing slow subscribers from blocking others.
 func Publish(e Event) {
+	if globalBus == nil {
+		Init()
+	}
 	globalBus.mu.RLock()
 	defer globalBus.mu.RUnlock()
 	for _, ch := range globalBus.subscribers {

@@ -40,8 +40,13 @@
             <input type="text" id="username" required data-i18n-placeholder="login.username" placeholder="{{t "login.username"}}">
             <label><span data-i18n="login.password">{{t "login.password"}}</span></label>
             <input type="password" id="password" required data-i18n-placeholder="login.password" placeholder="{{t "login.password"}}">
+            <div id="totpSection" style="display:none;">
+                <label><span data-i18n="login.totp_code">{{t "login.totp_code"}}</span></label>
+                <input type="text" id="totpCode" placeholder="000000" maxlength="6" style="text-align:center;font-size:18px;letter-spacing:4px;">
+            </div>
             <button type="submit"><span data-i18n="login.submit">{{t "login.submit"}}</span></button>
         </form>
+        <div id="oidcButtons" style="margin-top:16px;"></div>
         <div id="errorMsg" class="error"></div>
         <div id="successMsg" class="success"></div>
     </div>
@@ -73,6 +78,29 @@
             if (sel) sel.value = lang;
         })();
 
+        var pendingSessionID = null;
+
+        async function loadOIDCProviders() {
+            try {
+                const resp = await fetch('/api/v1/auth/oidc/providers');
+                if (!resp.ok) return;
+                const providers = await resp.json();
+                if (providers && providers.length > 0) {
+                    const container = document.getElementById('oidcButtons');
+                    container.innerHTML = '<div style="text-align:center;margin:8px 0;color:var(--text-secondary);font-size:13px;">{{t "login.or_sso"}}</div>';
+                    providers.forEach(function(p) {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.style.cssText = 'display:block;width:100%;padding:10px;margin:6px 0;background:var(--card-bg);border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:14px;color:var(--text);';
+                        btn.textContent = (p.display_name || p.name);
+                        btn.onclick = function() { window.location = '/api/v1/auth/oidc/login/' + encodeURIComponent(p.name); };
+                        container.appendChild(btn);
+                    });
+                }
+            } catch(e) {}
+        }
+        loadOIDCProviders();
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const errorMsg = document.getElementById('errorMsg');
@@ -81,13 +109,18 @@
             successMsg.style.display = 'none';
 
             try {
+                var body = {
+                    username: document.getElementById('username').value,
+                    password: document.getElementById('password').value
+                };
+                if (pendingSessionID) {
+                    body.session_id = pendingSessionID;
+                    body.totp_code = document.getElementById('totpCode').value;
+                }
                 const resp = await fetch('/api/v1/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        username: document.getElementById('username').value,
-                        password: document.getElementById('password').value
-                    })
+                    body: JSON.stringify(body)
                 });
                 if (!resp.ok) {
                     errorMsg.textContent = '{{t "login.failed"}}';
@@ -95,8 +128,14 @@
                     return;
                 }
                 const data = await resp.json();
+                if (data.two_factor_required) {
+                    pendingSessionID = data.session_id;
+                    document.getElementById('totpSection').style.display = 'block';
+                    document.getElementById('totpCode').focus();
+                    errorMsg.style.display = 'none';
+                    return;
+                }
                 if (data.token) {
-                    localStorage.setItem('token', data.token);
                     successMsg.textContent = '{{t "login.success"}}';
                     successMsg.style.display = 'block';
                     setTimeout(() => { window.location = '/dashboard'; }, 1000);

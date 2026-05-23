@@ -85,6 +85,9 @@ func ListBackups(c *gin.Context) {
 		if entry.IsDir() {
 			continue
 		}
+		if !strings.HasSuffix(entry.Name(), ".db") {
+			continue
+		}
 		info, err := entry.Info()
 		if err != nil {
 			continue
@@ -154,13 +157,13 @@ func RestoreBackup(c *gin.Context) {
 		return
 	}
 
-	db.Close()
-
 	if err := os.Rename(tmpPath, dbPath); err != nil {
 		os.Remove(tmpPath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to restore backup"})
 		return
 	}
+
+	db.Close()
 
 	slog.Info("database restored from backup", "backup", backupPath, "note", "server restart required")
 	c.JSON(http.StatusOK, gin.H{

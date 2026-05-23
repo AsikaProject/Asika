@@ -22,15 +22,22 @@ import (
 )
 
 func tFunc(key string, args ...interface{}) string {
-	return i18n.T(key, args...)
+	return i18n.TRequest(key, args...)
 }
 
 func currentLangFunc() string {
+	if loc := i18n.RequestLocale(); loc != "" {
+		return loc
+	}
 	return i18n.Locale()
 }
 
 func i18nJSONFunc() string {
-	msgs := i18n.AllMessages(i18n.Locale())
+	loc := i18n.RequestLocale()
+	if loc == "" {
+		loc = i18n.Locale()
+	}
+	msgs := i18n.AllMessages(loc)
 	data, _ := json.Marshal(msgs)
 	return string(data)
 }

@@ -295,8 +295,12 @@ func TestGitLabCreateClient(t *testing.T) {
 				if client.token != tt.token {
 					t.Errorf("token = %q, want %q", client.token, tt.token)
 				}
-				if client.baseURL != tt.baseURL {
-					t.Errorf("baseURL = %q, want %q", client.baseURL, tt.baseURL)
+				expectedBaseURL := tt.baseURL
+				if expectedBaseURL == "" {
+					expectedBaseURL = "https://gitlab.com/api/v4/"
+				}
+				if client.baseURL != expectedBaseURL {
+					t.Errorf("baseURL = %q, want %q", client.baseURL, expectedBaseURL)
 				}
 				if client.webhookSecret != tt.secret {
 					t.Errorf("webhookSecret = %q, want %q", client.webhookSecret, tt.secret)

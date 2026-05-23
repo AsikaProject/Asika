@@ -26,13 +26,20 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 			c.Header("Access-Control-Allow-Origin", "*")
 		} else if origins[origin] {
 			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-CSRF-Token, X-Fingerprint-Token")
 		} else {
 			c.Next()
 			return
 		}
 
+		if !allowAll {
+			c.Header("Access-Control-Allow-Credentials", "true")
+		}
+
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if allowAll {
+			c.Header("Access-Control-Allow-Headers", "Content-Type")
+		}
 		c.Header("Access-Control-Max-Age", "86400")
 
 		if c.Request.Method == "OPTIONS" {

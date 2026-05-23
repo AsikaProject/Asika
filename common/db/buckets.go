@@ -20,7 +20,7 @@ const (
 	BucketNotificationPrefs  = "notification_prefs"
 	BucketNotificationDedup  = "notification_dedup"
 	BucketNotificationDigest = "notification_digest"
-	BucketPendingPRs        = "pending_prs"
+	BucketPendingPRs         = "pending_prs"
 	BucketTeamSpaces         = "team_spaces"
 	BucketSpaceMembers       = "space_members"
 	BucketSpaceSettings      = "space_settings"
@@ -36,4 +36,7 @@ const (
 	BucketAuditLogIndex      = "audit_log_index"
 	BucketWebhookDedup       = "webhook_dedup"
 	BucketSyncLocks          = "sync_locks"
+	BucketSessions           = "sessions"
+	BucketSessionsByUser     = "sessions_by_user"
+	BucketOIDCLinks          = "oidc_links"
 )

@@ -57,10 +57,17 @@ func (s *mongoStorage) DeleteAPIKey(id string) error {
 	return err
 }
 
-func (s *mongoStorage) ListAPIKeys() ([]*models.APIKey, error) {
+func (s *mongoStorage) ListAPIKeys(limit, offset int) ([]*models.APIKey, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cursor, err := s.coll(BucketAPIKeys).Find(ctx, bson.M{})
+	opts := options.Find()
+	if limit > 0 {
+		opts.SetLimit(int64(limit))
+	}
+	if offset > 0 {
+		opts.SetSkip(int64(offset))
+	}
+	cursor, err := s.coll(BucketAPIKeys).Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, err
 	}

@@ -61,6 +61,34 @@ func AuthMiddleware() gin.HandlerFunc {
 		if token != "" {
 			claims, err := auth.ValidateJWT(token)
 			if err == nil {
+				if sid, ok := claims["sid"].(string); ok && sid != "" {
+					session, err := db.GetSession(sid)
+					if err != nil || session == nil {
+						if strings.HasPrefix(path, "/api/") {
+							c.JSON(http.StatusUnauthorized, gin.H{"error": "session revoked", "code": 401})
+						} else {
+							c.Redirect(http.StatusFound, "/login")
+						}
+						c.Abort()
+						return
+					}
+					if session.ExpiresAt.Before(time.Now()) {
+						db.DeleteSession(sid)
+						if strings.HasPrefix(path, "/api/") {
+							c.JSON(http.StatusUnauthorized, gin.H{"error": "session expired", "code": 401})
+						} else {
+							c.Redirect(http.StatusFound, "/login")
+						}
+						c.Abort()
+						return
+					}
+					if lastUpdate, ok := c.Get("last_activity_update_" + sid); !ok || time.Since(lastUpdate.(time.Time)) > time.Minute {
+						if err := db.UpdateSessionActivity(sid); err != nil {
+							slog.Warn("failed to update session activity", "sid", sid, "error", err)
+						}
+						c.Set("last_activity_update_"+sid, time.Now())
+					}
+				}
 				c.Set("username", auth.GetUsername(claims))
 				c.Set("role", auth.GetUserRole(claims))
 				c.Set("claims", claims)
@@ -108,7 +136,7 @@ func LocaleMiddleware() gin.HandlerFunc {
 		} else {
 			locale = i18n.ParseAcceptLanguage(c.GetHeader("Accept-Language"))
 		}
-		i18n.SetLocale(locale)
+		i18n.SetRequestLocale(locale)
 		c.Set("locale", locale)
 		c.Next()
 	}
@@ -183,17 +211,33 @@ func RequireRepoGroupAccess() gin.HandlerFunc {
 			return
 		}
 
-		// API key auth: check AllowedRepoGroups on the key.
-		// If the key has groups defined, use key scope intersected with user scope.
-		apiKeyGroups, _ := c.Get("allowed_repo_groups")
-		var keyAllowedGroups []string
-		if apiKeyGroups != nil {
-			if groups, ok := apiKeyGroups.([]string); ok && len(groups) > 0 {
-				keyAllowedGroups = groups
+		uname := username.(string)
+		isAPIKey := strings.HasPrefix(uname, "apikey:")
+
+		if isAPIKey {
+			apiKeyGroups, _ := c.Get("allowed_repo_groups")
+			var keyAllowedGroups []string
+			if apiKeyGroups != nil {
+				if groups, ok := apiKeyGroups.([]string); ok && len(groups) > 0 {
+					keyAllowedGroups = groups
+				}
 			}
+			if len(keyAllowedGroups) == 0 {
+				c.Next()
+				return
+			}
+			for _, g := range keyAllowedGroups {
+				if g == repoGroup {
+					c.Next()
+					return
+				}
+			}
+			c.JSON(http.StatusForbidden, gin.H{"error": "权限不够: 无权访问仓库组 " + repoGroup, "code": 403})
+			c.Abort()
+			return
 		}
 
-		data, err := db.Get(db.BucketUsers, username.(string))
+		data, err := db.Get(db.BucketUsers, uname)
 		if err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "code": 403})
 			c.Abort()
@@ -206,31 +250,12 @@ func RequireRepoGroupAccess() gin.HandlerFunc {
 			return
 		}
 
-		userGroups := user.AllowedRepoGroups
-
-		allowedGroups := userGroups
-		if len(keyAllowedGroups) > 0 && len(userGroups) > 0 {
-			groupSet := make(map[string]bool, len(userGroups))
-			for _, g := range userGroups {
-				groupSet[g] = true
-			}
-			var intersected []string
-			for _, g := range keyAllowedGroups {
-				if groupSet[g] {
-					intersected = append(intersected, g)
-				}
-			}
-			allowedGroups = intersected
-		} else if len(keyAllowedGroups) > 0 {
-			allowedGroups = keyAllowedGroups
-		}
-
-		if len(allowedGroups) == 0 {
+		if len(user.AllowedRepoGroups) == 0 {
 			c.Next()
 			return
 		}
 
-		for _, g := range allowedGroups {
+		for _, g := range user.AllowedRepoGroups {
 			if g == repoGroup {
 				c.Next()
 				return

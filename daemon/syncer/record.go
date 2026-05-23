@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,6 +26,7 @@ func (s *Syncer) SyncBranchDeletion(repoGroup, sourcePlatform, branch string) {
 	ctx := context.Background()
 	targets := s.getTargetPlatforms(group, sourcePlatform)
 
+	var failedTargets []string
 	for _, target := range targets {
 		client := s.clients[platforms.PlatformType(target.name)]
 		if client == nil {
@@ -52,11 +54,16 @@ func (s *Syncer) SyncBranchDeletion(repoGroup, sourcePlatform, branch string) {
 				break
 			}
 			slog.Info("branch deleted", "platform", target.name, "branch", branch)
-			return
+			lastErr = nil
+			break
 		}
 		if lastErr != nil {
 			slog.Error("failed to delete branch", "platform", target.name, "branch", branch, "error", lastErr)
+			failedTargets = append(failedTargets, target.name)
 		}
+	}
+	if len(failedTargets) > 0 {
+		slog.Error("branch deletion failed on some targets", "branch", branch, "failed_targets", strings.Join(failedTargets, ", "))
 	}
 }
 

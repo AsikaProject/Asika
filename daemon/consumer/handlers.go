@@ -23,7 +23,9 @@ func (c *Consumer) handlePROpened(event events.Event) {
 	if pr.ID == "" {
 		pr.ID = uuid.New().String()
 	}
-	pr.CreatedAt = time.Now()
+	if pr.CreatedAt.IsZero() {
+		pr.CreatedAt = time.Now()
+	}
 	pr.UpdatedAt = time.Now()
 	pr.Events = append(pr.Events, models.PREvent{
 		Timestamp: time.Now(),

@@ -188,15 +188,18 @@ func PerformWebUpdate(c *gin.Context) {
 		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to download checksum: %s", err.Error())})
 		return
 	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("checksum download failed: HTTP %d", resp.StatusCode)})
+		return
+	}
 	f, err := os.Create(checksumPath)
 	if err != nil {
 		sendJSONEvent("error", gin.H{"error": err.Error()})
-		resp.Body.Close()
 		return
 	}
-	written, err := io.Copy(f, resp.Body)
+	written, err := io.Copy(f, io.LimitReader(resp.Body, 4096))
 	f.Close()
-	resp.Body.Close()
 	if err != nil || written == 0 {
 		sendJSONEvent("error", gin.H{"error": "failed to download checksum file"})
 		return

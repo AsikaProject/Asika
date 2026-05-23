@@ -101,7 +101,7 @@ func (s *Syncer) pushWithRetry(gitRepo *git.Repository, remoteName, branch, toke
 			slog.Info("retrying push", "attempt", attempt+1, "max", syncMaxRetries, "delay", delay, "target", targetName)
 			time.Sleep(delay)
 		}
-		if err := gitutil.Push(gitRepo, remoteName, branch, token); err != nil {
+		if err := gitutil.PushWithForce(gitRepo, remoteName, branch, token, true); err != nil {
 			lastErr = err
 			if isTransientError(err) {
 				slog.Warn("transient push error, retrying", "attempt", attempt+1, "target", targetName, "error", err)

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="{{currentLang}}">
+<head>
+{{template "pwa"}}
+<title>{{t "account.title"}} - Asika</title>
+{{template "styles"}}
+<style>
+    .account-section { margin-bottom: 24px; }
+    .account-section h3 { margin-bottom: 12px; font-size: 16px; color: var(--text-secondary); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .session-item { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--border); gap: 12px; }
+    .session-item:last-child { border-bottom: none; }
+    .session-info { flex: 1; min-width: 0; }
+    .session-meta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+    .session-current { color: var(--success); font-weight: 600; font-size: 12px; }
+    .totp-status { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .totp-qr { text-align: center; margin: 16px 0; }
+    .totp-qr img { max-width: 200px; }
+    .totp-secret { font-family: monospace; background: var(--bg); padding: 8px 12px; border-radius: 4px; word-break: break-all; margin: 8px 0; }
+    .backup-codes { font-family: monospace; background: var(--bg); padding: 12px; border-radius: 4px; margin: 8px 0; }
+    .backup-codes code { display: inline-block; margin: 2px 8px; }
+    .oidc-link-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .oidc-link-item:last-child { border-bottom: none; }
+    .warning-box { color: #856404; background: #fff3cd; padding: 10px; border-radius: 4px; margin: 8px 0; }
+    [data-theme="dark"] .warning-box { background: #3d3a1a; color: #ffc107; }
+    @media (max-width: 480px) {
+        .session-item { flex-direction: column; align-items: flex-start; }
+    }
+</style>
+</head>
+<body>
+{{template "header" .}}
+<div class="container">
+    <div class="card account-section">
+        <h3>{{t "account.totp"}}</h3>
+        <div id="totpContent"><p>{{t "common.loading"}}</p></div>
+    </div>
+
+    <div class="card account-section">
+        <h3>{{t "account.sessions"}}</h3>
+        <div style="margin-bottom: 12px;">
+            <button class="btn btn-danger btn-sm" onclick="revokeAllOthers()">{{t "account.revoke_others"}}</button>
+        </div>
+        <div id="sessionsContent"><p>{{t "common.loading"}}</p></div>
+    </div>
+
+    <div class="card account-section">
+        <h3>{{t "account.oidc_links"}}</h3>
+        <div id="oidcContent"><p>{{t "common.loading"}}</p></div>
+    </div>
+</div>
+{{template "scripts"}}
+{{template "client_auth"}}
+<script>
+function loadAccount() {
+    loadTOTPStatus();
+    loadSessions();
+    loadOIDCLinks();
+}
+
+async function loadTOTPStatus() {
+    try {
+        const resp = await apiRequest('/api/v1/auth/2fa');
+        const data = await resp.json();
+        const container = document.getElementById('totpContent');
+        if (data.required) {
+            container.innerHTML = '<div class="warning-box">{{t "account.totp_required"}}</div>';
+        }
+        if (data.enabled || data.required) {
+            container.innerHTML += '<div class="totp-status"><span>{{t "account.totp_enabled"}}</span> <button class="btn btn-danger btn-sm" onclick="disableTOTP()">{{t "account.totp_disable"}}</button></div>';
+            container.innerHTML += '<button class="btn btn-secondary btn-sm" onclick="regenerateCodes()">{{t "account.regenerate_codes"}}</button>';
+        } else {
+            container.innerHTML = '<p>{{t "account.totp_disabled"}}</p><button class="btn btn-primary" onclick="enrollTOTP()">{{t "account.totp_enable"}}</button>';
+        }
+    } catch(e) {
+        document.getElementById('totpContent').innerHTML = '<p class="error">Error loading 2FA status</p>';
+    }
+}
+
+async function enrollTOTP() {
+    try {
+        const resp = await apiRequest('/api/v1/auth/2fa/enroll', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await resp.json();
+        if (data.secret) {
+            const container = document.getElementById('totpContent');
+            container.innerHTML = '<p>{{t "account.totp_scan_qr"}}</p>';
+            container.innerHTML += '<div class="totp-qr"><canvas id="totpQrCanvas" width="200" height="200"></canvas></div>';
+            container.innerHTML += '<p>{{t "account.totp_secret"}}</p><div class="totp-secret">' + escapeHtml(data.secret) + '</div>';
+            container.innerHTML += '<p>{{t "account.totp_enter_code"}}</p>';
+            container.innerHTML += '<input type="text" id="totpCode" placeholder="000000" maxlength="6" style="width: 120px; text-align: center; font-size: 18px; letter-spacing: 4px;">';
+            container.innerHTML += '<br><button class="btn btn-primary" style="margin-top: 8px;" onclick="verifyTOTP()">{{t "account.totp_verify"}}</button>';
+            generateQRCode('totpQrCanvas', data.url);
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function verifyTOTP() {
+    const code = document.getElementById('totpCode').value;
+    if (!code || code.length !== 6) {
+        alert('Please enter a 6-digit code');
+        return;
+    }
+    try {
+        const resp = await apiRequest('/api/v1/auth/2fa/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code }) });
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert(err.error || 'Verification failed');
+            return;
+        }
+        const data = await resp.json();
+        if (data.backup_codes) {
+            let codesHtml = '<p><strong>{{t "account.backup_codes"}}</strong></p><p class="warning-box">{{t "account.backup_codes_warning"}}</p><div class="backup-codes">';
+            data.backup_codes.forEach(function(c) { codesHtml += '<code>' + escapeHtml(c) + '</code>'; });
+            codesHtml += '</div>';
+            document.getElementById('totpContent').innerHTML = '<p class="success">{{t "account.totp_enabled"}}</p>' + codesHtml;
+        } else {
+            loadTOTPStatus();
+        }
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function disableTOTP() {
+    const password = prompt('{{t "account.password_required"}}');
+    if (!password) return;
+    try {
+        const resp = await apiRequest('/api/v1/auth/2fa/disable', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: password }) });
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert(err.error || 'Failed to disable 2FA');
+            return;
+        }
+        loadTOTPStatus();
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function regenerateCodes() {
+    const password = prompt('{{t "account.password_required"}}');
+    if (!password) return;
+    try {
+        const resp = await apiRequest('/api/v1/auth/2fa/codes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: password }) });
+        if (!resp.ok) {
+            const err = await resp.json();
+            alert(err.error || 'Failed to regenerate codes');
+            return;
+        }
+        const data = await resp.json();
+        let codesHtml = '<p><strong>{{t "account.backup_codes"}}</strong></p><p class="warning-box">{{t "account.backup_codes_warning"}}</p><div class="backup-codes">';
+        data.backup_codes.forEach(function(c) { codesHtml += '<code>' + escapeHtml(c) + '</code>'; });
+        codesHtml += '</div>';
+        document.getElementById('totpContent').innerHTML = '<p class="success">{{t "account.totp_enabled"}}</p>' + codesHtml;
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function loadSessions() {
+    try {
+        const resp = await apiRequest('/api/v1/auth/sessions');
+        const data = await resp.json();
+        const container = document.getElementById('sessionsContent');
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p>{{t "account.no_sessions"}}</p>';
+            return;
+        }
+        let html = '';
+        data.forEach(function(s) {
+            html += '<div class="session-item">';
+            html += '<div class="session-info">';
+            html += '<div>' + escapeHtml(s.user_agent) + (s.is_current ? ' <span class="session-current">({{t "account.current"}})</span>' : '') + '</div>';
+            html += '<div class="session-meta">IP: ' + escapeHtml(s.ip_address) + ' | {{t "account.last_used"}}: ' + escapeHtml(s.last_used_at) + ' | {{t "account.expires"}}: ' + escapeHtml(s.expires_at) + '</div>';
+            html += '</div>';
+            if (!s.is_current) {
+                html += '<button class="btn btn-danger btn-sm" onclick="revokeSession(\'' + escapeJs(s.id) + '\')">{{t "account.revoke"}}</button>';
+            }
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    } catch(e) {
+        document.getElementById('sessionsContent').innerHTML = '<p class="error">Error loading sessions</p>';
+    }
+}
+
+async function revokeSession(id) {
+    if (!confirm('{{t "account.confirm_revoke"}}')) return;
+    try {
+        await apiRequest('/api/v1/auth/sessions/' + encodeURIComponent(id), { method: 'DELETE' });
+        loadSessions();
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function revokeAllOthers() {
+    if (!confirm('{{t "account.confirm_revoke_others"}}')) return;
+    try {
+        const resp = await apiRequest('/api/v1/auth/sessions', { method: 'DELETE' });
+        const data = await resp.json();
+        alert((data.message || 'Done') + ' (' + (data.count || 0) + ')');
+        loadSessions();
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function loadOIDCLinks() {
+    try {
+        const resp = await apiRequest('/api/v1/auth/oidc/links');
+        const data = await resp.json();
+        const container = document.getElementById('oidcContent');
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p>{{t "account.no_oidc_links"}}</p>';
+            return;
+        }
+        let html = '';
+        data.forEach(function(l) {
+            html += '<div class="oidc-link-item">';
+            html += '<div><strong>' + escapeHtml(l.provider) + '</strong> <span style="color:var(--text-secondary);font-size:12px;">' + escapeHtml(l.subject) + '</span></div>';
+            html += '<button class="btn btn-danger btn-sm" onclick="unlinkOIDC(\'' + escapeJs(l.provider) + '\', \'' + escapeJs(l.subject) + '\')">{{t "account.unlink"}}</button>';
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    } catch(e) {
+        document.getElementById('oidcContent').innerHTML = '<p class="error">Error loading OIDC links</p>';
+    }
+}
+
+async function unlinkOIDC(provider, subject) {
+    if (!confirm('{{t "account.confirm_unlink"}}')) return;
+    try {
+        await apiRequest('/api/v1/auth/oidc/link?provider=' + encodeURIComponent(provider) + '&subject=' + encodeURIComponent(subject), { method: 'DELETE' });
+        loadOIDCLinks();
+    } catch(e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+function generateQRCode(canvasId, text) {
+    var canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+
+    function getQRModules(text) {
+        var mode = 0;
+        var bytes = [];
+        for (var i = 0; i < text.length; i++) {
+            var c = text.charCodeAt(i);
+            if (c < 128) bytes.push(c);
+            else { bytes.push(0x80 | (c >> 6)); bytes.push(0x80 | (c & 0x3f)); }
+        }
+
+        var version = 1;
+        while (version <= 9) {
+            var capacity = [26,44,70,100,134,172,196,242,292,346,404,466,532,581,655,733,815,901,991,1085][version] || 0;
+            if (capacity >= bytes.length + 3) break;
+            version++;
+        }
+        var size = 17 + version * 4;
+
+        var grid = [];
+        for (var i = 0; i < size * size; i++) grid.push(0);
+        function set(r, c, v) { grid[r * size + c] = v; }
+        function get(r, c) { return (r < 0 || r >= size || c < 0 || c >= size) ? 0 : grid[r * size + c]; }
+
+        function drawFinder(r, c) {
+            for (var dr = -1; dr <= 7; dr++) for (var dc = -1; dc <= 7; dc++) {
+                var rr = r + dr, cc = c + dc;
+                if (rr < 0 || rr >= size || cc < 0 || cc >= size) continue;
+                var v = 0;
+                if (dr >= 0 && dr <= 6 && dc >= 0 && dc <= 6) {
+                    if (dr === 0 || dr === 6 || dc === 0 || dc === 6) v = 1;
+                    else if (dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4) v = 1;
+                }
+                set(rr, cc, v);
+            }
+        }
+        drawFinder(0, 0); drawFinder(0, size - 7); drawFinder(size - 7, 0);
+
+        for (var i = 8; i < size - 8; i++) {
+            set(6, i, i % 2 === 0 ? 1 : 0);
+            set(i, 6, i % 2 === 0 ? 1 : 0);
+        }
+
+        set(size - 8, 8, 1);
+
+        var bits = [];
+        bits.push(0,1,0,0);
+        var bc = version < 10 ? 8 : 16;
+        for (var i = bc - 1; i >= 0; i--) bits.push((bytes.length >> i) & 1);
+        for (var i = 0; i < bytes.length; i++) {
+            var b = bytes[i];
+            for (var j = 7; j >= 0; j--) bits.push((b >> j) & 1);
+        }
+        var padBytes = [0xEC, 0x11];
+        for (var p = 0; p < 2 && bits.length < (size * size * 2); p++) {
+            for (var i = 0; i < 8; i++) bits.push((padBytes[p] >> (7 - i)) & 1);
+        }
+
+        var idx = 0;
+        var r = size - 1, c = size - 1, dir = -1;
+        function nextPos() {
+            if (dir === -1) {
+                c--; if (c < 0) { c = 0; r--; dir = 1; }
+                if (r === 6) r--;
+            } else {
+                c++; if (c >= size) { c = size - 1; r--; dir = -1; }
+                if (r === 6) r--;
+            }
+        }
+        while (r >= 0 && idx < bits.length) {
+            while (r >= 0 && get(r, c) !== 0) nextPos();
+            if (r < 0) break;
+            set(r, c, idx < bits.length ? bits[idx] * 2 + 1 : 1);
+            idx++;
+            while (r >= 0 && get(r, c) !== 0) nextPos();
+            if (r < 0) break;
+            set(r, c, idx < bits.length ? bits[idx] * 2 + 1 : 1);
+            idx++;
+        }
+
+        var mask = 0;
+        var bestScore = -1;
+        for (var m = 0; m < 4; m++) {
+            var testGrid = grid.slice();
+            function tg(r, c) { return (r < 0 || r >= size || c < 0 || c >= size) ? 0 : testGrid[r * size + c]; }
+            for (var rr = 0; rr < size; rr++) {
+                for (var cc = 0; cc < size; cc++) {
+                    if (tg(rr, cc) > 1) continue;
+                    var doMask = false;
+                    if (m === 0) doMask = (rr + cc) % 2 === 0;
+                    else if (m === 1) doMask = rr % 2 === 0;
+                    else if (m === 2) doMask = cc % 3 === 0;
+                    else doMask = (rr + cc) % 3 === 0;
+                    if (doMask) testGrid[rr * size + cc] = tg(rr, cc) ^ 1;
+                }
+            }
+            var score = 0;
+            for (var rr = 0; rr < size - 1; rr++) {
+                for (var cc = 0; cc < size - 1; cc++) {
+                    var v = tg(rr, cc) & 1;
+                    if (v === (tg(rr, cc+1) & 1) && v === (tg(rr+1, cc) & 1) && v === (tg(rr+1, cc+1) & 1)) score += 3;
+                }
+            }
+            if (score > bestScore) { bestScore = score; mask = m; }
+        }
+
+        for (var rr = 0; rr < size; rr++) {
+            for (var cc = 0; cc < size; cc++) {
+                if (get(rr, cc) > 1) continue;
+                var doMask = false;
+                if (mask === 0) doMask = (rr + cc) % 2 === 0;
+                else if (mask === 1) doMask = rr % 2 === 0;
+                else if (mask === 2) doMask = cc % 3 === 0;
+                else doMask = (rr + cc) % 3 === 0;
+                if (doMask) set(rr, cc, get(rr, cc) ^ 1);
+            }
+        }
+
+        var result = [];
+        for (var rr = 0; rr < size; rr++) {
+            var row = [];
+            for (var cc = 0; cc < size; cc++) row.push(get(rr, cc) & 1);
+            result.push(row);
+        }
+        return result;
+    }
+
+    var modules = getQRModules(text);
+    var numModules = modules.length;
+    var canvasSize = 200;
+    var cellSize = Math.floor(canvasSize / (numModules + 8));
+    var quietZone = Math.floor((canvasSize - cellSize * numModules) / 2);
+
+    canvas.width = canvasSize;
+    canvas.height = canvasSize;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasSize, canvasSize);
+    ctx.fillStyle = '#000000';
+
+    for (var r = 0; r < numModules; r++) {
+        for (var c = 0; c < numModules; c++) {
+            if (modules[r][c]) {
+                ctx.fillRect(quietZone + c * cellSize, quietZone + r * cellSize, cellSize, cellSize);
+            }
+        }
+    }
+}
+
+loadAccount();
+</script>
+{{template "pwa_sw"}}
+</body>
+</html>

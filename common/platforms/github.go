@@ -532,7 +532,7 @@ func (c *GitHubClient) RequestReview(ctx context.Context, owner, repo string, nu
 
 // RevertPR creates a revert PR for a merged PR on GitHub.
 func (c *GitHubClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/pulls/%d/revert", owner, repo, number)
+	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/revert", c.client.BaseURL.String(), owner, repo, number)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create revert request: %w", err)
@@ -600,5 +600,5 @@ func (c *GitHubClient) HasWritePermission(ctx context.Context, owner, repo, user
 		return false, fmt.Errorf("failed to get permission level for %s: %w", username, err)
 	}
 	p := perm.GetPermission()
-	return p == "admin" || p == "maintain" || p == "push" || p == "triage", nil
+	return p == "admin" || p == "maintain" || p == "push", nil
 }

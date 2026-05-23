@@ -119,10 +119,10 @@
         document.getElementById('performUpdateBtn').disabled = true;
         document.getElementById('checkUpdateBtn').disabled = true;
 
-        const token = getToken();
         try {
             const resp = await fetch('/api/v1/self-update/run', {
-                headers: { 'Authorization': 'Bearer ' + token }
+                method: 'POST',
+                credentials: 'same-origin'
             });
             if (!resp.ok) {
                 const d = await resp.json();

@@ -57,11 +57,7 @@ func (c *Checker) IsReadyToMerge(pr *models.PRRecord) (bool, error) {
 
 	mq := group.MergeQueue
 
-	if pr.HasConflict && mq.Expression == "" {
-		slog.Info("PR has merge conflicts, skipping enqueue", "pr_id", pr.ID, "title", pr.Title)
-		return false, nil
-	}
-	if pr.HasConflict && mq.Expression != "" && !mq.AllowExpressionOverrideCI {
+	if pr.HasConflict {
 		slog.Info("PR has merge conflicts, hard gate blocking", "pr_id", pr.ID, "title", pr.Title)
 		return false, nil
 	}
@@ -158,18 +154,14 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 
 	mq := group.MergeQueue
 
-	if pr.HasConflict && mq.Expression == "" {
+	if pr.HasConflict {
 		slog.Info("PR has merge conflicts, attempting auto-rebase", "pr_id", pr.ID, "title", pr.Title)
 		if c.tryAutoRebase(ctx, pr, group) {
 			pr.HasConflict = false
 		} else {
-			slog.Info("PR has merge conflicts, skipping", "pr_id", pr.ID, "title", pr.Title)
+			slog.Info("PR has merge conflicts, hard gate blocking", "pr_id", pr.ID, "title", pr.Title)
 			return false, nil
 		}
-	}
-	if pr.HasConflict && mq.Expression != "" && !mq.AllowExpressionOverrideCI {
-		slog.Info("PR has merge conflicts, hard gate blocking", "pr_id", pr.ID, "title", pr.Title)
-		return false, nil
 	}
 
 	approvalStatus, err := c.fetchApprovals(ctx, pr, group)
@@ -322,8 +314,7 @@ func (c *Checker) filterWritePermission(ctx context.Context, pr *models.PRRecord
 	for _, username := range approvers {
 		hasWrite, err := client.HasWritePermission(ctx, owner, repo, username)
 		if err != nil {
-			slog.Warn("failed to check write permission, keeping approver", "username", username, "error", err)
-			filtered = append(filtered, username)
+			slog.Warn("failed to check write permission, skipping approver", "username", username, "error", err)
 			continue
 		}
 		if hasWrite {

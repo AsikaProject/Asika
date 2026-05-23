@@ -15,6 +15,7 @@ import (
 	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
+	"asika/common/notifier"
 	"asika/daemon/hooks"
 )
 
@@ -389,13 +390,17 @@ func startAutoRollbackWatch(configPath string, rollbackVersion int) {
 }
 
 func VerifyNotifiers() bool {
-	if len(globalNotifiers) == 0 {
+	globalNotifiersMu.RLock()
+	notifiers := make([]notifier.Notifier, len(globalNotifiers))
+	copy(notifiers, globalNotifiers)
+	globalNotifiersMu.RUnlock()
+	if len(notifiers) == 0 {
 		return true
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	okCount := 0
-	for _, n := range globalNotifiers {
+	for _, n := range notifiers {
 		if err := n.Send(ctx, "[Asika] Config Health Check", ""); err == nil {
 			okCount++
 		}
@@ -408,9 +413,11 @@ func rollbackAndReload(configPath string, version int) {
 		slog.Error("auto-rollback failed", "error", err)
 		return
 	}
-	if _, err := config.Load(configPath); err != nil {
+	loadedCfg, err := config.Load(configPath)
+	if err != nil {
 		slog.Error("auto-rollback reload failed", "error", err)
 		return
 	}
+	config.Store(loadedCfg)
 	slog.Info("auto-rollback completed", "version", version)
 }
