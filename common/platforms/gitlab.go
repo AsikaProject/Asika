@@ -58,7 +58,7 @@ func NewGitLabClient(token string, baseURL string, webhookSecret string) *GitLab
 // GetPR retrieves a merge request
 func (c *GitLabClient) GetPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
 	project := owner + "/" + repo
-	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil)
+	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MR: %w", err)
 	}
@@ -77,7 +77,7 @@ func (c *GitLabClient) ListPRs(ctx context.Context, owner, repo string, state st
 
 	var result []*models.PRRecord
 	for {
-		mrs, resp, err := c.client.MergeRequests.ListProjectMergeRequests(project, opts)
+		mrs, resp, err := c.client.MergeRequests.ListProjectMergeRequests(project, opts, gitlab.WithContext(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("failed to list MRs: %w", err)
 		}
@@ -98,7 +98,7 @@ func (c *GitLabClient) ListPRs(ctx context.Context, owner, repo string, state st
 // ApprovePR approves a merge request
 func (c *GitLabClient) ApprovePR(ctx context.Context, owner, repo string, number int) error {
 	project := owner + "/" + repo
-	_, _, err := c.client.MergeRequestApprovals.ApproveMergeRequest(project, int64(number), &gitlab.ApproveMergeRequestOptions{})
+	_, _, err := c.client.MergeRequestApprovals.ApproveMergeRequest(project, int64(number), &gitlab.ApproveMergeRequestOptions{}, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to approve MR: %w", err)
 	}
@@ -116,7 +116,7 @@ func (c *GitLabClient) MergePR(ctx context.Context, owner, repo string, number i
 		opts.Squash = boolPtr(true)
 	}
 
-	_, _, err := c.client.MergeRequests.AcceptMergeRequest(project, int64(number), opts)
+	_, _, err := c.client.MergeRequests.AcceptMergeRequest(project, int64(number), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to merge MR: %w", err)
 	}
@@ -128,7 +128,7 @@ func (c *GitLabClient) ClosePR(ctx context.Context, owner, repo string, number i
 	project := owner + "/" + repo
 	_, _, err := c.client.MergeRequests.UpdateMergeRequest(project, int64(number), &gitlab.UpdateMergeRequestOptions{
 		StateEvent: strPtr("close"),
-	})
+	}, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to close MR: %w", err)
 	}
@@ -140,7 +140,7 @@ func (c *GitLabClient) ReopenPR(ctx context.Context, owner, repo string, number 
 	project := owner + "/" + repo
 	_, _, err := c.client.MergeRequests.UpdateMergeRequest(project, int64(number), &gitlab.UpdateMergeRequestOptions{
 		StateEvent: strPtr("reopen"),
-	})
+	}, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to reopen MR: %w", err)
 	}
@@ -152,7 +152,7 @@ func (c *GitLabClient) CommentPR(ctx context.Context, owner, repo string, number
 	project := owner + "/" + repo
 	_, _, err := c.client.Notes.CreateMergeRequestNote(project, int64(number), &gitlab.CreateMergeRequestNoteOptions{
 		Body: strPtr(body),
-	})
+	}, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to comment on MR: %w", err)
 	}
@@ -168,7 +168,7 @@ func (c *GitLabClient) AddLabel(ctx context.Context, owner, repo string, number 
 	if err := c.CreateLabel(ctx, owner, repo, label, color, ""); err != nil {
 		return err
 	}
-	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil)
+	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to get MR: %w", err)
 	}
@@ -176,7 +176,7 @@ func (c *GitLabClient) AddLabel(ctx context.Context, owner, repo string, number 
 	labels := gitlab.LabelOptions(append(mr.Labels, label))
 	_, _, err = c.client.MergeRequests.UpdateMergeRequest(project, int64(number), &gitlab.UpdateMergeRequestOptions{
 		Labels: &labels,
-	})
+	}, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to add label: %w", err)
 	}
@@ -186,7 +186,7 @@ func (c *GitLabClient) AddLabel(ctx context.Context, owner, repo string, number 
 // RemoveLabel removes a label from a merge request
 func (c *GitLabClient) RemoveLabel(ctx context.Context, owner, repo string, number int, label string) error {
 	project := owner + "/" + repo
-	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil)
+	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to get MR: %w", err)
 	}
@@ -201,7 +201,7 @@ func (c *GitLabClient) RemoveLabel(ctx context.Context, owner, repo string, numb
 	labelOpts := gitlab.LabelOptions(labels)
 	_, _, err = c.client.MergeRequests.UpdateMergeRequest(project, int64(number), &gitlab.UpdateMergeRequestOptions{
 		Labels: &labelOpts,
-	})
+	}, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to remove label: %w", err)
 	}
@@ -215,7 +215,7 @@ func (c *GitLabClient) CreateLabel(ctx context.Context, owner, repo, name, color
 		Color:       &color,
 		Description: &description,
 	}
-	_, _, err := c.client.Labels.CreateLabel(project, opts)
+	_, _, err := c.client.Labels.CreateLabel(project, opts, gitlab.WithContext(ctx))
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "409") {
 			return nil
@@ -228,7 +228,7 @@ func (c *GitLabClient) CreateLabel(ctx context.Context, owner, repo, name, color
 // GetBranch checks if a branch exists
 func (c *GitLabClient) GetBranch(ctx context.Context, owner, repo, branch string) (bool, error) {
 	project := owner + "/" + repo
-	_, _, err := c.client.Branches.GetBranch(project, branch)
+	_, _, err := c.client.Branches.GetBranch(project, branch, gitlab.WithContext(ctx))
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			return false, nil
@@ -246,7 +246,7 @@ func (c *GitLabClient) ListBranches(ctx context.Context, owner, repo string) ([]
 	}
 	var branches []string
 	for {
-		branchList, resp, err := c.client.Branches.ListBranches(project, opts)
+		branchList, resp, err := c.client.Branches.ListBranches(project, opts, gitlab.WithContext(ctx))
 		if err != nil {
 			return nil, fmt.Errorf("failed to list branches: %w", err)
 		}
@@ -264,7 +264,7 @@ func (c *GitLabClient) ListBranches(ctx context.Context, owner, repo string) ([]
 // DeleteBranch deletes a branch
 func (c *GitLabClient) DeleteBranch(ctx context.Context, owner, repo, branch string) error {
 	project := owner + "/" + repo
-	_, err := c.client.Branches.DeleteBranch(project, branch)
+	_, err := c.client.Branches.DeleteBranch(project, branch, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to delete branch: %w", err)
 	}
@@ -274,7 +274,7 @@ func (c *GitLabClient) DeleteBranch(ctx context.Context, owner, repo, branch str
 // GetDefaultBranch gets the default branch
 func (c *GitLabClient) GetDefaultBranch(ctx context.Context, owner, repo string) (string, error) {
 	project := owner + "/" + repo
-	p, _, err := c.client.Projects.GetProject(project, nil)
+	p, _, err := c.client.Projects.GetProject(project, nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("failed to get project: %w", err)
 	}
@@ -286,7 +286,7 @@ func (c *GitLabClient) GetCIStatus(ctx context.Context, owner, repo string, comm
 	project := owner + "/" + repo
 	pipelines, _, err := c.client.Pipelines.ListProjectPipelines(project, &gitlab.ListProjectPipelinesOptions{
 		SHA: strPtr(commitSHA),
-	})
+	}, gitlab.WithContext(ctx))
 	if err != nil || len(pipelines) == 0 {
 		return "none", nil
 	}
@@ -306,7 +306,7 @@ func (c *GitLabClient) GetCIStatus(ctx context.Context, owner, repo string, comm
 // GetDefaultMergeMethod gets the default merge method
 func (c *GitLabClient) GetDefaultMergeMethod(ctx context.Context, owner, repo string) (string, error) {
 	project := owner + "/" + repo
-	p, _, err := c.client.Projects.GetProject(project, nil)
+	p, _, err := c.client.Projects.GetProject(project, nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return "", fmt.Errorf("failed to get project: %w", err)
 	}
@@ -331,7 +331,7 @@ func (c *GitLabClient) HasMultipleMergeMethods(ctx context.Context, owner, repo 
 // approval state, so we replay the ApprovedBy list directly.
 func (c *GitLabClient) GetApprovals(ctx context.Context, owner, repo string, number int) (*models.ApprovalStatus, error) {
 	project := owner + "/" + repo
-	approvals, _, err := c.client.MergeRequests.GetMergeRequestApprovals(project, int64(number))
+	approvals, _, err := c.client.MergeRequests.GetMergeRequestApprovals(project, int64(number), gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get approvals: %w", err)
 	}
@@ -343,7 +343,7 @@ func (c *GitLabClient) GetApprovals(ctx context.Context, owner, repo string, num
 		}
 	}
 
-	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil)
+	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil, gitlab.WithContext(ctx))
 	if err == nil && mr != nil {
 		for _, r := range mr.Assignees {
 			delete(approverSet, r.Username)
@@ -383,7 +383,7 @@ func (c *GitLabClient) VerifyWebhookSignature(body []byte, signature string) boo
 // GetPRCommits gets the commits in a MR
 func (c *GitLabClient) GetPRCommits(ctx context.Context, owner, repo string, number int) ([]string, error) {
 	project := owner + "/" + repo
-	commits, _, err := c.client.MergeRequests.GetMergeRequestCommits(project, int64(number), nil)
+	commits, _, err := c.client.MergeRequests.GetMergeRequestCommits(project, int64(number), nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MR commits: %w", err)
 	}
@@ -398,7 +398,7 @@ func (c *GitLabClient) GetPRCommits(ctx context.Context, owner, repo string, num
 // GetPRBranchInfo gets branch metadata for rebase operations
 func (c *GitLabClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {
 	project := owner + "/" + repo
-	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil)
+	mr, _, err := c.client.MergeRequests.GetMergeRequest(project, int64(number), nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MR: %w", err)
 	}
@@ -416,7 +416,7 @@ func (c *GitLabClient) GetPRBranchInfo(ctx context.Context, owner, repo string, 
 // GetDiffFiles gets the changed files in a MR via ListMergeRequestDiffs
 func (c *GitLabClient) GetDiffFiles(ctx context.Context, owner, repo string, number int) ([]string, error) {
 	project := owner + "/" + repo
-	diffs, _, err := c.client.MergeRequests.ListMergeRequestDiffs(project, int64(number), nil)
+	diffs, _, err := c.client.MergeRequests.ListMergeRequestDiffs(project, int64(number), nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MR diffs: %w", err)
 	}
@@ -436,7 +436,7 @@ func (c *GitLabClient) GetDiffFiles(ctx context.Context, owner, repo string, num
 // GetPRDiff gets the diff content for each file in a MR
 func (c *GitLabClient) GetPRDiff(ctx context.Context, owner, repo string, number int) ([]models.DiffFile, error) {
 	project := owner + "/" + repo
-	diffs, _, err := c.client.MergeRequests.ListMergeRequestDiffs(project, int64(number), nil)
+	diffs, _, err := c.client.MergeRequests.ListMergeRequestDiffs(project, int64(number), nil, gitlab.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MR diffs: %w", err)
 	}
@@ -480,7 +480,7 @@ func (c *GitLabClient) CommentPRLine(ctx context.Context, owner, repo string, nu
 		CommitID: &comment.CommitSHA,
 		Position: position,
 	}
-	_, _, err := c.client.Discussions.CreateMergeRequestDiscussion(project, int64(number), opts)
+	_, _, err := c.client.Discussions.CreateMergeRequestDiscussion(project, int64(number), opts, gitlab.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to create inline comment: %w", err)
 	}
@@ -492,7 +492,7 @@ func (c *GitLabClient) RequestReview(ctx context.Context, owner, repo string, nu
 	note := fmt.Sprintf("🔍 Review requested from: %s", strings.Join(reviewers, ", "))
 	_, _, err := c.client.Notes.CreateMergeRequestNote(owner+"/"+repo, int64(number), &gitlab.CreateMergeRequestNoteOptions{
 		Body: &note,
-	})
+	}, gitlab.WithContext(ctx))
 	return err
 }
 
@@ -550,7 +550,7 @@ func (c *GitLabClient) HasWritePermission(ctx context.Context, owner, repo, user
 	project := owner + "/" + repo
 	members, _, err := c.client.ProjectMembers.ListProjectMembers(project, &gitlab.ListProjectMembersOptions{
 		Query: &username,
-	})
+	}, gitlab.WithContext(ctx))
 	if err != nil {
 		return false, fmt.Errorf("failed to list project members: %w", err)
 	}

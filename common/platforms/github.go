@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/google/go-github/v69/github"
@@ -47,27 +49,40 @@ func (c *GitHubClient) GetPR(ctx context.Context, owner, repo string, number int
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PR: %w", err)
 	}
+	author := ""
+	if pr.GetUser() != nil {
+		author = pr.GetUser().GetLogin()
+	}
+	createdAt := pr.GetCreatedAt().Time
+	updatedAt := pr.GetUpdatedAt().Time
+	var branchInfo *models.PRBranchInfo
+	if pr.GetHead() != nil || pr.GetBase() != nil {
+		branchInfo = &models.PRBranchInfo{}
+		if pr.GetHead() != nil {
+			branchInfo.HeadBranch = pr.GetHead().GetRef()
+			branchInfo.HeadSHA = pr.GetHead().GetSHA()
+		}
+		if pr.GetBase() != nil {
+			branchInfo.BaseBranch = pr.GetBase().GetRef()
+		}
+	}
 
 	record := &models.PRRecord{
 		ID:             fmt.Sprintf("%d", pr.GetID()),
 		Platform:       "github",
 		PRNumber:       pr.GetNumber(),
 		Title:          pr.GetTitle(),
-		Author:         pr.GetUser().GetLogin(),
+		Author:         author,
 		State:          pr.GetState(),
 		Labels:         extractLabels(pr.Labels),
 		MergeCommitSHA: pr.GetMergeCommitSHA(),
 		SpamFlag:       false,
-		CreatedAt:      pr.GetCreatedAt().Time,
-		UpdatedAt:      pr.GetUpdatedAt().Time,
+		CreatedAt:      createdAt,
+		UpdatedAt:      updatedAt,
 		Events:         []models.PREvent{},
 		HasConflict:    !pr.GetMergeable(),
 		HTMLURL:        pr.GetHTMLURL(),
-		BranchInfo: &models.PRBranchInfo{
-			HeadBranch: pr.GetHead().GetRef(),
-			HeadSHA:    pr.GetHead().GetSHA(),
-			BaseBranch: pr.GetBase().GetRef(),
-		},
+		BranchInfo:     branchInfo,
 	}
 	return record, nil
 }
@@ -87,27 +102,40 @@ func (c *GitHubClient) ListPRs(ctx context.Context, owner, repo string, state st
 		}
 
 		for _, pr := range prs {
+			author := ""
+			if pr.GetUser() != nil {
+				author = pr.GetUser().GetLogin()
+			}
+			createdAt := pr.GetCreatedAt().Time
+			updatedAt := pr.GetUpdatedAt().Time
+			var branchInfo *models.PRBranchInfo
+			if pr.GetHead() != nil || pr.GetBase() != nil {
+				branchInfo = &models.PRBranchInfo{}
+				if pr.GetHead() != nil {
+					branchInfo.HeadBranch = pr.GetHead().GetRef()
+					branchInfo.HeadSHA = pr.GetHead().GetSHA()
+				}
+				if pr.GetBase() != nil {
+					branchInfo.BaseBranch = pr.GetBase().GetRef()
+				}
+			}
 			record := &models.PRRecord{
 				ID:             fmt.Sprintf("%d", pr.GetID()),
 				Platform:       "github",
 				PRNumber:       pr.GetNumber(),
 				Title:          pr.GetTitle(),
-				Author:         pr.GetUser().GetLogin(),
+				Author:         author,
 				State:          pr.GetState(),
 				Labels:         extractLabels(pr.Labels),
 				MergeCommitSHA: pr.GetMergeCommitSHA(),
 				SpamFlag:       false,
-				CreatedAt:      pr.GetCreatedAt().Time,
-				UpdatedAt:      pr.GetUpdatedAt().Time,
+				CreatedAt:      createdAt,
+				UpdatedAt:      updatedAt,
 				Events:         []models.PREvent{},
 				IsDraft:        pr.GetDraft(),
 				HTMLURL:        pr.GetHTMLURL(),
 				MergedAt:       pr.GetMergedAt().Time,
-				BranchInfo: &models.PRBranchInfo{
-					HeadBranch: pr.GetHead().GetRef(),
-					HeadSHA:    pr.GetHead().GetSHA(),
-					BaseBranch: pr.GetBase().GetRef(),
-				},
+				BranchInfo:     branchInfo,
 			}
 			result = append(result, record)
 		}
@@ -350,6 +378,7 @@ func (c *GitHubClient) HasMultipleMergeMethods(ctx context.Context, owner, repo 
 // their review (e.g. approve then request changes).
 func (c *GitHubClient) GetApprovals(ctx context.Context, owner, repo string, number int) (*models.ApprovalStatus, error) {
 	opts := &github.ListOptions{PerPage: 100}
+	var reviewsAll []*github.PullRequestReview
 	approverSet := make(map[string]bool)
 	blockerSet := make(map[string]bool)
 
@@ -358,24 +387,31 @@ func (c *GitHubClient) GetApprovals(ctx context.Context, owner, repo string, num
 		if err != nil {
 			return nil, fmt.Errorf("failed to list reviews: %w", err)
 		}
-		for _, review := range reviews {
-			login := review.GetUser().GetLogin()
-			switch review.GetState() {
-			case "APPROVED":
-				approverSet[login] = true
-				delete(blockerSet, login)
-			case "CHANGES_REQUESTED":
-				delete(approverSet, login)
-				blockerSet[login] = true
-			case "DISMISSED":
-				delete(approverSet, login)
-				delete(blockerSet, login)
-			}
-		}
+		reviewsAll = append(reviewsAll, reviews...)
 		if resp.NextPage == 0 {
 			break
 		}
 		opts.Page = resp.NextPage
+	}
+	sort.SliceStable(reviewsAll, func(i, j int) bool {
+		return reviewsAll[i].GetSubmittedAt().Time.Before(reviewsAll[j].GetSubmittedAt().Time)
+	})
+	for _, review := range reviewsAll {
+		if review.GetUser() == nil {
+			continue
+		}
+		login := review.GetUser().GetLogin()
+		switch review.GetState() {
+		case "APPROVED":
+			approverSet[login] = true
+			delete(blockerSet, login)
+		case "CHANGES_REQUESTED":
+			delete(approverSet, login)
+			blockerSet[login] = true
+		case "DISMISSED":
+			delete(approverSet, login)
+			delete(blockerSet, login)
+		}
 	}
 
 	pr, _, err := c.client.PullRequests.Get(ctx, owner, repo, number)
@@ -532,8 +568,10 @@ func (c *GitHubClient) RequestReview(ctx context.Context, owner, repo string, nu
 
 // RevertPR creates a revert PR for a merged PR on GitHub.
 func (c *GitHubClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
-	url := fmt.Sprintf("%s/repos/%s/%s/pulls/%d/revert", c.client.BaseURL.String(), owner, repo, number)
-	req, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	baseURL := *c.client.BaseURL
+	baseURL.Path = strings.TrimRight(baseURL.Path, "/") + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(repo) + fmt.Sprintf("/pulls/%d/revert", number)
+	baseURL.RawQuery = ""
+	req, err := http.NewRequestWithContext(ctx, "POST", baseURL.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create revert request: %w", err)
 	}

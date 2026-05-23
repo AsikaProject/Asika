@@ -163,6 +163,48 @@ func TestGiteaClientCreation(t *testing.T) {
 	}
 }
 
+func TestNormalizeLabelColor(t *testing.T) {
+	tests := []struct {
+		name  string
+		color string
+		want  string
+	}{
+		{"empty uses default", "", "#ededed"},
+		{"bare hex gets hash", "ededed", "#ededed"},
+		{"hash preserved", "#ededed", "#ededed"},
+		{"trim spaces", "  abc123  ", "#abc123"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeLabelColor(tt.color); got != tt.want {
+				t.Fatalf("normalizeLabelColor(%q) = %q, want %q", tt.color, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPathEscapeSegments(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{"simple path", "src/main.go", "src/main.go"},
+		{"space in segment", "docs/my file.md", "docs/my%20file.md"},
+		{"slash preserved", "a/b/c.txt", "a/b/c.txt"},
+		{"reserved chars escaped", "a#b/c?d.txt", "a%23b/c%3Fd.txt"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := pathEscapeSegments(tt.path); got != tt.want {
+				t.Fatalf("pathEscapeSegments(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestParseDiffFiles(t *testing.T) {
 	tests := []struct {
 		name string

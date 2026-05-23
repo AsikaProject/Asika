@@ -288,6 +288,6 @@ func (c *Consumer) handleBranchDeleted(event events.Event) {
 	slog.Info("branch deleted", "branch", branch, "repo_group", event.RepoGroup)
 
 	if c.syncer != nil {
-		go c.syncer.SyncBranchDeletion(event.RepoGroup, event.Platform, branch)
+		go c.syncer.SyncBranchDeletion(c.ctx, event.RepoGroup, event.Platform, branch)
 	}
 }

@@ -101,7 +101,7 @@ func StartWebhookRetryWorker() {
 				}
 
 				slog.Info("webhook retry succeeded", "id", retry.ID)
-				markWebhookProcessed(retry.Platform, retry.RepoGroup, retry.DeliveryID)
+				markWebhookProcessed(retry.Platform, retry.RepoGroup, resolvedDeliveryID(retry.Platform, retry.RepoGroup, retry.Body, retry.DeliveryID))
 				db.PutWebhookHealth(retry.RepoGroup, retry.Platform, time.Now())
 				db.DeleteWebhookRetry(retry.ID)
 			}

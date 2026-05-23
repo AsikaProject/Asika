@@ -26,6 +26,8 @@ type BitbucketClient struct {
 	webhookSecret string
 }
 
+const bitbucketHTTPTimeout = 30 * time.Second
+
 // NewBitbucketClient creates a new Bitbucket Cloud client
 func NewBitbucketClient(token string, webhookSecret string) *BitbucketClient {
 	c, err := bitbucket.NewAPITokenAuth("", token)
@@ -33,6 +35,7 @@ func NewBitbucketClient(token string, webhookSecret string) *BitbucketClient {
 		slog.Error("failed to create bitbucket client", "error", err)
 		return nil
 	}
+	c.HttpClient.Timeout = bitbucketHTTPTimeout
 	return &BitbucketClient{
 		client:        c,
 		token:         token,
@@ -147,9 +150,9 @@ func (c *BitbucketClient) ListPRs(ctx context.Context, owner, repo string, state
 		stateParam = strings.ToUpper(state)
 	}
 	var allRecords []*models.PRRecord
-	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests?pagelen=50", owner, repo)
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests?pagelen=50", url.PathEscape(owner), url.PathEscape(repo))
 	if stateParam != "" {
-		endpoint += "&state=" + stateParam
+		endpoint += "&state=" + url.QueryEscape(stateParam)
 	}
 	for endpoint != "" && len(allRecords) < maxPRs {
 		req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
@@ -581,7 +584,7 @@ func (c *BitbucketClient) RequestReview(ctx context.Context, owner, repo string,
 
 // RevertPR creates a revert PR for a merged PR on Bitbucket.
 func (c *BitbucketClient) RevertPR(ctx context.Context, owner, repo string, number int) (*models.PRRecord, error) {
-	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests/%d/revert", owner, repo, number)
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests/%d/revert", url.PathEscape(owner), url.PathEscape(repo), number)
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create revert request: %w", err)
@@ -618,7 +621,7 @@ func (c *BitbucketClient) RevertPR(ctx context.Context, owner, repo string, numb
 }
 
 func (c *BitbucketClient) GetPRBody(ctx context.Context, owner, repo string, number int) (string, error) {
-	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests/%d", owner, repo, number)
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/pullrequests/%d", url.PathEscape(owner), url.PathEscape(repo), number)
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return "", err
@@ -646,7 +649,7 @@ func (c *BitbucketClient) GetPRBody(ctx context.Context, owner, repo string, num
 }
 
 func (c *BitbucketClient) GetFileContent(ctx context.Context, owner, repo, path string) (string, error) {
-	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/src/HEAD/%s", owner, repo, pathEscapeSegments(path))
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/src/HEAD/%s", url.PathEscape(owner), url.PathEscape(repo), pathEscapeSegments(path))
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return "", err
@@ -668,7 +671,7 @@ func (c *BitbucketClient) GetFileContent(ctx context.Context, owner, repo, path 
 }
 
 func (c *BitbucketClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
-	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/permissions-config/users?q=username=%q", owner, repo, url.QueryEscape(username))
+	endpoint := fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s/permissions-config/users?q=%s", url.PathEscape(owner), url.PathEscape(repo), url.QueryEscape("username=\""+username+"\""))
 	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return false, fmt.Errorf("failed to create permission request: %w", err)

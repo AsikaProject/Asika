@@ -120,12 +120,12 @@ func isConflictError(err error) bool {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "conflict") ||
-		strings.Contains(msg, "merge conflict") ||
+	return strings.Contains(msg, "merge conflict") ||
 		strings.Contains(msg, "cherry-pick conflict") ||
 		strings.Contains(msg, "non-fast-forward") ||
-		strings.Contains(msg, "rejected") ||
-		strings.Contains(msg, "failed to push")
+		strings.Contains(msg, "push rejected") ||
+		strings.Contains(msg, "failed to push some refs") ||
+		strings.Contains(msg, "failed to push refs")
 }
 
 // isTransientError checks if an error is likely temporary.

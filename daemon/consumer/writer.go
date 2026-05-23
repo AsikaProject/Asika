@@ -12,6 +12,7 @@ import (
 type writeRequest struct {
 	key       string
 	value     []byte
+	link      *models.IssuePRLink
 	prID      string
 	repoGroup string
 	prNumber  int
@@ -58,6 +59,10 @@ func (w *writerActor) run() {
 						req.result <- fmt.Errorf("write panic: %v", r)
 					}
 				}()
+				if req.link != nil {
+					req.result <- db.PutIssuePRLink(req.link)
+					return
+				}
 				if req.prID == "" && req.repoGroup == "" && req.prNumber == 0 {
 					req.result <- db.Put(db.BucketSyncHistory, req.key, req.value)
 				} else {
@@ -73,7 +78,21 @@ func (w *writerActor) run() {
 
 // writeIssueLink stores an issue-PR link through the writer actor.
 func (w *writerActor) writeIssueLink(link *models.IssuePRLink) error {
-	return db.PutIssuePRLink(link)
+	req := writeRequest{
+		link:   link,
+		result: make(chan error, 1),
+	}
+	select {
+	case w.requests <- req:
+		select {
+		case err := <-req.result:
+			return err
+		case <-w.stop:
+			return fmt.Errorf("writer actor stopped")
+		}
+	case <-w.stop:
+		return fmt.Errorf("writer actor stopped")
+	}
 }
 
 // write submits a write request and waits for the result.

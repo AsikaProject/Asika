@@ -358,10 +358,10 @@ func (m *Manager) merge(item *models.QueueItem) error {
 		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 		data, marshalErr := json.Marshal(pr)
 		if marshalErr != nil {
-			slog.Error("failed to marshal PR after merge", "error", marshalErr, "pr_id", pr.ID)
+			return fmt.Errorf("marshal PR after merge: %w", marshalErr)
 		} else {
 			if putErr := db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber); putErr != nil {
-				slog.Error("failed to save PR after merge", "error", putErr, "pr_id", pr.ID)
+				return fmt.Errorf("save PR after merge: %w", putErr)
 			}
 		}
 	}

@@ -51,4 +51,3 @@ func (s *mongoStorage) ReleaseSyncLock(repoGroup, holderID string) error {
 	_, err := s.coll(BucketSyncLocks).DeleteOne(ctx, bson.M{"_id": key, "holder": holderID})
 	return err
 }
-

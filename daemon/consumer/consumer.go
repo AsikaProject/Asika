@@ -228,7 +228,7 @@ func (c *Consumer) debounceKey(event events.Event) string {
 
 // debounce dispatches an event with a random 1-10s delay to avoid API rate limits.
 // Multiple events for the same PR within the delay window are coalesced.
-func (c *Consumer) debounce(event events.Event, fn func()) {
+func (c *Consumer) debounce(event events.Event, fn func(*workerPool)) {
 	key := c.debounceKey(event)
 
 	c.debounceMu.Lock()
@@ -246,7 +246,7 @@ func (c *Consumer) debounce(event events.Event, fn func()) {
 		if workers == nil {
 			return
 		}
-		fn()
+		fn(workers)
 	})
 	c.debounceMu.Unlock()
 }
@@ -257,25 +257,25 @@ func (c *Consumer) dispatch(event events.Event) {
 
 	switch event.Type {
 	case events.EventPROpened:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handlePROpened(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePROpened(event) }) })
 	case events.EventPRClosed:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRClosed(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePRClosed(event) }) })
 	case events.EventPRMerged:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRMerged(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePRMerged(event) }) })
 	case events.EventPRApproved:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRApproved(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePRApproved(event) }) })
 	case events.EventPRReopened:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRReopened(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePRReopened(event) }) })
 	case events.EventPRReverted:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRReverted(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePRReverted(event) }) })
 	case events.EventSpamDetected:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handleSpamDetected(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handleSpamDetected(event) }) })
 	case events.EventPRComment:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRComment(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePRComment(event) }) })
 	case events.EventPRLabeled:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handlePRLabeled(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePRLabeled(event) }) })
 	case events.EventBranchDeleted:
-		c.debounce(event, func() { c.workers.Submit(func() { c.handleBranchDeleted(event) }) })
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handleBranchDeleted(event) }) })
 	case events.EventSyncCompleted:
 		slog.Info("sync completed", "repo_group", event.RepoGroup)
 	case events.EventSyncFailed:

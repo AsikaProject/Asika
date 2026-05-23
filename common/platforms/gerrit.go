@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/andygrunwald/go-gerrit"
 
@@ -20,11 +21,14 @@ import (
 // GerritClient implements PlatformClient for Gerrit
 type GerritClient struct {
 	client        *gerrit.Client
+	httpClient    *http.Client
 	webhookSecret string
 	baseURL       string
 	username      string
 	password      string
 }
+
+const gerritHTTPTimeout = 30 * time.Second
 
 // NewGerritClient creates a new Gerrit client
 func NewGerritClient(url, username, password, webhookSecret string) *GerritClient {
@@ -33,7 +37,8 @@ func NewGerritClient(url, username, password, webhookSecret string) *GerritClien
 		return nil
 	}
 
-	client, err := gerrit.NewClient(context.Background(), url, nil)
+	httpClient := &http.Client{Timeout: gerritHTTPTimeout}
+	client, err := gerrit.NewClient(context.Background(), url, httpClient)
 	if err != nil {
 		slog.Warn("failed to create gerrit client", "url", url, "error", err)
 		return nil
@@ -42,6 +47,7 @@ func NewGerritClient(url, username, password, webhookSecret string) *GerritClien
 
 	return &GerritClient{
 		client:        client,
+		httpClient:    httpClient,
 		webhookSecret: webhookSecret,
 		baseURL:       url,
 		username:      username,
@@ -533,7 +539,7 @@ func (c *GerritClient) GetFileContent(ctx context.Context, owner, repo, path str
 		return "", err
 	}
 	req.SetBasicAuth(c.username, c.password)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -569,7 +575,7 @@ func (c *GerritClient) HasWritePermission(ctx context.Context, owner, repo, user
 		return false, fmt.Errorf("failed to create gerrit access request: %w", err)
 	}
 	req.SetBasicAuth(c.username, c.password)
-	resp, err := (&http.Client{}).Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return false, fmt.Errorf("failed to query gerrit access: %w", err)
 	}

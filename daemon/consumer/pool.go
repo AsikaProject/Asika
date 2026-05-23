@@ -49,6 +49,7 @@ type workerPool struct {
 	mu         sync.Mutex
 	cancels    []context.CancelFunc
 	lastScaled time.Time
+	stopped    atomic.Bool
 }
 
 func newWorkerPool(cfg models.WorkerPoolConfig) *workerPool {
@@ -68,6 +69,7 @@ func newWorkerPool(cfg models.WorkerPoolConfig) *workerPool {
 		w.spawnWorker()
 	}
 
+	w.wg.Add(1)
 	go w.adjustLoop()
 
 	slog.Info("worker pool started", "min", cfg.MinWorkers, "max", cfg.MaxWorkers, "buffer", cfg.MaxWorkers*4)
@@ -75,6 +77,9 @@ func newWorkerPool(cfg models.WorkerPoolConfig) *workerPool {
 }
 
 func (w *workerPool) spawnWorker() {
+	if w.stopped.Load() {
+		return
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	id := w.nextID.Add(1)
 	w.metrics.workers.Add(1)
@@ -130,6 +135,7 @@ func (w *workerPool) Submit(task func()) {
 }
 
 func (w *workerPool) Stop() {
+	w.stopped.Store(true)
 	close(w.stop)
 	w.wg.Wait()
 }
@@ -151,6 +157,7 @@ func (w *workerPool) UpdateConfig(cfg models.WorkerPoolConfig) {
 }
 
 func (w *workerPool) adjustLoop() {
+	defer w.wg.Done()
 	d := 30 * time.Second
 	if cfg, ok := w.cfg.Load().(models.WorkerPoolConfig); ok {
 		if parsed, err := time.ParseDuration(cfg.StatsInterval); err == nil && parsed > 0 {
@@ -170,6 +177,9 @@ func (w *workerPool) adjustLoop() {
 }
 
 func (w *workerPool) adjust() {
+	if w.stopped.Load() {
+		return
+	}
 	cap_ := cap(w.tasks)
 	if cap_ == 0 {
 		return

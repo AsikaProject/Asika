@@ -104,23 +104,34 @@ func giteaPRToRecord(pr *gitea.PullRequest) *models.PRRecord {
 		Platform:       "gitea",
 		PRNumber:       int(pr.Index),
 		Title:          pr.Title,
-		Author:         pr.Poster.UserName,
+		Author:         "",
 		State:          state,
 		Labels:         extractGiteaLabels(pr.Labels),
 		MergeCommitSHA: mergeCommitSHA,
 		SpamFlag:       false,
-		CreatedAt:      *pr.Created,
-		UpdatedAt:      *pr.Updated,
+		CreatedAt:      time.Time{},
+		UpdatedAt:      time.Time{},
 		Events:         []models.PREvent{},
 		HasConflict:    !pr.Mergeable,
 		HTMLURL:        pr.HTMLURL,
 		MergedAt:       mergedAt,
 	}
+	if pr.Poster != nil {
+		record.Author = pr.Poster.UserName
+	}
+	if pr.Created != nil {
+		record.CreatedAt = *pr.Created
+	}
+	if pr.Updated != nil {
+		record.UpdatedAt = *pr.Updated
+	}
 	if pr.Head != nil {
 		record.BranchInfo = &models.PRBranchInfo{
 			HeadBranch: pr.Head.Name,
 			HeadSHA:    pr.Head.Sha,
-			BaseBranch: pr.Base.Name,
+		}
+		if pr.Base != nil {
+			record.BranchInfo.BaseBranch = pr.Base.Name
 		}
 	}
 	return record
@@ -264,7 +275,7 @@ func (c *GiteaClient) RemoveLabel(ctx context.Context, owner, repo string, numbe
 func (c *GiteaClient) CreateLabel(ctx context.Context, owner, repo, name, color, description string) error {
 	opts := gitea.CreateLabelOption{
 		Name:        name,
-		Color:       "#" + color,
+		Color:       normalizeLabelColor(color),
 		Description: description,
 	}
 	_, _, err := c.client.CreateLabel(owner, repo, opts)
@@ -275,6 +286,17 @@ func (c *GiteaClient) CreateLabel(ctx context.Context, owner, repo, name, color,
 		return fmt.Errorf("failed to create label: %w", err)
 	}
 	return nil
+}
+
+func normalizeLabelColor(color string) string {
+	color = strings.TrimSpace(color)
+	if color == "" {
+		return "#ededed"
+	}
+	if strings.HasPrefix(color, "#") {
+		return color
+	}
+	return "#" + color
 }
 
 // GetBranch checks if a branch exists
@@ -512,8 +534,9 @@ func (c *GiteaClient) GetPRBranchInfo(ctx context.Context, owner, repo string, n
 		return nil, fmt.Errorf("failed to get PR: %w", err)
 	}
 
-	info := &models.PRBranchInfo{
-		BaseBranch: pr.Base.Name,
+	info := &models.PRBranchInfo{}
+	if pr.Base != nil {
+		info.BaseBranch = pr.Base.Name
 	}
 	if pr.Head != nil {
 		info.HeadBranch = pr.Head.Name

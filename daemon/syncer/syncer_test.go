@@ -201,7 +201,7 @@ func TestSyncBranchDeletion_SingleMode(t *testing.T) {
 	defer cleanup()
 
 	// Should not panic for single mode
-	s.SyncBranchDeletion("single-group", "github", "feature-branch")
+	s.SyncBranchDeletion(context.Background(), "single-group", "github", "feature-branch")
 }
 
 func TestSyncBranchDeletion_GroupNotFound(t *testing.T) {
@@ -209,7 +209,7 @@ func TestSyncBranchDeletion_GroupNotFound(t *testing.T) {
 	defer cleanup()
 
 	// Should not panic for nonexistent group
-	s.SyncBranchDeletion("nonexistent", "github", "feature-branch")
+	s.SyncBranchDeletion(context.Background(), "nonexistent", "github", "feature-branch")
 }
 
 func TestAcquireReleaseLock(t *testing.T) {
@@ -461,8 +461,10 @@ func TestIsConflictError(t *testing.T) {
 		{"conflict in message", fmt.Errorf("merge conflict in file.go"), true},
 		{"cherry-pick conflict", fmt.Errorf("cherry-pick conflict"), true},
 		{"non-fast-forward", fmt.Errorf("non-fast-forward update"), true},
-		{"rejected", fmt.Errorf("push rejected"), true},
+		{"push rejected", fmt.Errorf("push rejected"), true},
 		{"failed to push", fmt.Errorf("failed to push some refs"), true},
+		{"unrelated rejected", fmt.Errorf("login rejected"), false},
+		{"unrelated conflict", fmt.Errorf("configuration conflict detected"), false},
 		{"unrelated error", fmt.Errorf("connection refused"), false},
 		{"not found", fmt.Errorf("404 not found"), false},
 	}

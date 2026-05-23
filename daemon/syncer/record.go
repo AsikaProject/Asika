@@ -17,13 +17,12 @@ import (
 )
 
 // SyncBranchDeletion syncs branch deletion to all configured target platforms with retry.
-func (s *Syncer) SyncBranchDeletion(repoGroup, sourcePlatform, branch string) {
+func (s *Syncer) SyncBranchDeletion(ctx context.Context, repoGroup, sourcePlatform, branch string) {
 	group := config.GetRepoGroupByName(s.cfg, repoGroup)
 	if group == nil || group.Mode != "multi" {
 		return
 	}
 
-	ctx := context.Background()
 	targets := s.getTargetPlatforms(group, sourcePlatform)
 
 	var failedTargets []string
@@ -42,7 +41,11 @@ func (s *Syncer) SyncBranchDeletion(repoGroup, sourcePlatform, branch string) {
 		for attempt := 0; attempt < syncMaxRetries; attempt++ {
 			if attempt > 0 {
 				delay := syncRetryBaseDelay * time.Duration(1<<uint(attempt-1))
-				time.Sleep(delay)
+				select {
+				case <-time.After(delay):
+				case <-ctx.Done():
+					return
+				}
 			}
 			if err := client.DeleteBranch(ctx, owner, repo, branch); err != nil {
 				lastErr = err

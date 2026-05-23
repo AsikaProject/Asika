@@ -1,6 +1,8 @@
 package webhook
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -44,6 +46,14 @@ func extractDeliveryID(platform string, c *gin.Context) string {
 
 func dedupKey(platform, repoGroup, deliveryID string) string {
 	return platform + ":" + repoGroup + ":" + deliveryID
+}
+
+func resolvedDeliveryID(platform, repoGroup string, body []byte, deliveryID string) string {
+	if deliveryID != "" {
+		return deliveryID
+	}
+	sum := sha256.Sum256(append([]byte(platform+":"+repoGroup+":"), body...))
+	return "body-" + hex.EncodeToString(sum[:])
 }
 
 func isDuplicateWebhook(platform, repoGroup, deliveryID string) bool {
@@ -115,7 +125,7 @@ func WebhookHandler(c *gin.Context) {
 		return
 	}
 
-	deliveryID := extractDeliveryID(platform, c)
+	deliveryID := resolvedDeliveryID(platform, repoGroup, body, extractDeliveryID(platform, c))
 
 	dedupMu.Lock()
 	if isDuplicateWebhook(platform, repoGroup, deliveryID) {
@@ -149,7 +159,9 @@ func WebhookHandler(c *gin.Context) {
 		retry.LastError = err.Error()
 		retry.LastFailed = time.Now()
 		retry.NextRetry = time.Now().Add(time.Duration(1<<uint(retry.FailCount)) * time.Second)
-		db.PutWebhookRetry(retry)
+		if putErr := db.PutWebhookRetry(retry); putErr != nil {
+			slog.Error("failed to persist webhook retry state", "error", putErr, "webhook_id", retry.ID)
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to process webhook"})
 		return
 	}
