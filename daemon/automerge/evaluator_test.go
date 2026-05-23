@@ -162,9 +162,9 @@ func TestMatchesRule(t *testing.T) {
 
 	t.Run("RequiredApprovals with IsApproved false", func(t *testing.T) {
 		pr := &models.PRRecord{
-			RepoGroup: "test-group",
-			Author:    "alice",
-			Labels:    []string{"auto-merge"},
+			RepoGroup:  "test-group",
+			Author:     "alice",
+			Labels:     []string{"auto-merge"},
 			IsApproved: false,
 		}
 		rule := &models.AutoMergeRule{
@@ -185,10 +185,10 @@ func TestEvaluatePR(t *testing.T) {
 		}
 		e := NewEvaluator(cfg, nil)
 		pr := &models.PRRecord{
-			State:     "open",
-			IsDraft:   false,
-			SpamFlag:  false,
-			Labels:    []string{"auto-merge"},
+			State:    "open",
+			IsDraft:  false,
+			SpamFlag: false,
+			Labels:   []string{"auto-merge"},
 		}
 		e.EvaluatePR(pr)
 	})
