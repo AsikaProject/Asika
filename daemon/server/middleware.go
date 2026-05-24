@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"asika/common/auth"
@@ -17,6 +18,28 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+var (
+	sessionActivityMu    sync.Mutex
+	sessionActivityTimes = make(map[string]time.Time)
+	sessionActivityInit  sync.Once
+)
+
+func cleanupSessionActivity() {
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			sessionActivityMu.Lock()
+			for sid, t := range sessionActivityTimes {
+				if time.Since(t) > 5*time.Minute {
+					delete(sessionActivityTimes, sid)
+				}
+			}
+			sessionActivityMu.Unlock()
+		}
+	}()
+}
 
 // Logger is a custom logger middleware
 func Logger() gin.HandlerFunc {
@@ -82,11 +105,18 @@ func AuthMiddleware() gin.HandlerFunc {
 						c.Abort()
 						return
 					}
-					if lastUpdate, ok := c.Get("last_activity_update_" + sid); !ok || time.Since(lastUpdate.(time.Time)) > time.Minute {
+					sessionActivityInit.Do(cleanupSessionActivity)
+					sessionActivityMu.Lock()
+					lastUpdate := sessionActivityTimes[sid]
+					shouldUpdate := time.Since(lastUpdate) > time.Minute
+					if shouldUpdate {
+						sessionActivityTimes[sid] = time.Now()
+					}
+					sessionActivityMu.Unlock()
+					if shouldUpdate {
 						if err := db.UpdateSessionActivity(sid); err != nil {
 							slog.Warn("failed to update session activity", "sid", sid, "error", err)
 						}
-						c.Set("last_activity_update_"+sid, time.Now())
 					}
 				}
 				c.Set("username", auth.GetUsername(claims))

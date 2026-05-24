@@ -47,7 +47,8 @@ type Consumer struct {
 	debounceMu     sync.Mutex
 	debounceTimers map[string]*time.Timer
 
-	// Protect Start/Stop from concurrent access
+	loopWg sync.WaitGroup
+
 	lifecycleMu sync.Mutex
 }
 
@@ -124,7 +125,10 @@ func (c *Consumer) Start() {
 	}
 	c.workers = newWorkerPool(poolCfg)
 	c.eventCh = events.Subscribe()
+	stop := c.stop
+	c.loopWg.Add(1)
 	go func() {
+		defer c.loopWg.Done()
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Error("event consumer panic recovered", "error", r)
@@ -138,7 +142,7 @@ func (c *Consumer) Start() {
 					return
 				}
 				c.dispatch(event)
-			case <-c.stop:
+			case <-stop:
 				slog.Info("event consumer stopped")
 				return
 			}
@@ -170,16 +174,15 @@ func (c *Consumer) stopInternal() {
 		events.Unsubscribe(c.eventCh)
 		c.eventCh = nil
 	}
+	// Stop debounce timers FIRST to prevent deadlock
+	// (callbacks might be waiting for lifecycleMu which we hold)
 	c.debounceMu.Lock()
 	for _, timer := range c.debounceTimers {
 		timer.Stop()
 	}
 	c.debounceTimers = make(map[string]*time.Timer)
 	c.debounceMu.Unlock()
-	if c.workers != nil {
-		c.workers.Stop()
-		c.workers = nil
-	}
+	c.loopWg.Wait()
 	if c.writer != nil {
 		c.writer.Stop()
 		c.writer = nil

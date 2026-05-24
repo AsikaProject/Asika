@@ -113,6 +113,11 @@ func (c *Consumer) handlePRMerged(event events.Event) {
 
 	if c.syncer != nil {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("sync on merge panic recovered", "error", r, "repo_group", event.RepoGroup)
+				}
+			}()
 			ctx, cancel := context.WithTimeout(c.ctx, 10*time.Minute)
 			defer cancel()
 			if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
@@ -198,6 +203,11 @@ func (c *Consumer) handleSpamDetected(event events.Event) {
 
 	if c.spamDetector != nil {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("spam detector panic recovered", "error", r, "pr_number", pr.PRNumber)
+				}
+			}()
 			ctx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
 			defer cancel()
 			c.spamDetector.HandleSpamWithContext(ctx, pr, event.RepoGroup)
@@ -261,6 +271,11 @@ func (c *Consumer) handlePRReopened(event events.Event) {
 
 	if c.syncer != nil {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("sync on reopened panic recovered", "error", r, "pr_id", pr.ID)
+				}
+			}()
 			ctx, cancel := context.WithTimeout(c.ctx, 10*time.Minute)
 			defer cancel()
 			if err := c.syncer.SyncOnMerge(ctx, pr); err != nil {
@@ -288,6 +303,13 @@ func (c *Consumer) handleBranchDeleted(event events.Event) {
 	slog.Info("branch deleted", "branch", branch, "repo_group", event.RepoGroup)
 
 	if c.syncer != nil {
-		go c.syncer.SyncBranchDeletion(c.ctx, event.RepoGroup, event.Platform, branch)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("sync branch deletion panic recovered", "error", r, "branch", branch)
+				}
+			}()
+			c.syncer.SyncBranchDeletion(c.ctx, event.RepoGroup, event.Platform, branch)
+		}()
 	}
 }

@@ -69,12 +69,12 @@ func CSRFProtect() gin.HandlerFunc {
 		if token == "" {
 			token = c.PostForm("_csrf")
 		}
-		if token == "" {
-			token = c.Query("_csrf")
-		}
 
 		csrfTokensMu.Lock()
 		_, valid := csrfTokens[token]
+		if valid {
+			delete(csrfTokens, token)
+		}
 		csrfTokensMu.Unlock()
 
 		if !valid {

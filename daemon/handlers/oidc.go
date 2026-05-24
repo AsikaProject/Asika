@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -370,7 +371,7 @@ func fetchUserInfo(c *gin.Context, oauth2Config *oauth2.Config, token *oauth2.To
 	}
 	defer resp.Body.Close()
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
 		return nil, err
 	}
 	return result, nil

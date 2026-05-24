@@ -54,6 +54,10 @@ func maskConfig(cfg *models.Config) *models.Config {
 	masked.Slack.Token = maskSecret(cfg.Slack.Token)
 	masked.Slack.AppToken = maskSecret(cfg.Slack.AppToken)
 
+	for i := range masked.Auth.OIDCProviders {
+		masked.Auth.OIDCProviders[i].ClientSecret = maskSecret(cfg.Auth.OIDCProviders[i].ClientSecret)
+	}
+
 	return &masked
 }
 

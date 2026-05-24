@@ -1,5 +1,17 @@
 # ChangeLog for Asika
 
+## v20260524DEV
+
+- **Security**: `GenerateFingerprintID()` used predictable `time.Now()` timestamps. Now uses `crypto/rand` for cryptographically secure IDs.
+- **Security**: CSRF tokens accepted via URL query parameter, exposing them in server logs and browser history. Now only accepts via `X-CSRF-Token` header or POST form body.
+- **Security**: OIDC `ClientSecret` returned plaintext in `GET /api/v1/config` response. Now masked like other secrets.
+- **Security**: CSRF tokens not invalidated after use, allowing replay attacks. Now deleted from map after validation.
+- **Security**: OIDC `fetchUserInfo()` read entire response body without size limit, risking OOM from malicious providers. Now limited to 1MB.
+- **Security**: Fingerprint ID generation used predictable timestamps instead of `crypto/rand`. Now uses secure random bytes.
+- **Bugfix**: Consumer event loop goroutine exited before completing, causing race conditions on restart. Now waits for goroutine to finish via `WaitGroup`.
+- **Bugfix**: Session activity updates happened on every request instead of being throttled to once per minute. Now uses module-level cache with periodic cleanup.
+- **Bugfix**: Missing `defer recover()` in `handleSpamDetected`, `handlePRReopened`, and `handleBranchDeleted` goroutines could crash the process on panic. Now all goroutines have panic recovery.
+
 ## v20260523DEV
 
 ### Security Fixes

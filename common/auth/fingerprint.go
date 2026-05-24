@@ -2,8 +2,8 @@ package auth
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"strconv"
@@ -154,7 +154,8 @@ func CountFingerprints() int {
 
 func generateFingerprintID() string {
 	b := make([]byte, 16)
-	binary.BigEndian.PutUint64(b[:8], uint64(time.Now().UnixNano()))
-	binary.BigEndian.PutUint64(b[8:], uint64(time.Now().Unix()))
+	if _, err := rand.Read(b); err != nil {
+		return hex.EncodeToString([]byte(time.Now().String()))[:32]
+	}
 	return hex.EncodeToString(b)
 }
