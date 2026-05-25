@@ -140,6 +140,10 @@ type RepoGroupConfig struct {
 	MergeQueue     MergeQueueConfig `toml:"merge_queue" json:"merge_queue"`
 	LabelRules     []LabelRule      `toml:"label_rules" json:"label_rules,omitempty"`
 	ReviewRules    []ReviewRule     `toml:"review_rules" json:"review_rules,omitempty"`
+	ApprovalRules  []ApprovalRule   `toml:"approval_rules" json:"approval_rules,omitempty"`
+	PRSizeLimits   PRSizeConfig     `toml:"pr_size_limits" json:"pr_size_limits,omitempty"`
+	PRTemplate     PRTemplateConfig `toml:"pr_template" json:"pr_template,omitempty"`
+	DraftPR        DraftPRConfig    `toml:"draft_pr" json:"draft_pr,omitempty"`
 }
 
 // SingleRepoConfig represents single repository configuration

@@ -231,6 +231,16 @@ JWT-based session tracking with database-backed revocation:
 - **Cleanup worker**: Periodically removes sessions inactive longer than `session_inactivity_timeout`
 - **WebUI**: `/account` page shows active sessions with revoke buttons
 
+### LDAP/Active Directory Authentication
+
+LDAP authentication provides an alternative auth backend against corporate directory servers:
+
+- **Config**: `[ldap]` section: `enabled`, `host`, `port`, `use_tls`, `start_tls`, `bind_dn`, `bind_password`, `base_dn`, `user_filter`, `group_filter`, `group_dn`, `allowed_groups`, `auto_create`, `default_role`, `email_attribute`, `name_attribute`
+- **Module**: `common/auth/ldap.go` — `LDAPAuthenticator` with `Authenticate(username, password)` returning `*LDAPUserInfo`
+- **Login flow**: When local user not found in DB, falls back to LDAP. On success, optionally auto-creates local user with `default_role`
+- **Group filtering**: When `allowed_groups` is configured, verifies user membership before allowing login
+- **Dependency**: `github.com/go-ldap/ldap/v3`
+
 ### OIDC/SSO Authentication
 
 OAuth2 Authorization Code Flow for external identity providers:
@@ -264,6 +274,7 @@ OAuth2 Authorization Code Flow for external identity providers:
 - **Cross-Platform Syncer** — On PR merge, syncs the merge commit to all configured target platforms (GitHub/GitLab/Gitea/Forgejo/Codeberg/Bitbucket/Gerrit). Uses cherry-pick strategy with retry (3 attempts, exponential backoff). Publishes `sync_completed`/`sync_failed` events. Sync failure triggers notifier alert.
 - **Auto-Rebase Worker** — Periodically checks for open PRs with conflicts and rebases them automatically. Configurable via `[auto_rebase]` section: `enabled`, `exclude_labels`, `exclude_authors`.
 - **Session Cleanup Worker** — Periodically removes sessions inactive longer than `session_inactivity_timeout`. Configurable via `[auth]` section. Logs count of removed sessions.
+- **Auto-Merge Scanner** — Every 5 minutes, scans open PRs against configured auto-merge rules (label-based conditions with required approvals and CI checks). Event-driven trigger on `pr_approved`.
 
 ### Reviewer Auto-Assignment
 
@@ -385,7 +396,7 @@ The project supports two database backends via a pluggable `Storage` interface (
 
 The active backend is selected at startup via `models.DatabaseConfig.Type` (`"bbolt"` or `"mongo"`). Cross-engine migration is available via `MigrateBboltToMongo()` / `MigrateMongoToBbolt()`.
 
-Buckets (36 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking):
+Buckets (36 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking). `sync_history` bucket is also used for deployment records (key: deployment ID):
 
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
@@ -489,6 +500,36 @@ PlatformClient interface methods:
 - `logs.go` — `GetLogs`, `ExportLogs`; uses `audit_log_index` bucket for indexed lookups by actor/repo_group/action/category; falls back to full scan when no filter specified
 - `batch_rebase.go` — `BatchRebasePR` for batch rebase operations
 
+Additional PR handlers in `daemon/handlers/`:
+- `pr_extra.go` — `GetApprovalStatus` (GET `/:pr_id/approval-status`), `CheckTemplate` (GET `/:pr_id/template-check`), `MarkReady` (POST `/:pr_id/ready`)
+- `deployment.go` — `TrackDeployment` (POST `/deployments`), `GetDeployments` (GET `/deployments`), `DeploymentStatus` (POST `/deployment-status`)
+
+### Approval Rules
+
+File-path-based approval requirements enforced by the merge queue checker:
+- **Config**: `[[repo_groups.approval_rules]]` with `pattern` (glob), `approvers` (list), `min_count` (default 1), `priority`, `reason`
+- **Checker**: `checkPathApprovals()` fetches diff files via `GetDiffFiles`, matches against rules using glob patterns, verifies specified approvers have approved
+- **Merge gate**: Blocks merge if any matched rule's `min_count` is not satisfied by current approvers
+
+### PR Size Limits
+
+Configurable PR size warnings and merge blocking:
+- **Config**: `[repo_groups.pr_size_limits]` with `lines_changed_warn/block`, `files_changed_warn/block`, `block_merge`, `big_pr_label`, `warn_pr_label`, `exempt_labels`
+- **Checker**: `checkPRSize()` fetches diff via `GetPRDiff`, counts total lines and files, adds warning/blocking labels, optionally blocks merge
+
+### PR Template Enforcement
+
+Enforce PR description completeness before merge:
+- **Config**: `[repo_groups.pr_template]` with `require_body`, `require_checklist`, `block_merge`, `incomplete_label`, `exempt_labels`
+- **Checker**: `checkPRTemplate()` validates PR body is non-empty and checklist items are all checked
+
+### Draft PR Workflow
+
+Draft PR lifecycle management:
+- **Config**: `[repo_groups.draft_pr]` with `auto_enqueue_on_ready`, `skip_queue`, `skip_escalation`
+- **API**: `POST /api/v1/repos/:repo_group/prs/:pr_id/ready` marks a draft PR as ready and optionally auto-enqueues it
+- **Queue**: Draft PRs are already skipped in `AddToQueue` (existing behavior)
+
 ### Reviewer Package
 
 `daemon/reviewer/` handles automatic reviewer assignment:
@@ -505,6 +546,23 @@ PlatformClient interface methods:
 
 `daemon/feed/` provides RSS feed generation:
 - `feed.go` — `Feed` struct (ring buffer), `RSS`/`RSSChannel`/`RSSItem` XML types, `GenerateRSS()`, `StartFeedSubscriber()`, global `InitGlobalFeed()`/`GlobalFeed()`
+
+### Deployment Tracking
+
+Track deployments and link them to merged PRs:
+
+- **Config**: `[deployment]` section: `enabled`, `webhook_url`, `auto_track`, `notify_on_fail`
+- **Endpoints**: `POST /api/v1/repos/:repo_group/deployments`, `GET /api/v1/repos/:repo_group/deployments`, `POST /api/v1/deployment-status`
+- **Auto-track**: `AutoTrackDeployment()` scans recently merged PRs and creates deployment records
+- **Failure notification**: Sends webhook notification on failed deployments when `notify_on_fail = true`
+
+### Multi-Tenancy
+
+Space-level data isolation for multi-tenant deployments:
+
+- **Config**: `[multi_tenant]` section: `enabled`, `space_data_isolation`
+- **Enforcement**: `RequireSpaceAccess()` middleware checks user membership in the team space that owns the requested repo group
+- **Space isolation**: When `space_data_isolation = true`, users can only access repo groups belonging to their team spaces
 
 ## Development
 

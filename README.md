@@ -137,7 +137,9 @@ Use natural language commands in any channel the bot is invited to:
  prs my-project        → List PRs
  pr my-project 42      → Show PR #42 (with description, events, rebase/cherry-pick buttons)
  approve my-project 42 → Approve
+ approve my-project 42 43 44 → Batch approve
  close my-project 42   → Close
+ close my-project 42 43 44 → Batch close
  reopen my-project 42  → Reopen
  spam my-project 42    → Mark as spam
  rebase my-project 42  → Rebase PR onto base branch
@@ -156,7 +158,9 @@ Start a chat with your bot:
  /prs my-project        → List PRs
  /pr my-project 42      → Show PR #42 (with description, events, rebase/cherry-pick buttons)
  /approve my-project 42 → Approve
+ /batch_approve my-project 42 43 44 → Batch approve
  /close my-project 42   → Close
+ /batch_close my-project 42 43 44 → Batch close
  /reopen my-project 42  → Reopen
  /spam my-project 42    → Mark as spam
  /rebase my-project 42  → Rebase PR onto base branch
@@ -175,7 +179,10 @@ Send messages directly to the bot:
  prs my-project    → List PRs
  pr my-project 42  → Show PR #42 (with description, events, rebase/cherry-pick buttons)
  approve my-project 42 → Approve
+ approve my-project 42 43 44 → Batch approve
  close my-project 42   → Close
+ close my-project 42 43 44 → Batch close
+ reopen my-project 42  → Reopen
  spam my-project 42    → Mark as spam
  rebase my-project 42  → Rebase PR onto base branch
  cherrypick my-project 42 <branch> → Cherry-pick merged PR
@@ -193,7 +200,9 @@ Use slash commands or prefix commands in your Discord server:
  !prs my-project        → List PRs
  !pr my-project 42      → Show PR #42 (with description and events)
  !approve my-project 42 → Approve
+ !batch_approve my-project 42 43 44 → Batch approve
  !close my-project 42   → Close
+ !batch_close my-project 42 43 44 → Batch close
  !reopen my-project 42  → Reopen
  !spam my-project 42    → Mark as spam
  !queue my-project      → Check merge queue

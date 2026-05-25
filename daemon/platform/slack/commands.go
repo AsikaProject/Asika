@@ -21,8 +21,8 @@ func (b *Bot) handleHelp(ev *slack.MessageEvent, client *socketmode.Client) {
 *PR Management*
 prs [repo_group] — List PRs
 pr <repo_group> <number> — Show PR details
-approve <repo_group> <pr_id> — Approve a PR
-close <repo_group> <pr_id> [reason] — Close a PR
+ approve <repo_group> <pr_id> [pr_id2] ... — Approve one or more PRs
+close <repo_group> <pr_id> [pr_id2] ... — Close one or more PRs
 reopen <repo_group> <pr_id> — Reopen a PR (spam recovery)
 spam <repo_group> <pr_id> — Mark PR as spam
 revert <repo_group> <pr_id> — Revert a merged PR

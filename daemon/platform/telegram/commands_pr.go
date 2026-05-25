@@ -235,6 +235,126 @@ func (b *Bot) handleClosePR(c telebot.Context) error {
 	return c.Send(fmt.Sprintf("PR #%d closed.", pr.PRNumber))
 }
 
+func (b *Bot) handleBatchApprovePR(c telebot.Context) error {
+	if !b.requireOperator(c) {
+		return nil
+	}
+	args := strings.Fields(c.Text())
+	if len(args) < 4 {
+		return c.Send("Usage: /batch_approve repo_group pr_id [pr_id2] [pr_id3] ...")
+	}
+	repoGroup := args[1]
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		return c.Send("Repo group not found.")
+	}
+	successCount := 0
+	failCount := 0
+	for i := 2; i < len(args); i++ {
+		prID := args[i]
+		pr, err := commonutil.GetPRByID(repoGroup, prID)
+		if err != nil || pr == nil {
+			failCount++
+			continue
+		}
+		client := b.clients[platforms.PlatformType(pr.Platform)]
+		if client == nil {
+			failCount++
+			continue
+		}
+		owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+		if owner == "" || repo == "" {
+			failCount++
+			continue
+		}
+		ctx := context.Background()
+		if err := client.ApprovePR(ctx, owner, repo, pr.PRNumber); err != nil {
+			slog.Error("telegram bot: batch approve failed", "error", err, "pr_number", pr.PRNumber)
+			db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
+				"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+			})
+			failCount++
+			continue
+		}
+		pr.IsApproved = true
+		prData, _ := json.Marshal(pr)
+		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+		if prData != nil {
+			db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		}
+		addedToQueue := false
+		if b.queueMgr != nil {
+			if pr.State != "" && pr.State != "open" {
+				slog.Info("telegram bot: skipping queue add for non-open PR", "pr_number", pr.PRNumber, "state", pr.State)
+			} else {
+				if err := b.queueMgr.AddToQueue(pr); err != nil {
+					slog.Warn("telegram bot: failed to add PR to queue", "error", err, "pr_number", pr.PRNumber)
+				} else {
+					addedToQueue = true
+					go b.queueMgr.CheckQueue()
+				}
+			}
+		}
+		db.AppendAuditLog("info", "PR approved", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "added_to_queue": addedToQueue,
+		})
+		successCount++
+	}
+	return c.Send(fmt.Sprintf("Batch approve complete. Success: %d, Failed: %d", successCount, failCount))
+}
+
+func (b *Bot) handleBatchClosePR(c telebot.Context) error {
+	if !b.requireOperator(c) {
+		return nil
+	}
+	args := strings.Fields(c.Text())
+	if len(args) < 4 {
+		return c.Send("Usage: /batch_close repo_group pr_id [pr_id2] [pr_id3] ...")
+	}
+	repoGroup := args[1]
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		return c.Send("Repo group not found.")
+	}
+	successCount := 0
+	failCount := 0
+	for i := 2; i < len(args); i++ {
+		prID := args[i]
+		pr, err := commonutil.GetPRByID(repoGroup, prID)
+		if err != nil || pr == nil {
+			failCount++
+			continue
+		}
+		client := b.clients[platforms.PlatformType(pr.Platform)]
+		if client == nil {
+			failCount++
+			continue
+		}
+		owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+		if owner == "" || repo == "" {
+			failCount++
+			continue
+		}
+		ctx := context.Background()
+		if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
+			db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
+				"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+			})
+			failCount++
+			continue
+		}
+		pr.State = "closed"
+		prData, _ := json.Marshal(pr)
+		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+		db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		db.AppendAuditLog("info", "PR closed", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram",
+		})
+		successCount++
+	}
+	return c.Send(fmt.Sprintf("Batch close complete. Success: %d, Failed: %d", successCount, failCount))
+}
+
 func (b *Bot) handleReopenPR(c telebot.Context) error {
 	if !b.requireAdmin(c) {
 		return nil

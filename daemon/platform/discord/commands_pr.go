@@ -421,3 +421,108 @@ func (b *Bot) handleCherryPickPR(s *discordgo.Session, m *discordgo.MessageCreat
 		s.ChannelMessageSend(m.ChannelID, "Cherry-pick request submitted.")
 	}
 }
+
+func (b *Bot) handleBatchApprovePR(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if len(args) < 3 {
+		s.ChannelMessageSend(m.ChannelID, "Usage: `!batch_approve <repo_group> <pr_id> [pr_id2] [pr_id3] ...`")
+		return
+	}
+	repoGroup := args[1]
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		s.ChannelMessageSend(m.ChannelID, "Repo group not found.")
+		return
+	}
+	successCount := 0
+	failCount := 0
+	var failedPRs []string
+	for _, prID := range args[2:] {
+		pr, err := commonutil.GetPRByID(repoGroup, prID)
+		if err != nil || pr == nil {
+			failCount++
+			failedPRs = append(failedPRs, fmt.Sprintf("%s (not found)", prID))
+			continue
+		}
+		client := b.getClientForPlatform(pr.Platform)
+		if client == nil {
+			failCount++
+			failedPRs = append(failedPRs, fmt.Sprintf("%s (no client for platform %s)", prID, pr.Platform))
+			continue
+		}
+		owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+		ctx := context.Background()
+		if err := client.ApprovePR(ctx, owner, repo, pr.PRNumber); err != nil {
+			slog.Error("discord bot: batch approve failed", "error", err, "pr_number", pr.PRNumber)
+			failCount++
+			failedPRs = append(failedPRs, fmt.Sprintf("#%d (%v)", pr.PRNumber, err))
+			continue
+		}
+		pr.IsApproved = true
+		pr.Events = append(pr.Events, models.PREvent{Timestamp: time.Now(), Action: "approved", Actor: m.Author.Username})
+		prData, _ := json.Marshal(pr)
+		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+		if prData != nil {
+			db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		}
+		successCount++
+		db.AppendAuditLog("info", "PR approved", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
+		})
+	}
+	if failCount > 0 {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Batch approve: %d succeeded, %d failed. Failed: %s", successCount, failCount, strings.Join(failedPRs, ", ")))
+	} else {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Batch approve: %d PRs approved.", successCount))
+	}
+}
+
+func (b *Bot) handleBatchClosePR(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if len(args) < 3 {
+		s.ChannelMessageSend(m.ChannelID, "Usage: `!batch_close <repo_group> <pr_id> [pr_id2] [pr_id3] ...`")
+		return
+	}
+	repoGroup := args[1]
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		s.ChannelMessageSend(m.ChannelID, "Repo group not found.")
+		return
+	}
+	successCount := 0
+	failCount := 0
+	var failedPRs []string
+	for _, prID := range args[2:] {
+		pr, _ := commonutil.GetPRByID(repoGroup, prID)
+		if pr == nil {
+			failCount++
+			failedPRs = append(failedPRs, fmt.Sprintf("%s (not found)", prID))
+			continue
+		}
+		client := b.getClientForPlatform(pr.Platform)
+		if client == nil {
+			failCount++
+			failedPRs = append(failedPRs, fmt.Sprintf("%s (no client for platform %s)", prID, pr.Platform))
+			continue
+		}
+		owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+		ctx := context.Background()
+		if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
+			slog.Error("discord bot: batch close failed", "error", err, "pr_number", pr.PRNumber)
+			failCount++
+			failedPRs = append(failedPRs, fmt.Sprintf("#%d (%v)", pr.PRNumber, err))
+			continue
+		}
+		pr.State = "closed"
+		prData, _ := json.Marshal(pr)
+		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+		db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		successCount++
+		db.AppendAuditLog("info", "PR closed", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
+		})
+	}
+	if failCount > 0 {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Batch close: %d succeeded, %d failed. Failed: %s", successCount, failCount, strings.Join(failedPRs, ", ")))
+	} else {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Batch close: %d PRs closed.", successCount))
+	}
+}

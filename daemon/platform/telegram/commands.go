@@ -83,7 +83,9 @@ func (b *Bot) handleHelp(c telebot.Context) error {
 /prs repo_group — List PRs
 /pr repo_group number — Show PR details
 /approve repo_group pr_id — Approve a PR
+/batch_approve repo_group pr_id [pr_id2] ... — Approve multiple PRs
 /close repo_group pr_id — Close a PR
+/batch_close repo_group pr_id [pr_id2] ... — Close multiple PRs
 /reopen repo_group pr_id — Reopen a PR (spam recovery)
 /revert repo_group pr_number — Revert a merged PR
 /spam repo_group pr_id — Mark PR as spam

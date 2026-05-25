@@ -481,6 +481,10 @@ func normalizeRepoGroup(rg *models.RepoGroupConfig) models.RepoGroup {
 		MergeQueue:     rg.MergeQueue,
 		LabelRules:     rg.LabelRules,
 		ReviewRules:    rg.ReviewRules,
+		ApprovalRules:  rg.ApprovalRules,
+		PRSizeLimits:   rg.PRSizeLimits,
+		PRTemplate:     rg.PRTemplate,
+		DraftPR:        rg.DraftPR,
 	}
 }
 

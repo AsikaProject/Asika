@@ -149,6 +149,19 @@ func (s *Server) setupRoutes() {
 				prsAssign.POST("/:pr_id/assign", handlers.AssignReviewers)
 				prsAssign.POST("/:pr_id/codeowners-assign", handlers.TriggerCodeOwnersAssign)
 			}
+
+			prsExtra := prs.Group("")
+			prsExtra.Use(RequireAnyRole("viewer", "operator", "admin"))
+			{
+				prsExtra.GET("/:pr_id/approval-status", handlers.GetApprovalStatus)
+				prsExtra.GET("/:pr_id/template-check", handlers.CheckTemplate)
+			}
+
+			prsReady := prs.Group("")
+			prsReady.Use(RequirePermission("approve"))
+			{
+				prsReady.POST("/:pr_id/ready", handlers.MarkReady)
+			}
 		}
 
 		queue := protected.Group("/queue/:repo_group")
@@ -246,6 +259,16 @@ func (s *Server) setupRoutes() {
 			admin.GET("/backups", handlers.ListBackups)
 			admin.POST("/restore", handlers.RestoreBackup)
 		}
+
+		deployments := protected.Group("/repos/:repo_group/deployments")
+		deployments.Use(RequireAnyRole("viewer", "operator", "admin"))
+		deployments.Use(RequireRepoGroupAccess())
+		{
+			deployments.GET("", handlers.GetDeployments)
+			deployments.POST("", handlers.TrackDeployment)
+		}
+
+		protected.POST("/deployment-status", handlers.DeploymentStatus)
 
 		protected.GET("/events", handlers.StreamEvents)
 

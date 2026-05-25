@@ -71,6 +71,50 @@ fast_forward_only  = false  # if true, auto-rebase PR before merge to ensure lin
 # Example: "core_approved >= 1 OR author IN core_contributors"
 # allow_expression_override_ci = false  # if true, expression can override CI/conflict hard gates
 
+# Approval rules — file-path-based approval requirements (optional)
+# When files matching a pattern are changed, specified approvers must approve.
+# [[approval_rules]]
+# pattern   = "src/security/**"
+# approvers = ["security-lead", "security-team"]
+# min_count = 1
+# priority  = 20
+# reason    = "Security-sensitive changes require security team approval"
+#
+# [[approval_rules]]
+# pattern   = "src/database/migrations/**"
+# approvers = ["dba-lead"]
+# min_count = 1
+# priority  = 15
+# reason    = "Database migrations require DBA approval"
+
+# PR size limits (optional)
+# [pr_size_limits]
+# enabled            = true
+# lines_changed_warn = 300
+# lines_changed_block = 1000
+# files_changed_warn  = 15
+# files_changed_block = 30
+# block_merge        = true
+# big_pr_label       = "size/xl"
+# warn_pr_label      = "size/l"
+# notify_on_big_pr   = true
+# exempt_labels      = ["dependencies"]
+
+# PR template enforcement (optional)
+# [pr_template]
+# enabled             = true
+# require_body        = true
+# require_checklist   = true
+# block_merge         = true
+# incomplete_label    = "incomplete"
+# exempt_labels       = ["dependencies"]
+
+# Draft PR workflow (optional)
+# [draft_pr]
+# auto_enqueue_on_ready = true
+# skip_queue            = false
+# skip_escalation       = true
+
 # Spam detection
 [spam]
 enabled                    = true
@@ -426,3 +470,37 @@ viewer_ids   = ["U0555566666"]
 # Keys are delivered via DM and auto-deleted after 2 minutes.
 # Use X-API-Key header for authentication:
 #   curl -H "X-API-Key: ak_xxx..." http://localhost:8080/api/v1/stats
+
+# LDAP/Active Directory authentication (optional)
+# When enabled, users not found in local DB are authenticated against LDAP.
+# [ldap]
+# enabled        = false
+# host           = "ldap.example.com"
+# port           = 636
+# use_tls        = true
+# start_tls      = false
+# bind_dn        = "cn=admin,dc=example,dc=com"
+# bind_password  = "change-me"
+# base_dn        = "ou=users,dc=example,dc=com"
+# user_filter    = "(uid={username})"
+# group_filter   = "(member={userDN})"
+# group_dn       = "ou=groups,dc=example,dc=com"
+# allowed_groups = ["asika-admins", "asika-operators"]
+# auto_create    = true
+# default_role   = "operator"
+# email_attribute = "mail"
+# name_attribute  = "cn"
+
+# Multi-tenancy configuration (optional)
+# Enforce space-level data isolation for repo groups.
+# [multi_tenant]
+# enabled              = false
+# space_data_isolation = true
+
+# Deployment tracking (optional)
+# Track deployments and link them to merged PRs.
+# [deployment]
+# enabled       = false
+# webhook_url   = "https://hooks.slack.com/services/xxx"
+# auto_track    = true
+# notify_on_fail = true

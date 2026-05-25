@@ -179,9 +179,17 @@ func (b *Bot) handleMessage(ev *slack.MessageEvent, client *socketmode.Client) {
 	case "pr":
 		b.handleShowPR(ev, client, parts)
 	case "approve":
-		b.handleApprovePR(ev, client, parts)
+		if len(parts) > 3 {
+			b.handleBatchApprovePR(ev, client, parts)
+		} else {
+			b.handleApprovePR(ev, client, parts)
+		}
 	case "close":
-		b.handleClosePR(ev, client, parts)
+		if len(parts) > 3 {
+			b.handleBatchClosePR(ev, client, parts)
+		} else {
+			b.handleClosePR(ev, client, parts)
+		}
 	case "reopen":
 		b.handleReopenPR(ev, client, parts)
 	case "spam":

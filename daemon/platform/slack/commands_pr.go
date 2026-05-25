@@ -433,3 +433,123 @@ func (b *Bot) handleCherryPickPR(ev *slack.MessageEvent, client *socketmode.Clie
 	}
 	b.postMessage(client, ev.Channel, "Cherry-pick request submitted.")
 }
+
+func (b *Bot) handleBatchApprovePR(ev *slack.MessageEvent, client *socketmode.Client, args []string) {
+	if len(args) < 3 {
+		b.postMessage(client, ev.Channel, "Usage: approve <repo_group> <pr_id> [pr_id2] [pr_id3] ...")
+		return
+	}
+	repoGroup := args[1]
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		b.postMessage(client, ev.Channel, "Repo group not found.")
+		return
+	}
+	successCount := 0
+	failCount := 0
+	var failDetails []string
+	for _, prID := range args[2:] {
+		pr, err := platformutil.GetPRByID(repoGroup, prID)
+		if err != nil || pr == nil {
+			failCount++
+			failDetails = append(failDetails, fmt.Sprintf("%s: not found", prID))
+			continue
+		}
+		pClient := b.getClientForPlatform(pr.Platform)
+		if pClient == nil {
+			failCount++
+			failDetails = append(failDetails, fmt.Sprintf("#%d: no client for platform %s", pr.PRNumber, pr.Platform))
+			continue
+		}
+		owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+		ctx := context.Background()
+		if err := pClient.ApprovePR(ctx, owner, repo, pr.PRNumber); err != nil {
+			failCount++
+			failDetails = append(failDetails, fmt.Sprintf("#%d: %v", pr.PRNumber, err))
+			db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
+				"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "error": err.Error(),
+			})
+			continue
+		}
+		pr.IsApproved = true
+		pr.Events = append(pr.Events, models.PREvent{Timestamp: time.Now(), Action: "approved", Actor: ev.User})
+		prData, _ := json.Marshal(pr)
+		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+		if prData != nil {
+			db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		}
+		if b.queueMgr != nil {
+			if pr.State != "" && pr.State != "open" {
+				slog.Info("slack bot: skipping queue add for non-open PR", "pr_number", pr.PRNumber, "state", pr.State)
+			} else {
+				if err := b.queueMgr.AddToQueue(pr); err != nil {
+					slog.Warn("slack bot: failed to add PR to queue", "error", err, "pr_number", pr.PRNumber)
+				} else {
+					go b.queueMgr.CheckQueue()
+				}
+			}
+		}
+		db.AppendAuditLog("info", "PR approved", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack",
+		})
+		successCount++
+	}
+	result := fmt.Sprintf("Batch approve: %d succeeded, %d failed.", successCount, failCount)
+	if len(failDetails) > 0 {
+		result += "\nFailures:\n" + strings.Join(failDetails, "\n")
+	}
+	b.postMessage(client, ev.Channel, result)
+}
+
+func (b *Bot) handleBatchClosePR(ev *slack.MessageEvent, client *socketmode.Client, args []string) {
+	if len(args) < 3 {
+		b.postMessage(client, ev.Channel, "Usage: close <repo_group> <pr_id> [pr_id2] [pr_id3] ...")
+		return
+	}
+	repoGroup := args[1]
+	group := config.GetRepoGroupByName(b.cfg, repoGroup)
+	if group == nil {
+		b.postMessage(client, ev.Channel, "Repo group not found.")
+		return
+	}
+	successCount := 0
+	failCount := 0
+	var failDetails []string
+	for _, prID := range args[2:] {
+		pr, _ := platformutil.GetPRByID(repoGroup, prID)
+		if pr == nil {
+			failCount++
+			failDetails = append(failDetails, fmt.Sprintf("%s: not found", prID))
+			continue
+		}
+		pClient := b.getClientForPlatform(pr.Platform)
+		if pClient == nil {
+			failCount++
+			failDetails = append(failDetails, fmt.Sprintf("#%d: no client for platform", pr.PRNumber))
+			continue
+		}
+		owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+		ctx := context.Background()
+		if err := pClient.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
+			failCount++
+			failDetails = append(failDetails, fmt.Sprintf("#%d: %v", pr.PRNumber, err))
+			db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
+				"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "error": err.Error(),
+			})
+			continue
+		}
+		pr.State = "closed"
+		prData, _ := json.Marshal(pr)
+		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
+		db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
+		db.AppendAuditLog("info", "PR closed", map[string]interface{}{
+			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack",
+		})
+		successCount++
+	}
+	result := fmt.Sprintf("Batch close: %d succeeded, %d failed.", successCount, failCount)
+	if len(failDetails) > 0 {
+		result += "\nFailures:\n" + strings.Join(failDetails, "\n")
+	}
+	b.postMessage(client, ev.Channel, result)
+}

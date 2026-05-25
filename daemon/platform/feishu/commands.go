@@ -38,12 +38,18 @@ func (b *Bot) processCommand(senderID, text string) string {
 		return b.showPRText(parts[1], parts[2])
 	case strings.HasPrefix(lower, "approve ") || strings.HasPrefix(lower, "/approve "):
 		if len(parts) < 3 {
-			return "Usage: approve <repo_group> <pr_id>"
+			return "Usage: approve <repo_group> <pr_id> [pr_id2] [pr_id3] ..."
+		}
+		if len(parts) > 3 {
+			return b.handleBatchApprovePR(senderID, parts[1], parts[2:])
 		}
 		return b.doApprove(senderID, parts[1], parts[2])
 	case strings.HasPrefix(lower, "close ") || strings.HasPrefix(lower, "/close "):
 		if len(parts) < 3 {
-			return "Usage: close <repo_group> <pr_id> [reason]"
+			return "Usage: close <repo_group> <pr_id> [pr_id2] [pr_id3] ..."
+		}
+		if len(parts) > 3 {
+			return b.handleBatchClosePR(senderID, parts[1], parts[2:])
 		}
 		return b.doClose(senderID, parts[1], parts[2], parts[3:])
 	case strings.HasPrefix(lower, "reopen ") || strings.HasPrefix(lower, "/reopen "):
@@ -157,8 +163,8 @@ func (b *Bot) helpText() string {
   help          - Show this help
   prs [group]   - List PRs
   pr <group> <num> - Show PR details
-  approve <group> <id> - Approve PR
-  close <group> <id>   - Close PR
+   approve <group> <id> [id2] [id3] ... - Approve PR(s)
+   close <group> <id> [id2] [id3] ...   - Close PR(s)
   reopen <group> <id>  - Reopen PR
    spam <group> <id>    - Mark as spam
    revert <group> <id>   - Revert a merged PR

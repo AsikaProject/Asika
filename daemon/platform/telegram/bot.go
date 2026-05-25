@@ -96,7 +96,9 @@ func (b *Bot) registerCommands() {
 	b.bot.Handle("/prs", b.handleListPRs)
 	b.bot.Handle("/pr", b.handleShowPR)
 	b.bot.Handle("/approve", b.handleApprovePR)
+	b.bot.Handle("/batch_approve", b.handleBatchApprovePR)
 	b.bot.Handle("/close", b.handleClosePR)
+	b.bot.Handle("/batch_close", b.handleBatchClosePR)
 	b.bot.Handle("/reopen", b.handleReopenPR)
 	b.bot.Handle("/spam", b.handleMarkSpam)
 	b.bot.Handle("/revert", b.handleRevertPR)
@@ -127,7 +129,9 @@ func (b *Bot) registerBotMenu() {
 		{Text: "prs", Description: "List PRs in a group"},
 		{Text: "pr", Description: "Show PR details & actions"},
 		{Text: "approve", Description: "Approve a PR"},
+		{Text: "batch_approve", Description: "Approve multiple PRs"},
 		{Text: "close", Description: "Close a PR"},
+		{Text: "batch_close", Description: "Close multiple PRs"},
 		{Text: "reopen", Description: "Reopen a PR"},
 		{Text: "spam", Description: "Mark PR as spam"},
 		{Text: "revert", Description: "Revert a merged PR"},

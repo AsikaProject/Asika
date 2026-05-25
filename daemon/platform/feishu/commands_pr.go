@@ -433,3 +433,51 @@ func (b *Bot) doCherryPick(senderID, repoGroup, prNumberStr, targetBranch string
 	}
 	return "Cherry-pick request submitted."
 }
+
+func (b *Bot) handleBatchApprovePR(senderID, repoGroup string, prIDs []string) string {
+	successCount := 0
+	failCount := 0
+	var failDetails []string
+	for _, prID := range prIDs {
+		result := b.doApprove(senderID, repoGroup, prID)
+		if strings.HasPrefix(result, "Failed:") || strings.HasPrefix(result, "PR not found") || strings.HasPrefix(result, "No client") || strings.HasPrefix(result, "Repo group not found") {
+			failCount++
+			failDetails = append(failDetails, fmt.Sprintf("#%s: %s", prID, result))
+		} else {
+			successCount++
+		}
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Batch approve: %d succeeded, %d failed.", successCount, failCount))
+	if len(failDetails) > 0 {
+		sb.WriteString("\nFailures:")
+		for _, d := range failDetails {
+			sb.WriteString("\n  " + d)
+		}
+	}
+	return sb.String()
+}
+
+func (b *Bot) handleBatchClosePR(senderID, repoGroup string, prIDs []string) string {
+	successCount := 0
+	failCount := 0
+	var failDetails []string
+	for _, prID := range prIDs {
+		result := b.doClose(senderID, repoGroup, prID, nil)
+		if strings.HasPrefix(result, "Failed:") || strings.HasPrefix(result, "PR not found") || strings.HasPrefix(result, "No client") || strings.HasPrefix(result, "Repo group not found") {
+			failCount++
+			failDetails = append(failDetails, fmt.Sprintf("#%s: %s", prID, result))
+		} else {
+			successCount++
+		}
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Batch close: %d succeeded, %d failed.", successCount, failCount))
+	if len(failDetails) > 0 {
+		sb.WriteString("\nFailures:")
+		for _, d := range failDetails {
+			sb.WriteString("\n  " + d)
+		}
+	}
+	return sb.String()
+}

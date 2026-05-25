@@ -1,5 +1,21 @@
 # ChangeLog for Asika
 
+## v20260525DEV
+
+- **Feature**: Add file-path-based approval rules (`approval_rules`). When PR changes files matching a pattern, specified approvers must approve before merge.
+- **Feature**: Add PR size warnings and merge blocking (`pr_size_limits`). Configurable thresholds for lines changed and file count, with auto-labeling and optional merge blocking.
+- **Feature**: Add PR description template enforcement (`pr_template`). Require non-empty PR body and completed checklist before allowing merge.
+- **Feature**: Add draft PR workflow (`draft_pr`). Auto-enqueue PRs when marked as ready for review, with escalation skipping for drafts.
+- **Feature**: Add batch approve/close bot commands for all 4 bot platforms (Telegram, Discord, Slack, Feishu).
+- **Feature**: Add LDAP/Active Directory authentication backend. Auto-create users on first LDAP login with configurable role.
+- **Feature**: Add deployment tracking. Record deployment events, link to merged PRs, and notify on failure.
+- **Feature**: Add multi-tenancy configuration with space-level data isolation.
+- **Feature**: Add `GET /api/v1/repos/:repo_group/prs/:pr_id/approval-status` endpoint for detailed approval requirements.
+- **Feature**: Add `GET /api/v1/repos/:repo_group/prs/:pr_id/template-check` endpoint for template compliance checking.
+- **Feature**: Add `POST /api/v1/repos/:repo_group/prs/:pr_id/ready` endpoint to mark draft PRs as ready for review.
+- **Feature**: Add `LinesAdded` and `LinesDeleted` fields to PRRecord for size tracking.
+- **Refactor**: Enable webhook event filtering in example config (was previously commented out).
+
 ## v20260524DEV
 
 - **Security**: `GenerateFingerprintID()` used predictable `time.Now()` timestamps. Now uses `crypto/rand` for cryptographically secure IDs.

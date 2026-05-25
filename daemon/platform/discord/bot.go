@@ -166,8 +166,12 @@ func (b *Bot) handleMessageCreate(s *discordgo.Session, m *discordgo.MessageCrea
 		b.handleShowPR(s, m, parts)
 	case "!approve":
 		b.handleApprovePR(s, m, parts)
+	case "!batch_approve":
+		b.handleBatchApprovePR(s, m, parts)
 	case "!close":
 		b.handleClosePR(s, m, parts)
+	case "!batch_close":
+		b.handleBatchClosePR(s, m, parts)
 	case "!reopen":
 		b.handleReopenPR(s, m, parts)
 	case "!spam":

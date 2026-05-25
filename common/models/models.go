@@ -93,6 +93,10 @@ type RepoGroup struct {
 	MergeQueue     MergeQueueConfig `json:"merge_queue"`
 	LabelRules     []LabelRule      `json:"label_rules,omitempty"`
 	ReviewRules    []ReviewRule     `json:"review_rules,omitempty"`
+	ApprovalRules  []ApprovalRule   `json:"approval_rules,omitempty"`
+	PRSizeLimits   PRSizeConfig     `json:"pr_size_limits,omitempty"`
+	PRTemplate     PRTemplateConfig `json:"pr_template,omitempty"`
+	DraftPR        DraftPRConfig    `json:"draft_pr,omitempty"`
 }
 
 type PRBranchInfo struct {
@@ -125,6 +129,8 @@ type PRRecord struct {
 	BranchInfo     *PRBranchInfo `json:"branch_info,omitempty"`
 	CloseReason    string        `json:"close_reason,omitempty"`
 	Body           string        `json:"body,omitempty"`
+	LinesAdded     int           `json:"lines_added"`
+	LinesDeleted   int           `json:"lines_deleted"`
 }
 
 type PREvent struct {
@@ -403,6 +409,9 @@ type Config struct {
 	NotifyRules        NotifyRulesConfig  `toml:"notify_rules" json:"notify_rules"`
 	AutoRebase         AutoRebaseConfig   `toml:"auto_rebase" json:"auto_rebase"`
 	AutoMerge          AutoMergeConfig    `toml:"auto_merge" json:"auto_merge"`
+	LDAP               LDAPConfig         `toml:"ldap" json:"ldap"`
+	MultiTenant        MultiTenantConfig  `toml:"multi_tenant" json:"multi_tenant"`
+	Deployment         DeploymentConfig   `toml:"deployment" json:"deployment"`
 }
 
 type ScheduleConfig struct {

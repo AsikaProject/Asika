@@ -44,6 +44,62 @@ func Login(c *gin.Context) {
 		return
 	}
 	if data == nil {
+		if cfg.LDAP.Enabled {
+			ldapAuth := auth.NewLDAPAuthenticator(cfg.LDAP)
+			ldapInfo, ldapErr := ldapAuth.Authenticate(req.Username, req.Password)
+			if ldapErr == nil && ldapInfo != nil {
+				role := cfg.LDAP.DefaultRole
+				if role == "" {
+					role = "operator"
+				}
+				newUser := models.User{
+					Username:     req.Username,
+					PasswordHash: "",
+					Role:         role,
+					CreatedAt:    time.Now(),
+					Permissions: models.UserPermissions{
+						CanApprove: true, CanMerge: true, CanClose: true,
+						CanReopen: true, CanComment: true, CanLabel: true,
+					},
+				}
+				if cfg.LDAP.AutoCreate {
+					userData, _ := json.Marshal(newUser)
+					if putErr := db.Put(db.BucketUsers, req.Username, userData); putErr != nil {
+						slog.Error("failed to create LDAP user", "error", putErr)
+						c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
+						return
+					}
+					slog.Info("LDAP user auto-created", "username", req.Username, "role", role)
+				}
+				sessionID := auth.GenerateSessionID()
+				now := time.Now()
+				expiry := config.GenerateTokenExpiry(cfg.Auth.TokenExpiry)
+				session := &models.Session{
+					ID:          sessionID,
+					Username:    req.Username,
+					TokenPrefix: "",
+					IssuedAt:    now,
+					LastUsedAt:  now,
+					ExpiresAt:   now.Add(expiry),
+					IPAddress:   c.ClientIP(),
+					UserAgent:   c.Request.UserAgent(),
+				}
+				if err := db.PutSession(session); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create session"})
+					return
+				}
+				slog.Info("LDAP login successful", "username", req.Username, "ip", c.ClientIP())
+				c.JSON(http.StatusOK, gin.H{
+					"message":    "login successful (LDAP)",
+					"session_id": sessionID,
+					"username":   req.Username,
+					"role":       role,
+					"auth":       "ldap",
+				})
+				return
+			}
+			slog.Warn("LDAP authentication failed", "username", req.Username, "error", ldapErr)
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}

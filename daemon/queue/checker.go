@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"asika/common/config"
@@ -78,6 +81,42 @@ func (c *Checker) IsReadyToMerge(pr *models.PRRecord) (bool, error) {
 		slog.Info("PR does not meet approval requirement, skipping enqueue",
 			"pr_id", pr.ID, "approvals", len(approvals), "required", mq.RequiredApprovals)
 		return false, nil
+	}
+
+	// Check path-specific approval rules
+	if len(group.ApprovalRules) > 0 {
+		pathApproved, err := c.checkPathApprovals(ctx, pr, group, approvals)
+		if err != nil {
+			return false, err
+		}
+		if !pathApproved {
+			slog.Info("PR does not meet path approval requirements, skipping enqueue", "pr_id", pr.ID)
+			return false, nil
+		}
+	}
+
+	// Check PR size limits
+	if group.PRSizeLimits.Enabled {
+		sizeOK, err := c.checkPRSize(ctx, pr, group)
+		if err != nil {
+			return false, err
+		}
+		if !sizeOK {
+			slog.Info("PR exceeds size limits, skipping enqueue", "pr_id", pr.ID)
+			return false, nil
+		}
+	}
+
+	// Check PR template enforcement
+	if group.PRTemplate.Enabled {
+		templateOK, err := c.checkPRTemplate(ctx, pr, group)
+		if err != nil {
+			return false, err
+		}
+		if !templateOK {
+			slog.Info("PR does not meet template requirements, skipping enqueue", "pr_id", pr.ID)
+			return false, nil
+		}
 	}
 
 	if mq.CICheckRequired && group.CIProvider != "none" && group.CIProvider != "" {
@@ -252,6 +291,51 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 		return false, nil
 	}
 
+	if len(group.ApprovalRules) > 0 {
+		pathOK, err := c.checkPathApprovals(ctx, pr, group, approvals)
+		if err != nil {
+			return false, err
+		}
+		if !pathOK {
+			item.Criteria = models.MergeCriteria{
+				RequiredApprovals: mq.RequiredApprovals,
+				ApprovedBy:        approvals,
+				CIStatus:          ciStatus,
+			}
+			return false, nil
+		}
+	}
+
+	if group.PRSizeLimits.Enabled {
+		sizeOK, err := c.checkPRSize(ctx, pr, group)
+		if err != nil {
+			return false, err
+		}
+		if !sizeOK {
+			item.Criteria = models.MergeCriteria{
+				RequiredApprovals: mq.RequiredApprovals,
+				ApprovedBy:        approvals,
+				CIStatus:          ciStatus,
+			}
+			return false, nil
+		}
+	}
+
+	if group.PRTemplate.Enabled {
+		tplOK, err := c.checkPRTemplate(ctx, pr, group)
+		if err != nil {
+			return false, err
+		}
+		if !tplOK {
+			item.Criteria = models.MergeCriteria{
+				RequiredApprovals: mq.RequiredApprovals,
+				ApprovedBy:        approvals,
+				CIStatus:          ciStatus,
+			}
+			return false, nil
+		}
+	}
+
 	if ciStatus != "none" && ciStatus != "success" {
 		item.Criteria = models.MergeCriteria{
 			RequiredApprovals: mq.RequiredApprovals,
@@ -414,6 +498,199 @@ func getPRFromDB(repoGroup, prID string) (*models.PRRecord, error) {
 	return nil, fmt.Errorf("PR not found: %s", prID)
 }
 
+// checkPathApprovals checks file-path-based approval rules.
+// For each rule whose pattern matches changed files, at least one approver must have approved.
+func (c *Checker) checkPathApprovals(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup, approvals []string) (bool, error) {
+	client := c.clients[platforms.PlatformType(pr.Platform)]
+	if client == nil {
+		return false, fmt.Errorf("no client for platform: %s", pr.Platform)
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+	if owner == "" || repo == "" {
+		return false, fmt.Errorf("cannot resolve repo for platform %s", pr.Platform)
+	}
+
+	files, err := client.GetDiffFiles(ctx, owner, repo, pr.PRNumber)
+	if err != nil {
+		return false, fmt.Errorf("failed to get diff files: %w", err)
+	}
+
+	approvalSet := make(map[string]bool, len(approvals))
+	for _, a := range approvals {
+		approvalSet[a] = true
+	}
+
+	for _, rule := range group.ApprovalRules {
+		matched := false
+		for _, f := range files {
+			if matchSinglePattern(rule.Pattern, f) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			continue
+		}
+
+		minCount := rule.MinCount
+		if minCount <= 0 {
+			minCount = 1
+		}
+		matchedApprovers := 0
+		for _, approver := range rule.Approvers {
+			if approvalSet[approver] {
+				matchedApprovers++
+			}
+		}
+		if matchedApprovers < minCount {
+			reason := rule.Reason
+			if reason == "" {
+				reason = fmt.Sprintf("path rule %q requires %d approver(s) from %v, got %d",
+					rule.Pattern, minCount, rule.Approvers, matchedApprovers)
+			}
+			slog.Info("path approval not met", "pr_id", pr.ID, "rule", rule.Pattern, "reason", reason)
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// checkPRSize checks PR size limits and optionally blocks merge.
+func (c *Checker) checkPRSize(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) (bool, error) {
+	client := c.clients[platforms.PlatformType(pr.Platform)]
+	if client == nil {
+		return false, fmt.Errorf("no client for platform: %s", pr.Platform)
+	}
+	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+	if owner == "" || repo == "" {
+		return false, fmt.Errorf("cannot resolve repo for platform %s", pr.Platform)
+	}
+
+	diffFiles, err := client.GetPRDiff(ctx, owner, repo, pr.PRNumber)
+	if err != nil {
+		return false, fmt.Errorf("failed to get PR diff: %w", err)
+	}
+
+	totalFiles := len(diffFiles)
+	totalLines := 0
+	for _, df := range diffFiles {
+		totalLines += df.Additions + df.Deletions
+	}
+
+	if len(group.PRSizeLimits.ExemptLabels) > 0 {
+		for _, exempt := range group.PRSizeLimits.ExemptLabels {
+			for _, label := range pr.Labels {
+				if label == exempt {
+					slog.Info("PR size check skipped: exempt label", "pr_id", pr.ID, "label", exempt)
+					return true, nil
+				}
+			}
+		}
+	}
+
+	cfg := group.PRSizeLimits
+	blocked := false
+	if cfg.BlockMerge {
+		if cfg.LinesChangedBlock > 0 && totalLines > cfg.LinesChangedBlock {
+			blocked = true
+		}
+		if cfg.FilesChangedBlock > 0 && totalFiles > cfg.FilesChangedBlock {
+			blocked = true
+		}
+	}
+
+	if blocked {
+		slog.Info("PR exceeds size limits, blocking merge",
+			"pr_id", pr.ID, "lines", totalLines, "files", totalFiles,
+			"lines_limit", cfg.LinesChangedBlock, "files_limit", cfg.FilesChangedBlock)
+
+		if cfg.BigPRLabel != "" {
+			if err := client.AddLabel(ctx, owner, repo, pr.PRNumber, cfg.BigPRLabel, "ededed"); err != nil {
+				slog.Warn("failed to add big PR label", "error", err, "pr_id", pr.ID)
+			}
+		}
+		return false, nil
+	}
+
+	warned := false
+	if cfg.LinesChangedWarn > 0 && totalLines > cfg.LinesChangedWarn {
+		warned = true
+	}
+	if cfg.FilesChangedWarn > 0 && totalFiles > cfg.FilesChangedWarn {
+		warned = true
+	}
+
+	if warned && cfg.WarnPRLabel != "" {
+		slog.Info("PR exceeds size warning threshold, adding label",
+			"pr_id", pr.ID, "lines", totalLines, "files", totalFiles)
+		if err := client.AddLabel(ctx, owner, repo, pr.PRNumber, cfg.WarnPRLabel, "ffcc00"); err != nil {
+			slog.Warn("failed to add warn PR label", "error", err, "pr_id", pr.ID)
+		}
+	}
+
+	return true, nil
+}
+
+// checkPRTemplate validates PR description against template enforcement rules.
+func (c *Checker) checkPRTemplate(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) (bool, error) {
+	cfg := group.PRTemplate
+
+	if len(cfg.ExemptLabels) > 0 {
+		for _, exempt := range cfg.ExemptLabels {
+			for _, label := range pr.Labels {
+				if label == exempt {
+					slog.Info("PR template check skipped: exempt label", "pr_id", pr.ID, "label", exempt)
+					return true, nil
+				}
+			}
+		}
+	}
+
+	body := pr.Body
+	if body == "" {
+		client := c.clients[platforms.PlatformType(pr.Platform)]
+		if client != nil {
+			owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+			if owner != "" && repo != "" {
+				if fetched, err := client.GetPRBody(ctx, owner, repo, pr.PRNumber); err == nil {
+					body = fetched
+				}
+			}
+		}
+	}
+
+	if cfg.RequireBody && (body == "" || len(strings.TrimSpace(body)) < 10) {
+		slog.Info("PR template enforcement: body required but missing", "pr_id", pr.ID)
+		if cfg.BlockMerge {
+			return false, nil
+		}
+	}
+
+	if cfg.RequireChecklist {
+		complete, total, unchecked := validateChecklist(body)
+		if total > 0 && !complete {
+			slog.Info("PR template enforcement: checklist incomplete",
+				"pr_id", pr.ID, "total", total, "unchecked", unchecked)
+			if cfg.IncompleteLabel != "" {
+				client := c.clients[platforms.PlatformType(pr.Platform)]
+				if client != nil {
+					owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+					if owner != "" && repo != "" {
+						if err := client.AddLabel(ctx, owner, repo, pr.PRNumber, cfg.IncompleteLabel, "ff0000"); err != nil {
+							slog.Warn("failed to add incomplete label", "error", err, "pr_id", pr.ID)
+						}
+					}
+				}
+			}
+			if cfg.BlockMerge {
+				return false, nil
+			}
+		}
+	}
+
+	return true, nil
+}
+
 // tryAutoRebase attempts to rebase a conflicted PR.
 // Returns true if the rebase succeeded and the conflict was resolved.
 func (c *Checker) tryAutoRebase(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) bool {
@@ -457,4 +734,52 @@ func (c *Checker) tryAutoRebase(ctx context.Context, pr *models.PRRecord, group 
 
 	slog.Info("auto-rebase: succeeded", "pr_id", pr.ID, "head_branch", branchInfo.HeadBranch, "base_branch", branchInfo.BaseBranch)
 	return true
+}
+
+var checklistPattern = regexp.MustCompile(`(?m)^\s*[-*]\s+\[([ x])\]`)
+
+func validateChecklist(body string) (complete bool, total int, unchecked int) {
+	matches := checklistPattern.FindAllStringSubmatch(body, -1)
+	if len(matches) == 0 {
+		return true, 0, 0
+	}
+	total = len(matches)
+	for _, m := range matches {
+		if m[1] != "x" && m[1] != "X" {
+			unchecked++
+		}
+	}
+	return unchecked == 0, total, unchecked
+}
+
+var singlePatternCache sync.RWMutex
+var compiledSinglePatterns = make(map[string]*regexp.Regexp)
+
+func matchSinglePattern(pattern, file string) bool {
+	if strings.ContainsAny(pattern, "*?[") {
+		matched, _ := path.Match(pattern, file)
+		if matched {
+			return true
+		}
+	}
+	singlePatternCache.RLock()
+	re, ok := compiledSinglePatterns[pattern]
+	singlePatternCache.RUnlock()
+	if !ok {
+		var err error
+		re, err = regexp.Compile(pattern)
+		if err != nil {
+			return false
+		}
+		singlePatternCache.Lock()
+		if len(compiledSinglePatterns) > 1000 {
+			for k := range compiledSinglePatterns {
+				delete(compiledSinglePatterns, k)
+				break
+			}
+		}
+		compiledSinglePatterns[pattern] = re
+		singlePatternCache.Unlock()
+	}
+	return re.MatchString(file)
 }
