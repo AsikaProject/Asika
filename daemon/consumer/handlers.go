@@ -309,7 +309,9 @@ func (c *Consumer) handleBranchDeleted(event events.Event) {
 					slog.Error("sync branch deletion panic recovered", "error", r, "branch", branch)
 				}
 			}()
-			c.syncer.SyncBranchDeletion(c.ctx, event.RepoGroup, event.Platform, branch)
+			ctx, cancel := context.WithTimeout(c.ctx, 10*time.Minute)
+			defer cancel()
+			c.syncer.SyncBranchDeletion(ctx, event.RepoGroup, event.Platform, branch)
 		}()
 	}
 }

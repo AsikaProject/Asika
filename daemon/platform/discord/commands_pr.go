@@ -18,6 +18,8 @@ import (
 	commonutil "asika/common/platformutil"
 )
 
+const maxBatchSize = 50
+
 func (b *Bot) handleApprovePR(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 	if len(args) < 3 {
 		s.ChannelMessageSend(m.ChannelID, "Usage: `!approve <repo_group> <pr_id>`")
@@ -427,6 +429,10 @@ func (b *Bot) handleBatchApprovePR(s *discordgo.Session, m *discordgo.MessageCre
 		s.ChannelMessageSend(m.ChannelID, "Usage: `!batch_approve <repo_group> <pr_id> [pr_id2] [pr_id3] ...`")
 		return
 	}
+	if len(args)-2 > maxBatchSize {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Batch size limited to %d PRs.", maxBatchSize))
+		return
+	}
 	repoGroup := args[1]
 	group := config.GetRepoGroupByName(b.cfg, repoGroup)
 	if group == nil {
@@ -479,6 +485,10 @@ func (b *Bot) handleBatchApprovePR(s *discordgo.Session, m *discordgo.MessageCre
 func (b *Bot) handleBatchClosePR(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
 	if len(args) < 3 {
 		s.ChannelMessageSend(m.ChannelID, "Usage: `!batch_close <repo_group> <pr_id> [pr_id2] [pr_id3] ...`")
+		return
+	}
+	if len(args)-2 > maxBatchSize {
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Batch size limited to %d PRs.", maxBatchSize))
 		return
 	}
 	repoGroup := args[1]

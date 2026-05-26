@@ -19,26 +19,41 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const maxSessionActivityEntries = 100000
+
 var (
 	sessionActivityMu    sync.Mutex
 	sessionActivityTimes = make(map[string]time.Time)
 	sessionActivityInit  sync.Once
+	sessionActivityStop  chan struct{}
 )
 
 func cleanupSessionActivity() {
+	sessionActivityStop = make(chan struct{})
 	go func() {
 		ticker := time.NewTicker(10 * time.Minute)
 		defer ticker.Stop()
-		for range ticker.C {
-			sessionActivityMu.Lock()
-			for sid, t := range sessionActivityTimes {
-				if time.Since(t) > 5*time.Minute {
-					delete(sessionActivityTimes, sid)
+		for {
+			select {
+			case <-ticker.C:
+				sessionActivityMu.Lock()
+				for sid, t := range sessionActivityTimes {
+					if time.Since(t) > 5*time.Minute {
+						delete(sessionActivityTimes, sid)
+					}
 				}
+				sessionActivityMu.Unlock()
+			case <-sessionActivityStop:
+				return
 			}
-			sessionActivityMu.Unlock()
 		}
 	}()
+}
+
+func StopSessionActivityCleanup() {
+	if sessionActivityStop != nil {
+		close(sessionActivityStop)
+	}
 }
 
 // Logger is a custom logger middleware
@@ -107,6 +122,14 @@ func AuthMiddleware() gin.HandlerFunc {
 					}
 					sessionActivityInit.Do(cleanupSessionActivity)
 					sessionActivityMu.Lock()
+					if len(sessionActivityTimes) >= maxSessionActivityEntries {
+						// Evict oldest entries if map is too large
+						for sid, t := range sessionActivityTimes {
+							if time.Since(t) > time.Minute {
+								delete(sessionActivityTimes, sid)
+							}
+						}
+					}
 					lastUpdate := sessionActivityTimes[sid]
 					shouldUpdate := time.Since(lastUpdate) > time.Minute
 					if shouldUpdate {

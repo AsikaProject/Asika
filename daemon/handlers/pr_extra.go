@@ -77,7 +77,9 @@ func GetApprovalStatus(c *gin.Context) {
 	if len(group.ApprovalRules) > 0 {
 		files, diffErr := client.GetDiffFiles(ctx, owner, repo, prRecord.PRNumber)
 		if diffErr != nil {
-			slog.Warn("failed to get diff files for approval check", "error", diffErr)
+			slog.Error("failed to get diff files for approval check", "error", diffErr)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get diff files for approval check"})
+			return
 		}
 
 		approvalSet := make(map[string]bool, len(approvers))
@@ -251,9 +253,18 @@ func MarkReady(c *gin.Context) {
 	}
 
 	prRecord.IsDraft = false
-	updated, _ := json.Marshal(prRecord)
+	updated, marshalErr := json.Marshal(prRecord)
+	if marshalErr != nil {
+		slog.Error("failed to marshal PR record", "error", marshalErr, "pr_id", prID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal PR record"})
+		return
+	}
 	dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, prRecord.Platform, prRecord.PRNumber)
-	db.PutPRWithIndex(dbKey, updated, prRecord.ID, prRecord.RepoGroup, prRecord.PRNumber)
+	if putErr := db.PutPRWithIndex(dbKey, updated, prRecord.ID, prRecord.RepoGroup, prRecord.PRNumber); putErr != nil {
+		slog.Error("failed to update PR in database", "error", putErr, "pr_id", prID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update PR in database"})
+		return
+	}
 
 	db.AppendAuditLogEx(models.AuditLog{
 		Level:     "info",

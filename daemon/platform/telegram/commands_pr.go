@@ -21,6 +21,8 @@ import (
 	commonutil "asika/common/platformutil"
 )
 
+const maxBatchSize = 50
+
 const prsPerPage = 10
 
 func (b *Bot) handleListPRs(c telebot.Context) error {
@@ -243,6 +245,9 @@ func (b *Bot) handleBatchApprovePR(c telebot.Context) error {
 	if len(args) < 4 {
 		return c.Send("Usage: /batch_approve repo_group pr_id [pr_id2] [pr_id3] ...")
 	}
+	if len(args)-2 > maxBatchSize {
+		return c.Send(fmt.Sprintf("Batch size limited to %d PRs.", maxBatchSize))
+	}
 	repoGroup := args[1]
 	group := config.GetRepoGroupByName(b.cfg, repoGroup)
 	if group == nil {
@@ -310,6 +315,9 @@ func (b *Bot) handleBatchClosePR(c telebot.Context) error {
 	args := strings.Fields(c.Text())
 	if len(args) < 4 {
 		return c.Send("Usage: /batch_close repo_group pr_id [pr_id2] [pr_id3] ...")
+	}
+	if len(args)-2 > maxBatchSize {
+		return c.Send(fmt.Sprintf("Batch size limited to %d PRs.", maxBatchSize))
 	}
 	repoGroup := args[1]
 	group := config.GetRepoGroupByName(b.cfg, repoGroup)

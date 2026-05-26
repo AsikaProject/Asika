@@ -183,6 +183,10 @@ func (c *Consumer) stopInternal() {
 	c.debounceTimers = make(map[string]*time.Timer)
 	c.debounceMu.Unlock()
 	c.loopWg.Wait()
+	if c.workers != nil {
+		c.workers.Stop()
+		c.workers = nil
+	}
 	if c.writer != nil {
 		c.writer.Stop()
 		c.writer = nil

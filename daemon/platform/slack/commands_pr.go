@@ -20,6 +20,8 @@ import (
 	"asika/common/platformutil"
 )
 
+const maxBatchSize = 50
+
 func (b *Bot) handleApprovePR(ev *slack.MessageEvent, client *socketmode.Client, args []string) {
 	if len(args) < 3 {
 		b.postMessage(client, ev.Channel, "Usage: approve <repo_group> <pr_id>")
@@ -439,6 +441,10 @@ func (b *Bot) handleBatchApprovePR(ev *slack.MessageEvent, client *socketmode.Cl
 		b.postMessage(client, ev.Channel, "Usage: approve <repo_group> <pr_id> [pr_id2] [pr_id3] ...")
 		return
 	}
+	if len(args)-2 > maxBatchSize {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("Batch size limited to %d PRs.", maxBatchSize))
+		return
+	}
 	repoGroup := args[1]
 	group := config.GetRepoGroupByName(b.cfg, repoGroup)
 	if group == nil {
@@ -504,6 +510,10 @@ func (b *Bot) handleBatchApprovePR(ev *slack.MessageEvent, client *socketmode.Cl
 func (b *Bot) handleBatchClosePR(ev *slack.MessageEvent, client *socketmode.Client, args []string) {
 	if len(args) < 3 {
 		b.postMessage(client, ev.Channel, "Usage: close <repo_group> <pr_id> [pr_id2] [pr_id3] ...")
+		return
+	}
+	if len(args)-2 > maxBatchSize {
+		b.postMessage(client, ev.Channel, fmt.Sprintf("Batch size limited to %d PRs.", maxBatchSize))
 		return
 	}
 	repoGroup := args[1]
