@@ -385,6 +385,9 @@ func (b *Bot) handleReopenPR(c telebot.Context) error {
 	if client == nil {
 		return c.Send("No client configured for platform.")
 	}
+	if pr.State == "merged" || !pr.MergedAt.IsZero() {
+		return c.Send("Cannot reopen a merged PR.")
+	}
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	ctx := context.Background()
 	if err := client.ReopenPR(ctx, owner, repo, pr.PRNumber); err != nil {

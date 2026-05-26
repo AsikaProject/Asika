@@ -6,6 +6,7 @@
 - **Feature**: Add `Email` field to User model. Configurable during wizard initialization, via admin user management API, or self-service in account settings page.
 - **Feature**: Add `password_reset_tokens` database bucket for secure token storage (SHA256-hashed keys, 15-min TTL, single-use).
 - **Feature**: Add `GET /reset-password` page for setting new password after token verification.
+- **Fix**: Fix merged PRs showing "Reopen" instead of "Revert" in closed PR list. When filtering by "closed" state, merged PRs (stored with `State == "closed"` but non-zero `MergedAt`) now correctly display "Revert" button. Added `MergedAt` safety checks to all reopen handlers (WebUI + all IM bots) to prevent reopening merged PRs.
 
 ## v20260525DEV
 

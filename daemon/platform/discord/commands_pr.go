@@ -39,7 +39,11 @@ func (b *Bot) handleApprovePR(s *discordgo.Session, m *discordgo.MessageCreate, 
 	}
 	client := b.getClientForPlatform(pr.Platform)
 	if client == nil {
-		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("No client configured for platform %s.", pr.Platform))
+		s.ChannelMessageSend(m.ChannelID, "No client configured for platform.")
+		return
+	}
+	if pr.State == "merged" || !pr.MergedAt.IsZero() {
+		s.ChannelMessageSend(m.ChannelID, "Cannot reopen a merged PR.")
 		return
 	}
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)

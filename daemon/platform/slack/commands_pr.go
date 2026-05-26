@@ -41,7 +41,11 @@ func (b *Bot) handleApprovePR(ev *slack.MessageEvent, client *socketmode.Client,
 	}
 	pClient := b.getClientForPlatform(pr.Platform)
 	if pClient == nil {
-		b.postMessage(client, ev.Channel, fmt.Sprintf("No client configured for platform %s.", pr.Platform))
+		b.postMessage(client, ev.Channel, "No client configured for platform.")
+		return
+	}
+	if pr.State == "merged" || !pr.MergedAt.IsZero() {
+		b.postMessage(client, ev.Channel, "Cannot reopen a merged PR.")
 		return
 	}
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)

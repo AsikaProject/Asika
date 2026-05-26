@@ -206,6 +206,9 @@ func (b *Bot) doReopen(senderID, repoGroup, prID string) string {
 	if client == nil {
 		return "No client for platform."
 	}
+	if pr.State == "merged" || !pr.MergedAt.IsZero() {
+		return "Cannot reopen a merged PR."
+	}
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	if err := client.ReopenPR(context.Background(), owner, repo, pr.PRNumber); err != nil {
 		db.AppendAuditLog("error", "PR reopen failed", map[string]interface{}{

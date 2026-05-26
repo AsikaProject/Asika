@@ -222,7 +222,7 @@ func (b *Bot) callbackClose(c telebot.Context, pr *models.PRRecord, client platf
 }
 
 func (b *Bot) callbackReopen(c telebot.Context, pr *models.PRRecord, client platforms.PlatformClient, owner, repo string, ctx context.Context) error {
-	if pr.State == "merged" {
+	if pr.State == "merged" || !pr.MergedAt.IsZero() {
 		return c.Respond(&telebot.CallbackResponse{Text: "Cannot reopen merged PR."})
 	}
 	if pr.State == "open" {

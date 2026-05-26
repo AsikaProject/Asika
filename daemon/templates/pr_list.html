@@ -136,7 +136,7 @@
                     }
                     actions += '<button class="btn btn-danger" onclick="closePR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;">{{t "pr_list.close"}}</button> ';
                     actions += '<button class="btn" onclick="spamPR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;background:#ffc107;color:black;">{{t "pr_detail.mark_spam"}}</button>';
-                } else if (pr.state === 'merged') {
+                } else if (pr.state === 'merged' || pr.merged_at) {
                     actions += '<button class="btn btn-warning" onclick="revertPR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;">{{t "pr_detail.revert"}}</button>';
                 } else {
                     actions += '<button class="btn btn-secondary" onclick="reopenPR('+pr.pr_number+')" style="padding:4px 8px;font-size:12px;">{{t "pr_detail.reopen"}}</button>';

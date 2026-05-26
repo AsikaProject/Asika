@@ -63,6 +63,11 @@ func ReopenPR(c *gin.Context) {
 
 	beforeState := pr.State
 
+	if pr.State == "merged" || !pr.MergedAt.IsZero() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot reopen a merged PR"})
+		return
+	}
+
 	if err := client.ReopenPR(c.Request.Context(), owner, repo, prNumber); err != nil {
 		slog.Error("failed to reopen PR", "error", err)
 		db.AppendAuditLogEx(models.AuditLog{

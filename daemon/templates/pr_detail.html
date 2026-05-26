@@ -103,7 +103,7 @@
                 a += '<button class="btn btn-danger" onclick="C()">{{t "pr_detail.close"}}</button> ';
                 a += '<button class="btn" onclick="S()" style="background:#ffc107;color:black;">{{t "pr_detail.mark_spam"}}</button> ';
                 a += '<button class="btn btn-secondary" onclick="RB()">Rebase</button> ';
-            } else if(p.state === 'merged'){
+            } else if(p.state === 'merged' || p.merged_at){
                 a += '<button class="btn btn-warning" onclick="RV()">{{t "pr_detail.revert"}}</button> ';
             } else {
                 a += '<button class="btn btn-secondary" onclick="R()">{{t "pr_detail.reopen"}}</button> ';

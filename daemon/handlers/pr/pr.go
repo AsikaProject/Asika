@@ -162,7 +162,10 @@ func ListPRs(c *gin.Context) {
 			return nil
 		}
 		if state != "" && pr.State != state {
-			return nil
+			// merged is a special closed state; include merged PRs when filtering by "closed"
+			if !(state == "closed" && pr.State == "merged") {
+				return nil
+			}
 		}
 		if isDraftStr != "" {
 			isDraft := isDraftStr == "true"
