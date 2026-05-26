@@ -20,6 +20,18 @@
         button:hover { background: var(--primary-hover); }
         .error { color: var(--danger); padding: 10px; background: #f8d7da; border-radius: 4px; margin-top: 15px; display: none; }
         .success { color: #155724; padding: 10px; background: #d4edda; border-radius: 4px; margin-top: 15px; display: none; }
+        .forgot-link { text-align: center; margin-top: 16px; }
+        .forgot-link a { color: var(--primary); font-size: 13px; cursor: pointer; text-decoration: none; }
+        .forgot-link a:hover { text-decoration: underline; }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-overlay.open { display: flex; }
+        .modal { background: var(--card-bg); border-radius: 8px; padding: 24px; width: 100%; max-width: 380px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        .modal h3 { margin: 0 0 16px; font-size: 18px; color: var(--text); }
+        .modal label { display: block; font-weight: 500; font-size: 13px; margin-bottom: 4px; color: var(--text-secondary); }
+        .modal input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 14px; background: var(--card-bg); color: var(--text); box-sizing: border-box; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+        .modal-actions button { padding: 8px 16px; font-size: 14px; margin: 0; auto; }
+        .btn-cancel { background: var(--border); color: var(--text); }
         [data-theme="dark"] .error { background: #3d1a1a; }
         [data-theme="dark"] .success { color: #3dd75c; background: #1a3d1a; }
         @media (max-width: 480px) { body { padding: 16px; } .login-form { padding: 24px; } }
@@ -46,9 +58,23 @@
             </div>
             <button type="submit"><span data-i18n="login.submit">{{t "login.submit"}}</span></button>
         </form>
+        <div class="forgot-link"><a onclick="openForgotModal()">{{t "login.forgot_password"}}</a></div>
         <div id="oidcButtons" style="margin-top:16px;"></div>
         <div id="errorMsg" class="error"></div>
         <div id="successMsg" class="success"></div>
+    </div>
+
+    <div id="forgotModal" class="modal-overlay">
+        <div class="modal">
+            <h3>{{t "login.forgot_password"}}</h3>
+            <label>{{t "login.username"}}</label>
+            <input type="text" id="forgotUsername" placeholder="{{t "login.username"}}">
+            <div id="forgotMsg" style="margin-top:8px;font-size:13px;"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn-cancel" onclick="closeForgotModal()">{{t "common.cancel"}}</button>
+                <button type="button" onclick="submitForgotPassword()">{{t "login.reset_send"}}</button>
+            </div>
+        </div>
     </div>
     <script>
         function initTheme() {
@@ -100,6 +126,43 @@
             } catch(e) {}
         }
         loadOIDCProviders();
+
+        function openForgotModal() {
+            document.getElementById('forgotModal').classList.add('open');
+            document.getElementById('forgotUsername').value = '';
+            document.getElementById('forgotMsg').innerHTML = '';
+            document.getElementById('forgotUsername').focus();
+        }
+        function closeForgotModal() {
+            document.getElementById('forgotModal').classList.remove('open');
+        }
+        document.getElementById('forgotModal').addEventListener('click', function(e) {
+            if (e.target === this) closeForgotModal();
+        });
+        async function submitForgotPassword() {
+            const username = document.getElementById('forgotUsername').value.trim();
+            const msgEl = document.getElementById('forgotMsg');
+            if (!username) {
+                msgEl.innerHTML = '<span style="color:var(--danger);">{{t "login.username"}}</span>';
+                return;
+            }
+            try {
+                const resp = await fetch('/api/v1/auth/forgot-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username })
+                });
+                const data = await resp.json();
+                if (resp.ok) {
+                    msgEl.innerHTML = '<span style="color:var(--success);">' + (data.message || '') + '</span>';
+                    setTimeout(() => { closeForgotModal(); }, 3000);
+                } else {
+                    msgEl.innerHTML = '<span style="color:var(--danger);">' + (data.error || 'Error') + '</span>';
+                }
+            } catch(e) {
+                msgEl.innerHTML = '<span style="color:var(--danger);">Network error</span>';
+            }
+        }
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();

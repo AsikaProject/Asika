@@ -67,7 +67,7 @@ func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
 
-		skipPaths := []string{"/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/wizard", "/api/v1/locale", "/api/v1/i18n", "/login", "/wizard"}
+		skipPaths := []string{"/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/forgot-password", "/api/v1/auth/reset-password", "/api/v1/wizard", "/api/v1/locale", "/api/v1/i18n", "/login", "/wizard", "/reset-password"}
 		skip := false
 		for _, p := range skipPaths {
 			if strings.HasPrefix(path, p) {

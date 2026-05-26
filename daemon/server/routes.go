@@ -42,6 +42,8 @@ func (s *Server) setupRoutes() {
 	{
 		auth.POST("/login", handlers.Login)
 		auth.POST("/logout", handlers.Logout)
+		auth.POST("/forgot-password", handlers.ForgotPassword)
+		auth.POST("/reset-password", handlers.ResetPassword)
 		auth.GET("/oidc/login/:provider", handlers.OIDCLogin)
 		auth.GET("/oidc/callback/:provider", handlers.OIDCCallback)
 	}
@@ -430,6 +432,10 @@ func (s *Server) setupRoutes() {
 
 	s.engine.GET("/login", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "login.html", gin.H{"title": "Login - Asika"})
+	})
+
+	s.engine.GET("/reset-password", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "reset_password.html", gin.H{"title": "Reset Password - Asika"})
 	})
 
 	ssr := s.engine.Group("")

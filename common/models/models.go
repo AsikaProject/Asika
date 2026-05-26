@@ -43,6 +43,7 @@ type APIKey struct {
 type User struct {
 	Username          string          `json:"username"`
 	PasswordHash      string          `json:"password_hash"`
+	Email             string          `json:"email,omitempty"`
 	Role              string          `json:"role"`
 	CreatedAt         time.Time       `json:"created_at"`
 	AllowedRepoGroups []string        `json:"allowed_repo_groups"`

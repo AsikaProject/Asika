@@ -25,6 +25,7 @@ type wizardPayload struct {
 type wizardUser struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Email    string `json:"email"`
 	Role     string `json:"role"`
 }
 
@@ -173,6 +174,7 @@ func CompleteWizard(c *gin.Context) {
 		user := models.User{
 			Username:     u.Username,
 			PasswordHash: string(hash),
+			Email:        u.Email,
 			Role:         u.Role,
 			CreatedAt:    time.Now(),
 		}

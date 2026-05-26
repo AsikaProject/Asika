@@ -43,6 +43,10 @@
             <input type="password" id="newPassword" data-i18n-placeholder="login.password" placeholder="{{t "login.password"}}">
         </div>
         <div class="form-group" style="margin:0;">
+            <label><span data-i18n="users.th.email">{{t "users.th.email"}}</span></label>
+            <input type="email" id="newEmail" placeholder="user@example.com">
+        </div>
+        <div class="form-group" style="margin:0;">
             <label><span data-i18n="users.th.role">{{t "users.th.role"}}</span></label>
             <select id="newRole" onchange="togglePerms('new')">
                 <option value="viewer"><span data-i18n="users.role.viewer">{{t "users.role.viewer"}}</span></option>
@@ -74,13 +78,14 @@
     <table style="margin-top:0;">
         <thead>
             <tr>
-                <th><span data-i18n="users.th.username">{{t "users.th.username"}}</span></th>
-                <th><span data-i18n="users.th.role">{{t "users.th.role"}}</span></th>
-                <th><span data-i18n="users.allowed_groups">{{t "users.allowed_groups"}}</span></th>
-                <th><span data-i18n="users.th.permissions">{{t "users.th.permissions"}}</span></th>
-                <th><span data-i18n="users.th.created">{{t "users.th.created"}}</span></th>
-                <th><span data-i18n="users.th.action">{{t "users.th.action"}}</span></th>
-            </tr>
+                 <th><span data-i18n="users.th.username">{{t "users.th.username"}}</span></th>
+                 <th><span data-i18n="users.th.email">{{t "users.th.email"}}</span></th>
+                 <th><span data-i18n="users.th.role">{{t "users.th.role"}}</span></th>
+                 <th><span data-i18n="users.allowed_groups">{{t "users.allowed_groups"}}</span></th>
+                 <th><span data-i18n="users.th.permissions">{{t "users.th.permissions"}}</span></th>
+                 <th><span data-i18n="users.th.created">{{t "users.th.created"}}</span></th>
+                 <th><span data-i18n="users.th.action">{{t "users.th.action"}}</span></th>
+             </tr>
         </thead>
         <tbody id="usersBody">
             <tr><td colspan="6" style="text-align:center;"><span data-i18n="common.loading">{{t "common.loading"}}</span></td></tr>
@@ -98,6 +103,10 @@
         <div class="form-group">
             <label><span data-i18n="users.th.username">{{t "users.th.username"}}</span></label>
             <input type="text" id="editUsernameDisplay" disabled style="background:#f5f5f5;">
+        </div>
+        <div class="form-group">
+            <label><span data-i18n="users.th.email">{{t "users.th.email"}}</span></label>
+            <input type="email" id="editEmail" placeholder="user@example.com">
         </div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
             <div class="form-group" style="margin:0;">
@@ -159,6 +168,7 @@
                 const permStr = perms.length > 0 ? perms.join(', ') : '<span style="color:#999;font-size:12px;">{{t "users.perm.none"}}</span>';
                 const tr = document.createElement('tr');
                 tr.innerHTML = '<td>' + escapeHtml(u.username) + '</td>'
+                    + '<td>' + (u.email ? escapeHtml(u.email) : '<span style="color:#999;">-</span>') + '</td>'
                     + '<td>' + escapeHtml(u.role) + '</td>'
                     + '<td>' + groups + '</td>'
                     + '<td style="font-size:12px;">' + permStr + '</td>'
@@ -289,7 +299,8 @@
         const r = document.getElementById('newRole').value;
         const m = document.getElementById('addMsg');
         if (!u || !p) { m.innerHTML = '<span class="error">{{t "users.required"}}</span>'; return; }
-        const body = {username: u, password: p, role: r, allowed_repo_groups: newUserSelectedGroups};
+        const email = document.getElementById('newEmail').value.trim();
+        const body = {username: u, password: p, email: email, role: r, allowed_repo_groups: newUserSelectedGroups};
         if (r === 'operator') {
             body.permissions = getPermsFromContainer('newUserPerms');
         }
@@ -303,6 +314,7 @@
                 m.innerHTML = '<span class="success">{{t "users.created"}}'.replace('%s', u) + '</span>';
                 document.getElementById('newUsername').value = '';
                 document.getElementById('newPassword').value = '';
+                document.getElementById('newEmail').value = '';
                 newUserSelectedGroups = [];
                 renderGroupSelect('newUserGroups', newUserSelectedGroups);
                 renderPermCheckboxes('newUserPerms', {});
@@ -341,6 +353,7 @@
 
             document.getElementById('editUsername').value = user.username;
             document.getElementById('editUsernameDisplay').value = user.username;
+            document.getElementById('editEmail').value = user.email || '';
             document.getElementById('editPassword').value = '';
             document.getElementById('editRole').value = user.role;
 
@@ -373,8 +386,10 @@
         const role = document.getElementById('editRole').value;
         const m = document.getElementById('editMsg');
 
+        const email = document.getElementById('editEmail').value.trim();
         const body = {
             role: role,
+            email: email,
             allowed_repo_groups: editUserSelectedGroups,
         };
         if (role === 'operator') {

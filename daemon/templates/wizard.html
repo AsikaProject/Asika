@@ -388,6 +388,10 @@
                 <input type="text" id="admin_user" value="admin">
             </div>
             <div class="form-group">
+                <label>{{t "wizard.server.admin_email"}}</label>
+                <input type="email" id="admin_email" placeholder="admin@example.com">
+            </div>
+            <div class="form-group">
                 <label>{{t "wizard.server.admin_pass"}}</label>
                 <input type="password" id="admin_pass" placeholder="set a strong password">
             </div>
@@ -682,7 +686,7 @@
                 wecom: { enabled: !!document.getElementById('wecom_webhook_key').value, webhook_key: document.getElementById('wecom_webhook_key').value },
                 msteams: { enabled: !!document.getElementById('msteams_webhook_url').value, webhook_url: document.getElementById('msteams_webhook_url').value },
                 webhook: { enabled: !!document.getElementById('custom_webhook_url').value, url: document.getElementById('custom_webhook_url').value },
-                users: [{ username: document.getElementById('admin_user').value, password: document.getElementById('admin_pass').value, role: "admin" }],
+                users: [{ username: document.getElementById('admin_user').value, password: document.getElementById('admin_pass').value, email: document.getElementById('admin_email').value, role: "admin" }],
                 events: { mode: "webhook" },
                 merge_queue: { required_approvals: 1, ci_check_required: true },
                 spam: { enabled: false },

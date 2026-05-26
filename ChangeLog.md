@@ -1,5 +1,12 @@
 # ChangeLog for Asika
 
+## v20260526DEV
+
+- **Feature**: Add email-based password reset flow. Users can request a reset link via `POST /api/v1/auth/forgot-password`, receive a time-limited single-use token via email (using existing SMTP notifier), and set a new password via `POST /api/v1/auth/reset-password`.
+- **Feature**: Add `Email` field to User model. Configurable during wizard initialization, via admin user management API, or self-service in account settings page.
+- **Feature**: Add `password_reset_tokens` database bucket for secure token storage (SHA256-hashed keys, 15-min TTL, single-use).
+- **Feature**: Add `GET /reset-password` page for setting new password after token verification.
+
 ## v20260525DEV
 
 - **Feature**: Add file-path-based approval rules (`approval_rules`). When PR changes files matching a pattern, specified approvers must approve before merge.

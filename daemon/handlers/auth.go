@@ -270,6 +270,7 @@ func CreateUser(c *gin.Context) {
 	var req struct {
 		Username          string   `json:"username"`
 		Password          string   `json:"password"`
+		Email             string   `json:"email"`
 		Role              string   `json:"role"`
 		AllowedRepoGroups []string `json:"allowed_repo_groups"`
 		AllowedRepos      []string `json:"allowed_repos"`
@@ -313,6 +314,7 @@ func CreateUser(c *gin.Context) {
 	user := models.User{
 		Username:          req.Username,
 		PasswordHash:      string(hash),
+		Email:             req.Email,
 		Role:              req.Role,
 		AllowedRepoGroups: req.AllowedRepoGroups,
 		AllowedRepos:      req.AllowedRepos,
@@ -343,6 +345,7 @@ func UpdateUser(c *gin.Context) {
 
 	var req struct {
 		Password          *string  `json:"password"`
+		Email             *string  `json:"email"`
 		Role              *string  `json:"role"`
 		AllowedRepoGroups []string `json:"allowed_repo_groups"`
 		AllowedRepos      []string `json:"allowed_repos"`
@@ -381,6 +384,9 @@ func UpdateUser(c *gin.Context) {
 			return
 		}
 		user.PasswordHash = string(hash)
+	}
+	if req.Email != nil {
+		user.Email = *req.Email
 	}
 	if req.Role != nil {
 		validRoles := map[string]bool{"viewer": true, "operator": true, "admin": true}

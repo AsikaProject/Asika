@@ -45,6 +45,7 @@ func newBboltStorage(dbPath string) (*bboltStorage, error) {
 			BucketSessions,
 			BucketSessionsByUser,
 			BucketOIDCLinks,
+			BucketPasswordResetTokens,
 		}
 		for _, b := range buckets {
 			if _, err := tx.CreateBucketIfNotExists([]byte(b)); err != nil {

@@ -31,6 +31,19 @@
 {{template "header" .}}
 <div class="container">
     <div class="card account-section">
+        <h3>{{t "account.email"}}</h3>
+        <div id="emailContent"><p>{{t "common.loading"}}</p></div>
+        <div id="emailEdit" style="display:none;margin-top:8px;">
+            <input type="email" id="emailInput" placeholder="user@example.com" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;font-size:14px;background:var(--card-bg);color:var(--text);">
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn btn-primary btn-sm" onclick="saveEmail()">{{t "common.save"}}</button>
+                <button class="btn btn-secondary btn-sm" onclick="cancelEmail()">{{t "common.cancel"}}</button>
+            </div>
+            <div id="emailMsg" style="margin-top:6px;font-size:13px;"></div>
+        </div>
+    </div>
+
+    <div class="card account-section">
         <h3>{{t "account.totp"}}</h3>
         <div id="totpContent"><p>{{t "common.loading"}}</p></div>
     </div>
@@ -52,9 +65,61 @@
 {{template "client_auth"}}
 <script>
 function loadAccount() {
+    loadEmail();
     loadTOTPStatus();
     loadSessions();
     loadOIDCLinks();
+}
+
+var currentUsername = '';
+
+async function loadEmail() {
+    try {
+        const resp = await apiRequest('/api/v1/users');
+        if (!resp.ok) { document.getElementById('emailContent').innerHTML = '<p>{{t "common.error"}}Failed to load</p>'; return; }
+        const users = await resp.json();
+        if (users && users.length > 0) {
+            const me = users[0];
+            currentUsername = me.username;
+            document.getElementById('emailContent').innerHTML = '<p>' + (me.email ? escapeHtml(me.email) : '<span style="color:var(--text-secondary);">{{t "account.email_not_set"}}</span>') + ' <button class="btn btn-secondary btn-sm" style="margin-left:8px;" onclick="editEmail()">{{t "common.edit"}}</button></p>';
+        }
+    } catch(e) {
+        document.getElementById('emailContent').innerHTML = '<p>{{t "common.error"}}Error loading email</p>';
+    }
+}
+
+function editEmail() {
+    document.getElementById('emailContent').style.display = 'none';
+    document.getElementById('emailEdit').style.display = 'block';
+    document.getElementById('emailInput').value = '';
+    document.getElementById('emailMsg').innerHTML = '';
+}
+
+function cancelEmail() {
+    document.getElementById('emailEdit').style.display = 'none';
+    document.getElementById('emailContent').style.display = 'block';
+}
+
+async function saveEmail() {
+    const email = document.getElementById('emailInput').value.trim();
+    const msgEl = document.getElementById('emailMsg');
+    if (!currentUsername) { msgEl.innerHTML = '<span style="color:var(--danger);">Error: username not loaded</span>'; return; }
+    try {
+        const resp = await apiRequest('/api/v1/users/' + encodeURIComponent(currentUsername), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email })
+        });
+        if (resp.ok) {
+            msgEl.innerHTML = '<span style="color:var(--success);">{{t "common.success"}}</span>';
+            setTimeout(() => { cancelEmail(); loadEmail(); }, 1000);
+        } else {
+            const d = await resp.json();
+            msgEl.innerHTML = '<span style="color:var(--danger);">' + (d.error || 'Error') + '</span>';
+        }
+    } catch(e) {
+        msgEl.innerHTML = '<span style="color:var(--danger);">Error: ' + e.message + '</span>';
+    }
 }
 
 async function loadTOTPStatus() {

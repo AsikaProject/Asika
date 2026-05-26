@@ -203,7 +203,7 @@ Fingerprint tokens provide a lightweight HMAC-based device identity mechanism, s
 TOTP-based 2FA (RFC 6238) using HMAC-SHA1, compatible with Google Authenticator / Authy:
 
 - **Config**: `[auth]` section: `totp_required` (bool, default false) — when true, all users must complete 2FA to log in
-- **User fields**: `TOTPSecret` (base32-encoded), `TOTPEnabled` (bool), `BackupCodes` (bcrypt-hashed, 10 codes)
+- **User fields**: `Email` (string), `TOTPSecret` (base32-encoded), `TOTPEnabled` (bool), `BackupCodes` (bcrypt-hashed, 10 codes)
 - **Endpoints** (all require JWT auth):
   - `GET /api/v1/auth/2fa` — Check 2FA status for current user
   - `POST /api/v1/auth/2fa/enroll` — Generate TOTP secret, return QR code URL
@@ -213,6 +213,18 @@ TOTP-based 2FA (RFC 6238) using HMAC-SHA1, compatible with Google Authenticator 
 - **Login flow**: When 2FA is enabled/required, password verification returns `{"two_factor_required": true, "session_id": "..."}`. Client submits TOTP code + session_id to complete login.
 - **Backup codes**: 10 single-use codes generated on enable/regenerate. Stored as bcrypt hashes. Plain codes shown once to user.
 - **Implementation**: Pure standard library (HMAC-SHA1 + base32), no external TOTP dependency
+
+### Password Recovery
+
+Email-based password reset flow using the existing SMTP notifier configuration:
+
+- **User field**: `Email` (string) — set during wizard initialization (admin), via admin user management (`PUT /api/v1/users/:username`), or self-service in account settings
+- **Endpoints** (unauthenticated):
+  - `POST /api/v1/auth/forgot-password` — Accepts `{username}`. If user exists and has email, generates a reset token and sends a reset link via SMTP. Always returns the same success message (prevents user enumeration).
+  - `POST /api/v1/auth/reset-password` — Accepts `{token, new_password}`. Validates token (15-min TTL, single-use), updates password (bcrypt), revokes all user sessions.
+- **Token storage**: `password_reset_tokens` bucket, keyed by `SHA256(token)`. Value: `{username, expiresAt}`. Tokens are deleted on use or expiry.
+- **SMTP**: Reuses the first configured `[[notify]] type=smtp` notifier. Returns 503 if no SMTP notifier is configured.
+- **Page**: `GET /reset-password?token=xxx` serves the reset password page.
 
 ### Session Management
 
@@ -396,7 +408,7 @@ The project supports two database backends via a pluggable `Storage` interface (
 
 The active backend is selected at startup via `models.DatabaseConfig.Type` (`"bbolt"` or `"mongo"`). Cross-engine migration is available via `MigrateBboltToMongo()` / `MigrateMongoToBbolt()`.
 
-Buckets (36 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking). `sync_history` bucket is also used for deployment records (key: deployment ID):
+Buckets (37 total, defined in `common/db/buckets.go`). Note: `notification_dedup` bucket is also used for digest buffering (key format: `{prID}:{notifierType}` for buffer entries, `{eventType}:{prID}:{notifierType}` for sent-event tracking). `sync_history` bucket is also used for deployment records (key: deployment ID):
 
 | Bucket | Key Format | Value |
 |--------|-----------|-------|
@@ -433,6 +445,7 @@ Buckets (36 total, defined in `common/db/buckets.go`). Note: `notification_dedup
 | `sessions` | `{sessionID}` | Session (JSON); active user sessions with IP, user agent, timestamps |
 | `sessions_by_user` | `{username}:{sessionID}` → index | → `sessions` bucket key; enables per-user session listing |
 | `oidc_links` | `{provider}:{subject}` | OIDCLink (JSON); maps OIDC provider+subject to asika username |
+| `password_reset_tokens` | `{SHA256(token)}` | PasswordResetToken (JSON); username + expiresAt; 15-min TTL, single-use |
 
 Performance optimizations:
 - Index-based PR lookups via `PutPRWithIndex` / `GetPRByIndex` (O(1) vs O(n) scan)
