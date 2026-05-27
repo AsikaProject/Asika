@@ -126,11 +126,7 @@ func (s *mongoStorage) coll(bucket string) *mongo.Collection {
 func (s *mongoStorage) Put(bucket, key string, value []byte) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	var doc bson.D
-	if err := bson.UnmarshalExtJSON(value, true, &doc); err != nil {
-		doc = bson.D{{Key: "_id", Value: key}, {Key: "data", Value: string(value)}}
-	}
-	doc = ensureID(doc, key)
+	doc := bson.D{{Key: "_id", Value: key}, {Key: "data", Value: string(value)}}
 	_, err := s.coll(bucket).ReplaceOne(ctx, bson.M{"_id": key}, doc, options.Replace().SetUpsert(true))
 	return err
 }
@@ -281,11 +277,7 @@ func (s *mongoStorage) BucketForEachPrefix(bucket, prefix string, fn func(key, v
 func (s *mongoStorage) PutPRWithIndex(key string, value []byte, prID, repoGroup string, prNumber int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	var doc bson.D
-	if err := bson.UnmarshalExtJSON(value, true, &doc); err != nil {
-		doc = bson.D{{Key: "_id", Value: key}, {Key: "data", Value: string(value)}}
-	}
-	doc = ensureID(doc, key)
+	doc := bson.D{{Key: "_id", Value: key}, {Key: "data", Value: string(value)}}
 	_, err := s.coll(BucketPRs).ReplaceOne(ctx, bson.M{"_id": key}, doc, options.Replace().SetUpsert(true))
 	if err != nil {
 		return err
