@@ -69,23 +69,29 @@ func CommentPR(c *gin.Context) {
 
 	if err := client.CommentPR(c.Request.Context(), owner, repo, prNumber, req.Body); err != nil {
 		slog.Error("failed to comment on PR", "error", err)
-		db.AppendAuditLog("error", "PR comment failed", map[string]interface{}{
-			"pr_number":  prNumber,
-			"repo_group": repoGroup,
-			"actor":      c.GetString("username"),
-			"platform":   platform,
-			"error":      err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR comment failed",
+			Actor:     c.GetString("username"),
+			RepoGroup: repoGroup,
+			PRNumber:  prNumber,
+			Platform:  platform,
+			Action:    "comment",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to comment on PR"})
 		return
 	}
 
-	db.AppendAuditLog("info", "PR commented", map[string]interface{}{
-		"pr_number":  prNumber,
-		"repo_group": repoGroup,
-		"actor":      c.GetString("username"),
-		"platform":   platform,
-		"comment":    req.Body[:min(len(req.Body), 50)],
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR commented",
+		Actor:     c.GetString("username"),
+		RepoGroup: repoGroup,
+		PRNumber:  prNumber,
+		Platform:  platform,
+		Action:    "comment",
+		Context:   map[string]interface{}{"comment": req.Body[:min(len(req.Body), 50)]},
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "comment added"})
 }

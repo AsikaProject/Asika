@@ -164,8 +164,15 @@ func (b *Bot) handleApprovePR(c telebot.Context) error {
 	ctx := context.Background()
 	if err := client.ApprovePR(ctx, owner, repo, pr.PRNumber); err != nil {
 		slog.Error("telegram bot: approve failed", "error", err)
-		db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR approve failed",
+			Actor:     "telegram",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "approve",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		return c.Send(fmt.Sprintf("Failed to approve PR: %v", err))
 	}
@@ -188,8 +195,15 @@ func (b *Bot) handleApprovePR(c telebot.Context) error {
 			}
 		}
 	}
-	db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "added_to_queue": addedToQueue,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR approved",
+		Actor:     "telegram",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  pr.Platform,
+		Action:    "approve",
+		Context:   map[string]interface{}{"added_to_queue": addedToQueue},
 	})
 	if addedToQueue {
 		return c.Send(fmt.Sprintf("PR #%d approved and added to merge queue.", pr.PRNumber))
@@ -222,8 +236,15 @@ func (b *Bot) handleClosePR(c telebot.Context) error {
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	ctx := context.Background()
 	if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR close failed",
+			Actor:     "telegram",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "close",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		return c.Send(fmt.Sprintf("Failed to close PR: %v", err))
 	}
@@ -231,8 +252,14 @@ func (b *Bot) handleClosePR(c telebot.Context) error {
 	prData, _ := json.Marshal(pr)
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR closed",
+		Actor:     "telegram",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  pr.Platform,
+		Action:    "close",
 	})
 	return c.Send(fmt.Sprintf("PR #%d closed.", pr.PRNumber))
 }
@@ -275,8 +302,15 @@ func (b *Bot) handleBatchApprovePR(c telebot.Context) error {
 		ctx := context.Background()
 		if err := client.ApprovePR(ctx, owner, repo, pr.PRNumber); err != nil {
 			slog.Error("telegram bot: batch approve failed", "error", err, "pr_number", pr.PRNumber)
-			db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
-				"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+			db.AppendAuditLogEx(models.AuditLog{
+				Level:     "error",
+				Message:   "PR approve failed",
+				Actor:     "telegram",
+				RepoGroup: pr.RepoGroup,
+				PRNumber:  pr.PRNumber,
+				Platform:  pr.Platform,
+				Action:    "approve",
+				Context:   map[string]interface{}{"error": err.Error()},
 			})
 			failCount++
 			continue
@@ -300,8 +334,15 @@ func (b *Bot) handleBatchApprovePR(c telebot.Context) error {
 				}
 			}
 		}
-		db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "added_to_queue": addedToQueue,
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "info",
+			Message:   "PR approved",
+			Actor:     "telegram",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "approve",
+			Context:   map[string]interface{}{"added_to_queue": addedToQueue},
 		})
 		successCount++
 	}
@@ -345,8 +386,15 @@ func (b *Bot) handleBatchClosePR(c telebot.Context) error {
 		}
 		ctx := context.Background()
 		if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
-			db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
-				"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+			db.AppendAuditLogEx(models.AuditLog{
+				Level:     "error",
+				Message:   "PR close failed",
+				Actor:     "telegram",
+				RepoGroup: pr.RepoGroup,
+				PRNumber:  pr.PRNumber,
+				Platform:  pr.Platform,
+				Action:    "close",
+				Context:   map[string]interface{}{"error": err.Error()},
 			})
 			failCount++
 			continue
@@ -355,8 +403,14 @@ func (b *Bot) handleBatchClosePR(c telebot.Context) error {
 		prData, _ := json.Marshal(pr)
 		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 		db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
-		db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram",
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "info",
+			Message:   "PR closed",
+			Actor:     "telegram",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "close",
 		})
 		successCount++
 	}
@@ -391,8 +445,15 @@ func (b *Bot) handleReopenPR(c telebot.Context) error {
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	ctx := context.Background()
 	if err := client.ReopenPR(ctx, owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR reopen failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR reopen failed",
+			Actor:     "telegram",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "reopen",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		return c.Send(fmt.Sprintf("Failed to reopen PR: %v", err))
 	}
@@ -401,8 +462,14 @@ func (b *Bot) handleReopenPR(c telebot.Context) error {
 	pr.UpdatedAt = time.Now()
 	data, _ := json.Marshal(pr)
 	db.PutPRWithIndex(fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber), data, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("info", "PR reopened", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR reopened",
+		Actor:     "telegram",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  pr.Platform,
+		Action:    "reopen",
 	})
 	return c.Send(fmt.Sprintf("PR #%d reopened.", pr.PRNumber))
 }
@@ -450,8 +517,15 @@ func (b *Bot) handleRevertPR(c telebot.Context) error {
 	ctx := context.Background()
 	revertPR, err := client.RevertPR(ctx, owner, repo, found.PRNumber)
 	if err != nil {
-		db.AppendAuditLog("error", "PR revert failed", map[string]interface{}{
-			"pr_number": found.PRNumber, "repo_group": found.RepoGroup, "platform": found.Platform, "actor": "telegram", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR revert failed",
+			Actor:     "telegram",
+			RepoGroup: found.RepoGroup,
+			PRNumber:  found.PRNumber,
+			Platform:  found.Platform,
+			Action:    "revert",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		return c.Send(fmt.Sprintf("Failed to revert PR: %v", err))
 	}
@@ -483,13 +557,26 @@ func (b *Bot) handleRevertPR(c telebot.Context) error {
 				found.PRNumber, found.Title, actor, revertPR.PRNumber, repoGroup, found.Platform)
 			b.notifier.Send(ctx, title, body)
 		}
-		db.AppendAuditLog("info", "PR reverted", map[string]interface{}{
-			"pr_number": found.PRNumber, "repo_group": found.RepoGroup, "platform": found.Platform, "actor": "telegram", "revert_pr_number": revertPR.PRNumber,
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "info",
+			Message:   "PR reverted",
+			Actor:     "telegram",
+			RepoGroup: found.RepoGroup,
+			PRNumber:  found.PRNumber,
+			Platform:  found.Platform,
+			Action:    "revert",
+			Context:   map[string]interface{}{"revert_pr_number": revertPR.PRNumber},
 		})
 		return c.Send(fmt.Sprintf("PR #%d reverted. Revert PR: #%d", found.PRNumber, revertPR.PRNumber))
 	}
-	db.AppendAuditLog("info", "PR revert requested", map[string]interface{}{
-		"pr_number": found.PRNumber, "repo_group": found.RepoGroup, "platform": found.Platform, "actor": "telegram",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR revert requested",
+		Actor:     "telegram",
+		RepoGroup: found.RepoGroup,
+		PRNumber:  found.PRNumber,
+		Platform:  found.Platform,
+		Action:    "revert",
 	})
 	return c.Send(fmt.Sprintf("PR #%d revert requested.", found.PRNumber))
 }
@@ -514,8 +601,14 @@ func (b *Bot) handleMarkSpam(c telebot.Context) error {
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
 	db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "warn",
+		Message:   "PR marked as spam",
+		Actor:     "telegram",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  pr.Platform,
+		Action:    "mark_spam",
 	})
 	existing, _ := db.GetSpamAuthor(pr.Author, pr.Platform)
 	if existing != nil {
@@ -537,8 +630,15 @@ func (b *Bot) handleMarkSpam(c telebot.Context) error {
 		if client != nil {
 			owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 			if err := client.ClosePR(context.Background(), owner, repo, pr.PRNumber); err != nil {
-				db.AppendAuditLog("error", "PR spam close failed", map[string]interface{}{
-					"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "telegram", "error": err.Error(),
+				db.AppendAuditLogEx(models.AuditLog{
+					Level:     "error",
+					Message:   "PR spam close failed",
+					Actor:     "telegram",
+					RepoGroup: pr.RepoGroup,
+					PRNumber:  pr.PRNumber,
+					Platform:  pr.Platform,
+					Action:    "mark_spam",
+					Context:   map[string]interface{}{"error": err.Error()},
 				})
 			}
 		}
@@ -618,9 +718,9 @@ func (b *Bot) handleRebasePR(c telebot.Context) error {
 		return c.Send(fmt.Sprintf("Rebase request failed: %v", err))
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	var result map[string]interface{}
-	if json.Unmarshal(body, &result) != nil {
+	if json.Unmarshal(respBody, &result) != nil {
 		return c.Send("Rebase completed (async)")
 	}
 	if success, ok := result["success"].(bool); ok && success {

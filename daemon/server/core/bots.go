@@ -80,6 +80,7 @@ func StartFeishu(
 
 	fsBot := feishu.NewBot(
 		cfg, clients, queueMgr, syncr, spamDetector, feishuNotifier,
+		cfg.Feishu.AdminIDs, cfg.Feishu.OperatorIDs, cfg.Feishu.ViewerIDs,
 	)
 
 	feishu.InitFeishuBot(fsBot)

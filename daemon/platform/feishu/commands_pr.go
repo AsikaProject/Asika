@@ -104,7 +104,7 @@ func (b *Bot) showPRText(repoGroup, prID string) string {
 	return msg
 }
 
-func (b *Bot) doApprove(senderID, repoGroup, prID string) string {
+func (b *Bot) doApprove(userID, repoGroup, prID string) string {
 	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		return "PR not found."
@@ -119,13 +119,20 @@ func (b *Bot) doApprove(senderID, repoGroup, prID string) string {
 	}
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	if err := client.ApprovePR(context.Background(), owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR approve failed",
+			Action:    "approve",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Actor:     "feishu",
+			Platform:  pr.Platform,
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		return fmt.Sprintf("Failed: %v", err)
 	}
 	pr.IsApproved = true
-	pr.Events = append(pr.Events, models.PREvent{Timestamp: time.Now(), Action: "approved", Actor: senderID})
+	pr.Events = append(pr.Events, models.PREvent{Timestamp: time.Now(), Action: "approved", Actor: userID})
 	prData, _ := json.Marshal(pr)
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	if prData != nil {
@@ -144,8 +151,15 @@ func (b *Bot) doApprove(senderID, repoGroup, prID string) string {
 			}
 		}
 	}
-	db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "added_to_queue": addedToQueue,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR approved",
+		Action:    "approve",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Actor:     "feishu",
+		Platform:  pr.Platform,
+		Context:   map[string]interface{}{"added_to_queue": addedToQueue},
 	})
 	if addedToQueue {
 		return fmt.Sprintf("PR #%d approved and added to merge queue.", pr.PRNumber)
@@ -153,7 +167,7 @@ func (b *Bot) doApprove(senderID, repoGroup, prID string) string {
 	return fmt.Sprintf("PR #%d approved.", pr.PRNumber)
 }
 
-func (b *Bot) doClose(senderID, repoGroup, prID string, reasonParts []string) string {
+func (b *Bot) doClose(userID, repoGroup, prID string, reasonParts []string) string {
 	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		return "PR not found."
@@ -169,8 +183,15 @@ func (b *Bot) doClose(senderID, repoGroup, prID string, reasonParts []string) st
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	ctx := context.Background()
 	if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR close failed",
+			Action:    "close",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Actor:     "feishu",
+			Platform:  pr.Platform,
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		return fmt.Sprintf("Failed: %v", err)
 	}
@@ -184,8 +205,15 @@ func (b *Bot) doClose(senderID, repoGroup, prID string, reasonParts []string) st
 	prData, _ := json.Marshal(pr)
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "reason": reason,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR closed",
+		Action:    "close",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Actor:     "feishu",
+		Platform:  pr.Platform,
+		Context:   map[string]interface{}{"reason": reason},
 	})
 	if reason != "" {
 		return fmt.Sprintf("PR #%d closed with reason: %s", pr.PRNumber, reason)
@@ -193,7 +221,7 @@ func (b *Bot) doClose(senderID, repoGroup, prID string, reasonParts []string) st
 	return fmt.Sprintf("PR #%d closed.", pr.PRNumber)
 }
 
-func (b *Bot) doReopen(senderID, repoGroup, prID string) string {
+func (b *Bot) doReopen(userID, repoGroup, prID string) string {
 	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		return "PR not found."
@@ -211,8 +239,15 @@ func (b *Bot) doReopen(senderID, repoGroup, prID string) string {
 	}
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	if err := client.ReopenPR(context.Background(), owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR reopen failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR reopen failed",
+			Action:    "reopen",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Actor:     "feishu",
+			Platform:  pr.Platform,
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		return fmt.Sprintf("Failed: %v", err)
 	}
@@ -221,13 +256,19 @@ func (b *Bot) doReopen(senderID, repoGroup, prID string) string {
 	pr.UpdatedAt = time.Now()
 	data, _ := json.Marshal(pr)
 	db.PutPRWithIndex(fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber), data, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("info", "PR reopened", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR reopened",
+		Action:    "reopen",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Actor:     "feishu",
+		Platform:  pr.Platform,
 	})
 	return fmt.Sprintf("PR #%d reopened.", pr.PRNumber)
 }
 
-func (b *Bot) doRevert(senderID, repoGroup, prID string) string {
+func (b *Bot) doRevert(userID, repoGroup, prID string) string {
 	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		return "PR not found."
@@ -247,8 +288,15 @@ func (b *Bot) doRevert(senderID, repoGroup, prID string) string {
 	ctx := context.Background()
 	revertPR, err := client.RevertPR(ctx, owner, repo, pr.PRNumber)
 	if err != nil {
-		db.AppendAuditLog("error", "PR revert failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR revert failed",
+			Action:    "revert",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Actor:     "feishu",
+			Platform:  pr.Platform,
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		return fmt.Sprintf("Failed: %v", err)
 	}
@@ -264,20 +312,26 @@ func (b *Bot) doRevert(senderID, repoGroup, prID string) string {
 			}
 		}
 	}
-	_ = client.CommentPR(ctx, owner, repo, pr.PRNumber, fmt.Sprintf("Revert PR #%d has been created by %s via Feishu.", pr.PRNumber, senderID))
-	db.AppendAuditLog("info", "PR reverted", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu",
+	_ = client.CommentPR(ctx, owner, repo, pr.PRNumber, fmt.Sprintf("Revert PR #%d has been created by %s via Feishu.", pr.PRNumber, userID))
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR reverted",
+		Action:    "revert",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Actor:     "feishu",
+		Platform:  pr.Platform,
 	})
 	if b.notifier != nil {
 		title := fmt.Sprintf("[Revert] PR #%d reverted", pr.PRNumber)
 		body := fmt.Sprintf("PR #%d \"%s\" reverted by %s via Feishu.\nRepo: %s | Platform: %s",
-			pr.PRNumber, pr.Title, senderID, pr.RepoGroup, pr.Platform)
+			pr.PRNumber, pr.Title, userID, pr.RepoGroup, pr.Platform)
 		b.notifier.Send(context.Background(), title, body)
 	}
 	return fmt.Sprintf("PR #%d revert initiated.", pr.PRNumber)
 }
 
-func (b *Bot) doMarkSpam(senderID, repoGroup, prID string) string {
+func (b *Bot) doMarkSpam(userID, repoGroup, prID string) string {
 	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		return "PR not found."
@@ -288,8 +342,14 @@ func (b *Bot) doMarkSpam(senderID, repoGroup, prID string) string {
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
 	db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "warn",
+		Message:   "PR marked as spam",
+		Action:    "mark_spam",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Actor:     "feishu",
+		Platform:  pr.Platform,
 	})
 	existing, _ := db.GetSpamAuthor(pr.Author, pr.Platform)
 	if existing != nil {
@@ -311,8 +371,15 @@ func (b *Bot) doMarkSpam(senderID, repoGroup, prID string) string {
 		if client != nil {
 			owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 			if err := client.ClosePR(context.Background(), owner, repo, pr.PRNumber); err != nil {
-				db.AppendAuditLog("error", "PR spam close failed", map[string]interface{}{
-					"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "feishu", "error": err.Error(),
+				db.AppendAuditLogEx(models.AuditLog{
+					Level:     "error",
+					Message:   "PR spam close failed",
+					Action:    "mark_spam",
+					PRNumber:  pr.PRNumber,
+					RepoGroup: pr.RepoGroup,
+					Actor:     "feishu",
+					Platform:  pr.Platform,
+					Context:   map[string]interface{}{"error": err.Error()},
 				})
 			}
 		}
@@ -325,7 +392,7 @@ func (b *Bot) doMarkSpam(senderID, repoGroup, prID string) string {
 	return fmt.Sprintf("PR #%d marked as spam.", pr.PRNumber)
 }
 
-func (b *Bot) doRebase(senderID, repoGroup, prNumberStr string) string {
+func (b *Bot) doRebase(userID, repoGroup, prNumberStr string) string {
 	cfg := config.Current()
 	if cfg == nil {
 		return "Config not loaded."
@@ -384,9 +451,9 @@ func (b *Bot) doRebase(senderID, repoGroup, prNumberStr string) string {
 		return fmt.Sprintf("Rebase request failed: %v", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	var result map[string]interface{}
-	if json.Unmarshal(body, &result) != nil {
+	if json.Unmarshal(respBody, &result) != nil {
 		return "Rebase request submitted (async)."
 	}
 	if success, ok := result["success"].(bool); ok && success {
@@ -399,7 +466,7 @@ func (b *Bot) doRebase(senderID, repoGroup, prNumberStr string) string {
 	return "Rebase request submitted."
 }
 
-func (b *Bot) doCherryPick(senderID, repoGroup, prNumberStr, targetBranch string) string {
+func (b *Bot) doCherryPick(userID, repoGroup, prNumberStr, targetBranch string) string {
 	cfg := config.Current()
 	if cfg == nil {
 		return "Config not loaded."
@@ -437,12 +504,12 @@ func (b *Bot) doCherryPick(senderID, repoGroup, prNumberStr, targetBranch string
 	return "Cherry-pick request submitted."
 }
 
-func (b *Bot) handleBatchApprovePR(senderID, repoGroup string, prIDs []string) string {
+func (b *Bot) handleBatchApprovePR(userID, repoGroup string, prIDs []string) string {
 	successCount := 0
 	failCount := 0
 	var failDetails []string
 	for _, prID := range prIDs {
-		result := b.doApprove(senderID, repoGroup, prID)
+		result := b.doApprove(userID, repoGroup, prID)
 		if strings.HasPrefix(result, "Failed:") || strings.HasPrefix(result, "PR not found") || strings.HasPrefix(result, "No client") || strings.HasPrefix(result, "Repo group not found") {
 			failCount++
 			failDetails = append(failDetails, fmt.Sprintf("#%s: %s", prID, result))
@@ -461,12 +528,12 @@ func (b *Bot) handleBatchApprovePR(senderID, repoGroup string, prIDs []string) s
 	return sb.String()
 }
 
-func (b *Bot) handleBatchClosePR(senderID, repoGroup string, prIDs []string) string {
+func (b *Bot) handleBatchClosePR(userID, repoGroup string, prIDs []string) string {
 	successCount := 0
 	failCount := 0
 	var failDetails []string
 	for _, prID := range prIDs {
-		result := b.doClose(senderID, repoGroup, prID, nil)
+		result := b.doClose(userID, repoGroup, prID, nil)
 		if strings.HasPrefix(result, "Failed:") || strings.HasPrefix(result, "PR not found") || strings.HasPrefix(result, "No client") || strings.HasPrefix(result, "Repo group not found") {
 			failCount++
 			failDetails = append(failDetails, fmt.Sprintf("#%s: %s", prID, result))

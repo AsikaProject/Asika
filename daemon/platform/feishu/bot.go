@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"asika/common/auth"
@@ -30,6 +31,7 @@ type Bot struct {
 	operatorIDs   map[string]bool
 	viewerIDs     map[string]bool
 	stop          chan struct{}
+	stopOnce      sync.Once
 	feishuCfg     models.FeishuConfig
 	internalToken string
 }
@@ -41,7 +43,10 @@ func NewBot(
 	queueMgr *queue.Manager,
 	syncerRef *syncer.Syncer,
 	spamDetector *syncer.SpamDetector,
-	n *notifier.FeishuNotifier,
+	feishuNotifier *notifier.FeishuNotifier,
+	adminIDs []string,
+	operatorIDs []string,
+	viewerIDs []string,
 ) *Bot {
 	token, _ := auth.GenerateInternalToken()
 	b := &Bot{
@@ -50,7 +55,7 @@ func NewBot(
 		queueMgr:      queueMgr,
 		syncerRef:     syncerRef,
 		spamDetector:  spamDetector,
-		notifier:      n,
+		notifier:      feishuNotifier,
 		adminIDs:      make(map[string]bool),
 		operatorIDs:   make(map[string]bool),
 		viewerIDs:     make(map[string]bool),
@@ -58,13 +63,13 @@ func NewBot(
 		feishuCfg:     cfg.Feishu,
 		internalToken: token,
 	}
-	for _, id := range cfg.Feishu.AdminIDs {
+	for _, id := range adminIDs {
 		b.adminIDs[id] = true
 	}
-	for _, id := range cfg.Feishu.OperatorIDs {
+	for _, id := range operatorIDs {
 		b.operatorIDs[id] = true
 	}
-	for _, id := range cfg.Feishu.ViewerIDs {
+	for _, id := range viewerIDs {
 		b.viewerIDs[id] = true
 	}
 	return b
@@ -77,7 +82,9 @@ func (b *Bot) Start() {
 
 // Stop stops the bot gracefully.
 func (b *Bot) Stop() {
-	close(b.stop)
+	b.stopOnce.Do(func() {
+		close(b.stop)
+	})
 	slog.Info("feishu bot stopped")
 }
 
@@ -136,18 +143,18 @@ func (b *Bot) handleMessageEvent(ctx context.Context, raw json.RawMessage) (inte
 	if err := json.Unmarshal(raw, &msg); err != nil {
 		return nil, fmt.Errorf("failed to parse message event: %w", err)
 	}
-	senderID := msg.Sender.SenderID.UserID
+	userID := msg.Sender.SenderID.UserID
 	contentStr := msg.Message.Content
 	text := b.parseMessageText(contentStr)
 	if text == "" {
 		return nil, nil
 	}
-	slog.Info("feishu bot: received message", "sender", senderID, "text", text)
-	reply := b.processCommand(senderID, text)
+	slog.Info("feishu bot: received message", "sender", userID, "text", text)
+	reply := b.processCommand(userID, text)
 	if reply != "" {
 		// If reply contains API key, send via DM instead
 		if strings.Contains(reply, "ak_") {
-			b.sendDM(senderID, reply)
+			b.sendDM(userID, reply)
 			return map[string]interface{}{
 				"msg_type": "text",
 				"content":  map[string]interface{}{"text": "🔑 API key created! Check your DMs."},

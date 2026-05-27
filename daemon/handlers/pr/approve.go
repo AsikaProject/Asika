@@ -229,12 +229,15 @@ func BatchApprovePR(c *gin.Context) {
 			slog.Warn("batch approve failed", "pr_id", prID, "error", err)
 		} else {
 			results[prID] = "success"
-			db.AppendAuditLog("info", "PR approved (batch)", map[string]interface{}{
-				"pr_number":  prNumber,
-				"repo_group": repoGroup,
-				"actor":      c.GetString("username"),
-				"platform":   platform,
-				"batch":      true,
+			db.AppendAuditLogEx(models.AuditLog{
+				Level:     "info",
+				Message:   "PR approved (batch)",
+				Actor:     c.GetString("username"),
+				RepoGroup: repoGroup,
+				PRNumber:  prNumber,
+				Platform:  platform,
+				Action:    "approve",
+				Context:   map[string]interface{}{"batch": true},
 			})
 		}
 	}

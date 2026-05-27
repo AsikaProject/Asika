@@ -56,12 +56,15 @@ func RevertPR(c *gin.Context) {
 	revertPR, err := client.RevertPR(c.Request.Context(), owner, repo, pr.PRNumber)
 	if err != nil {
 		slog.Error("failed to revert PR", "error", err)
-		db.AppendAuditLog("error", "PR revert failed", map[string]interface{}{
-			"pr_number":  pr.PRNumber,
-			"repo_group": repoGroup,
-			"actor":      c.GetString("username"),
-			"platform":   platform,
-			"error":      err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR revert failed",
+			Actor:     c.GetString("username"),
+			RepoGroup: repoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  platform,
+			Action:    "revert",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to revert PR: " + err.Error()})
 		return
@@ -98,12 +101,15 @@ func RevertPR(c *gin.Context) {
 		slog.Warn("failed to comment on reverted PR", "error", err, "pr_number", pr.PRNumber)
 	}
 
-	db.AppendAuditLog("info", "PR reverted", map[string]interface{}{
-		"pr_number":        pr.PRNumber,
-		"repo_group":       repoGroup,
-		"actor":            c.GetString("username"),
-		"platform":         platform,
-		"revert_pr_number": revertPR.PRNumber,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR reverted",
+		Actor:     c.GetString("username"),
+		RepoGroup: repoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  platform,
+		Action:    "revert",
+		Context:   map[string]interface{}{"revert_pr_number": revertPR.PRNumber},
 	})
 
 	c.JSON(http.StatusOK, gin.H{

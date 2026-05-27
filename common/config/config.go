@@ -401,20 +401,20 @@ func validate(cfg *models.Config) error {
 
 	if cfg.HookPath != "" {
 		if !filepath.IsAbs(cfg.HookPath) {
-			return fmt.Errorf("hook_path must be an absolute path: %s", cfg.HookPath)
+			return fmt.Errorf("hookpath must be an absolute path: %s", cfg.HookPath)
 		}
 		if strings.Contains(cfg.HookPath, "..") {
-			return fmt.Errorf("hook_path must not contain .. components: %s", cfg.HookPath)
+			return fmt.Errorf("hookpath must not contain .. components: %s", cfg.HookPath)
 		}
 	}
 
 	for _, rg := range cfg.RepoGroups {
 		if rg.HookPath != "" {
 			if !filepath.IsAbs(rg.HookPath) {
-				return fmt.Errorf("hook_path for repo group %s must be an absolute path: %s", rg.Name, rg.HookPath)
+				return fmt.Errorf("hookpath for repo group %s must be an absolute path: %s", rg.Name, rg.HookPath)
 			}
 			if strings.Contains(rg.HookPath, "..") {
-				return fmt.Errorf("hook_path for repo group %s must not contain .. components: %s", rg.Name, rg.HookPath)
+				return fmt.Errorf("hookpath for repo group %s must not contain .. components: %s", rg.Name, rg.HookPath)
 			}
 		}
 	}

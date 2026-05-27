@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-func (b *Bot) handleAddUser(senderID string, parts []string) string {
-	if !b.isAdmin(senderID) {
+func (b *Bot) handleAddUser(userID string, parts []string) string {
+	if !b.isAdmin(userID) {
 		return "Access denied. Admin only."
 	}
 	if len(parts) < 3 {
@@ -39,7 +39,7 @@ func (b *Bot) handleAddUser(senderID string, parts []string) string {
 		body["allowed_repo_groups"] = groups
 	}
 	reply := b.doUserAPI("POST", "/api/v1/users", body, "User created")
-	b.sendDM(senderID, "Temporary password for "+username+": "+password+"\nUser must change password on first login.")
+	b.sendDM(userID, "Temporary password for "+username+": "+password+"\nUser must change password on first login.")
 	return reply
 }
 
@@ -53,8 +53,8 @@ func generateFeishuRandomPassword(length int) string {
 	return string(bb)
 }
 
-func (b *Bot) handleDelUser(senderID string, parts []string) string {
-	if !b.isAdmin(senderID) {
+func (b *Bot) handleDelUser(userID string, parts []string) string {
+	if !b.isAdmin(userID) {
 		return "Access denied. Admin only."
 	}
 	if len(parts) < 2 {
@@ -63,8 +63,8 @@ func (b *Bot) handleDelUser(senderID string, parts []string) string {
 	return b.doUserAPI("DELETE", fmt.Sprintf("/api/v1/users/%s", parts[1]), nil, "User deleted")
 }
 
-func (b *Bot) handleListUsers(senderID string) string {
-	if !b.isOperator(senderID) {
+func (b *Bot) handleListUsers(userID string) string {
+	if !b.isOperator(userID) {
 		return "Access denied. Operator or Admin only."
 	}
 	url := fmt.Sprintf("http://localhost%s/api/v1/users", b.cfg.Server.Listen)
@@ -132,8 +132,8 @@ func (b *Bot) doUserAPI(method, path string, bodyData interface{}, successMsg st
 	return successMsg
 }
 
-func (b *Bot) handleAPIKey(senderID string, parts []string) string {
-	if !b.isAdmin(senderID) {
+func (b *Bot) handleAPIKey(userID string, parts []string) string {
+	if !b.isAdmin(userID) {
 		return "Access denied. Admin only."
 	}
 	if len(parts) < 2 {

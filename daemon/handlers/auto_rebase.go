@@ -194,12 +194,18 @@ func (w *AutoRebaseWorker) rebasePR(ctx context.Context, pr *models.PRRecord, cf
 		db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 	}
 
-	db.AppendAuditLog("info", "PR auto-rebased", map[string]interface{}{
-		"pr_id":       pr.ID,
-		"repo_group":  pr.RepoGroup,
-		"platform":    platform,
-		"head_branch": branchInfo.HeadBranch,
-		"base_branch": branchInfo.BaseBranch,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR auto-rebased",
+		Actor:     "system",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  platform,
+		Action:    "auto_rebase",
+		Context: map[string]interface{}{
+			"head_branch": branchInfo.HeadBranch,
+			"base_branch": branchInfo.BaseBranch,
+		},
 	})
 
 	slog.Info("PR auto-rebased", "pr_id", pr.PRNumber, "repo_group", pr.RepoGroup, "platform", platform)

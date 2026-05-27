@@ -123,27 +123,37 @@ func CommentPRLine(c *gin.Context) {
 
 	if err := client.CommentPRLine(c.Request.Context(), owner, repo, prNumber, req); err != nil {
 		slog.Error("failed to post inline comment", "error", err)
-		db.AppendAuditLog("error", "PR inline comment failed", map[string]interface{}{
-			"pr_number":  prNumber,
-			"repo_group": repoGroup,
-			"actor":      c.GetString("username"),
-			"platform":   platform,
-			"file_path":  req.FilePath,
-			"line":       req.Line,
-			"error":      err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR inline comment failed",
+			Actor:     c.GetString("username"),
+			RepoGroup: repoGroup,
+			PRNumber:  prNumber,
+			Platform:  platform,
+			Action:    "inline_comment",
+			Context: map[string]interface{}{
+				"file_path": req.FilePath,
+				"line":      req.Line,
+				"error":     err.Error(),
+			},
 		})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to post inline comment"})
 		return
 	}
 
-	db.AppendAuditLog("info", "PR inline comment added", map[string]interface{}{
-		"pr_number":  prNumber,
-		"repo_group": repoGroup,
-		"actor":      c.GetString("username"),
-		"platform":   platform,
-		"file_path":  req.FilePath,
-		"line":       req.Line,
-		"comment":    req.Body[:min(len(req.Body), 50)],
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR inline comment added",
+		Actor:     c.GetString("username"),
+		RepoGroup: repoGroup,
+		PRNumber:  prNumber,
+		Platform:  platform,
+		Action:    "inline_comment",
+		Context: map[string]interface{}{
+			"file_path": req.FilePath,
+			"line":      req.Line,
+			"comment":   req.Body[:min(len(req.Body), 50)],
+		},
 	})
 	c.JSON(http.StatusOK, gin.H{"message": "inline comment added"})
 }

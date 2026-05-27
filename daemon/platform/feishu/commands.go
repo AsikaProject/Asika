@@ -14,8 +14,8 @@ import (
 	commonutil "asika/common/platformutil"
 )
 
-func (b *Bot) processCommand(senderID, text string) string {
-	if !b.isOperator(senderID) {
+func (b *Bot) processCommand(userID, text string) string {
+	if !b.isOperator(userID) {
 		return "Access denied. Operator or Admin only."
 	}
 	lower := strings.ToLower(text)
@@ -41,32 +41,32 @@ func (b *Bot) processCommand(senderID, text string) string {
 			return "Usage: approve <repo_group> <pr_id> [pr_id2] [pr_id3] ..."
 		}
 		if len(parts) > 3 {
-			return b.handleBatchApprovePR(senderID, parts[1], parts[2:])
+			return b.handleBatchApprovePR(userID, parts[1], parts[2:])
 		}
-		return b.doApprove(senderID, parts[1], parts[2])
+		return b.doApprove(userID, parts[1], parts[2])
 	case strings.HasPrefix(lower, "close ") || strings.HasPrefix(lower, "/close "):
 		if len(parts) < 3 {
 			return "Usage: close <repo_group> <pr_id> [pr_id2] [pr_id3] ..."
 		}
 		if len(parts) > 3 {
-			return b.handleBatchClosePR(senderID, parts[1], parts[2:])
+			return b.handleBatchClosePR(userID, parts[1], parts[2:])
 		}
-		return b.doClose(senderID, parts[1], parts[2], parts[3:])
+		return b.doClose(userID, parts[1], parts[2], parts[3:])
 	case strings.HasPrefix(lower, "reopen ") || strings.HasPrefix(lower, "/reopen "):
 		if len(parts) < 3 {
 			return "Usage: reopen <repo_group> <pr_id>"
 		}
-		return b.doReopen(senderID, parts[1], parts[2])
+		return b.doReopen(userID, parts[1], parts[2])
 	case strings.HasPrefix(lower, "revert ") || strings.HasPrefix(lower, "/revert "):
 		if len(parts) < 3 {
 			return "Usage: revert <repo_group> <pr_id>"
 		}
-		return b.doRevert(senderID, parts[1], parts[2])
+		return b.doRevert(userID, parts[1], parts[2])
 	case strings.HasPrefix(lower, "spam ") || strings.HasPrefix(lower, "/spam "):
 		if len(parts) < 3 {
 			return "Usage: spam <repo_group> <pr_id>"
 		}
-		return b.doMarkSpam(senderID, parts[1], parts[2])
+		return b.doMarkSpam(userID, parts[1], parts[2])
 	case lower == "queue" || lower == "/queue":
 		return b.showQueueText("")
 	case strings.HasPrefix(lower, "queue ") || strings.HasPrefix(lower, "/queue "):
@@ -126,24 +126,24 @@ func (b *Bot) processCommand(senderID, text string) string {
 		if len(parts) < 3 {
 			return "Usage: unstale <repo_group> <pr_number>"
 		}
-		return b.doUnstale(senderID, parts[1], parts[2])
+		return b.doUnstale(userID, parts[1], parts[2])
 	case strings.HasPrefix(lower, "rebase ") || strings.HasPrefix(lower, "/rebase "):
 		if len(parts) < 3 {
 			return "Usage: rebase <repo_group> <pr_number>"
 		}
-		return b.doRebase(senderID, parts[1], parts[2])
+		return b.doRebase(userID, parts[1], parts[2])
 	case lower == "stats" || lower == "/stats":
 		return b.showStatsText()
 	case lower == "usage" || lower == "/usage":
 		return b.showUsageText()
 	case lower == "adduser" || lower == "/adduser":
-		return b.handleAddUser(senderID, parts)
+		return b.handleAddUser(userID, parts)
 	case lower == "deluser" || lower == "/deluser":
-		return b.handleDelUser(senderID, parts)
+		return b.handleDelUser(userID, parts)
 	case lower == "listusers" || lower == "/listusers":
-		return b.handleListUsers(senderID)
+		return b.handleListUsers(userID)
 	case strings.HasPrefix(lower, "apikey ") || strings.HasPrefix(lower, "/apikey "):
-		return b.handleAPIKey(senderID, parts)
+		return b.handleAPIKey(userID, parts)
 	case lower == "apikey" || lower == "/apikey":
 		return "Usage:\napikey new <name> <role>\napikey list\napikey revoke <key_id>"
 	case lower == "version" || lower == "/version":
@@ -152,7 +152,7 @@ func (b *Bot) processCommand(senderID, text string) string {
 		if len(parts) < 4 {
 			return "Usage: cherry-pick <repo_group> <pr_number> <target_branch>"
 		}
-		return b.doCherryPick(senderID, parts[1], parts[2], parts[3])
+		return b.doCherryPick(userID, parts[1], parts[2], parts[3])
 	default:
 		return fmt.Sprintf("Unknown command: %s\nTry 'help' for available commands.", text)
 	}
@@ -278,7 +278,7 @@ func (b *Bot) doStaleCheckText(repoGroup string) string {
 	return strings.Join(lines, "\n")
 }
 
-func (b *Bot) doUnstale(senderID, repoGroup, prNumberStr string) string {
+func (b *Bot) doUnstale(userID, repoGroup, prNumberStr string) string {
 	cfg := config.Current()
 	if cfg == nil {
 		return "Config not loaded."

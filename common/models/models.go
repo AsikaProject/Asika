@@ -162,7 +162,7 @@ const (
 	ApprovalStateFailure ApprovalState = "failure"
 )
 
-// ComputeApprovalState is a pure function that computes the LGTM state from approval status.
+// ComputeApprovalStatus is a pure function that computes the LGTM state from approval status.
 // It returns the state, a human-readable message, and the desired LGTM label.
 func ComputeApprovalStatus(status *ApprovalStatus) (state ApprovalState, message, label string) {
 	approvers := status.Approvers
@@ -431,9 +431,9 @@ type ReviewerLoad struct {
 
 // ReviewerLoadConfig controls reviewer load balancing behavior
 type ReviewerLoadConfig struct {
-	Enabled            bool `toml:"enabled" json:"enabled"`
-	MaxReviewersPerPR  int  `toml:"max_reviewers_per_pr" json:"max_reviewers_per_pr"`
-	ActiveDays         int  `toml:"active_days" json:"active_days"`
+	Enabled           bool `toml:"enabled" json:"enabled"`
+	MaxReviewersPerPR int  `toml:"max_reviewers_per_pr" json:"max_reviewers_per_pr"`
+	ActiveDays        int  `toml:"active_days" json:"active_days"`
 }
 
 // WebAuthnCredential stores a WebAuthn credential for passkey login

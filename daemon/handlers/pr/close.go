@@ -313,12 +313,15 @@ func BatchClosePR(c *gin.Context) {
 				}
 			}
 
-			db.AppendAuditLog("info", "PR closed (batch)", map[string]interface{}{
-				"pr_number":  prNumber,
-				"repo_group": repoGroup,
-				"actor":      c.GetString("username"),
-				"platform":   platform,
-				"batch":      true,
+			db.AppendAuditLogEx(models.AuditLog{
+				Level:     "info",
+				Message:   "PR closed (batch)",
+				Actor:     c.GetString("username"),
+				RepoGroup: repoGroup,
+				PRNumber:  prNumber,
+				Platform:  platform,
+				Action:    "close",
+				Context:   map[string]interface{}{"batch": true},
 			})
 		}
 	}

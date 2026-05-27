@@ -17,7 +17,7 @@ import (
 	"asika/common/config"
 	"asika/common/db"
 	"asika/common/models"
-	"asika/common/platformutil"
+	commonutil "asika/common/platformutil"
 )
 
 const maxBatchSize = 50
@@ -29,7 +29,7 @@ func (b *Bot) handleApprovePR(ev *slack.MessageEvent, client *socketmode.Client,
 	}
 	repoGroup := args[1]
 	prID := args[2]
-	pr, err := platformutil.GetPRByID(repoGroup, prID)
+	pr, err := commonutil.GetPRByID(repoGroup, prID)
 	if err != nil || pr == nil {
 		b.postMessage(client, ev.Channel, "PR not found.")
 		return
@@ -52,8 +52,15 @@ func (b *Bot) handleApprovePR(ev *slack.MessageEvent, client *socketmode.Client,
 	ctx := context.Background()
 	if err := pClient.ApprovePR(ctx, owner, repo, pr.PRNumber); err != nil {
 		slog.Error("slack bot: approve failed", "error", err)
-		db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Action:    "approve",
+			Message:   "PR approve failed",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Platform:  pr.Platform,
+			Actor:     "slack",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		b.postMessage(client, ev.Channel, fmt.Sprintf("Failed to approve PR: %v", err))
 		return
@@ -78,8 +85,15 @@ func (b *Bot) handleApprovePR(ev *slack.MessageEvent, client *socketmode.Client,
 			}
 		}
 	}
-	db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "added_to_queue": addedToQueue,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Action:    "approve",
+		Message:   "PR approved",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Platform:  pr.Platform,
+		Actor:     "slack",
+		Context:   map[string]interface{}{"added_to_queue": addedToQueue},
 	})
 	if addedToQueue {
 		b.postMessage(client, ev.Channel, fmt.Sprintf("PR #%d approved and added to merge queue.", pr.PRNumber))
@@ -99,7 +113,7 @@ func (b *Bot) handleClosePR(ev *slack.MessageEvent, client *socketmode.Client, a
 	if len(args) > 3 {
 		reason = strings.Join(args[3:], " ")
 	}
-	pr, _ := platformutil.GetPRByID(repoGroup, prID)
+	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		b.postMessage(client, ev.Channel, "PR not found.")
 		return
@@ -117,8 +131,15 @@ func (b *Bot) handleClosePR(ev *slack.MessageEvent, client *socketmode.Client, a
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	ctx := context.Background()
 	if err := pClient.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Action:    "close",
+			Message:   "PR close failed",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Platform:  pr.Platform,
+			Actor:     "slack",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		b.postMessage(client, ev.Channel, fmt.Sprintf("Failed to close PR: %v", err))
 		return
@@ -132,8 +153,15 @@ func (b *Bot) handleClosePR(ev *slack.MessageEvent, client *socketmode.Client, a
 	prData, _ := json.Marshal(pr)
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "reason": reason,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Action:    "close",
+		Message:   "PR closed",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Platform:  pr.Platform,
+		Actor:     "slack",
+		Context:   map[string]interface{}{"reason": reason},
 	})
 	if reason != "" {
 		b.postMessage(client, ev.Channel, fmt.Sprintf("PR #%d closed with reason: %s", pr.PRNumber, reason))
@@ -149,7 +177,7 @@ func (b *Bot) handleReopenPR(ev *slack.MessageEvent, client *socketmode.Client, 
 	}
 	repoGroup := args[1]
 	prID := args[2]
-	pr, _ := platformutil.GetPRByID(repoGroup, prID)
+	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		b.postMessage(client, ev.Channel, "PR not found.")
 		return
@@ -167,8 +195,15 @@ func (b *Bot) handleReopenPR(ev *slack.MessageEvent, client *socketmode.Client, 
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	ctx := context.Background()
 	if err := pClient.ReopenPR(ctx, owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR reopen failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Action:    "reopen",
+			Message:   "PR reopen failed",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Platform:  pr.Platform,
+			Actor:     "slack",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		b.postMessage(client, ev.Channel, fmt.Sprintf("Failed to reopen PR: %v", err))
 		return
@@ -178,8 +213,14 @@ func (b *Bot) handleReopenPR(ev *slack.MessageEvent, client *socketmode.Client, 
 	pr.UpdatedAt = time.Now()
 	data, _ := json.Marshal(pr)
 	db.PutPRWithIndex(fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber), data, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("info", "PR reopened", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Action:    "reopen",
+		Message:   "PR reopened",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Platform:  pr.Platform,
+		Actor:     "slack",
 	})
 	b.postMessage(client, ev.Channel, fmt.Sprintf("PR #%d reopened.", pr.PRNumber))
 }
@@ -191,7 +232,7 @@ func (b *Bot) handleMarkSpam(ev *slack.MessageEvent, client *socketmode.Client, 
 	}
 	repoGroup := args[1]
 	prID := args[2]
-	pr, _ := platformutil.GetPRByID(repoGroup, prID)
+	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		b.postMessage(client, ev.Channel, "PR not found.")
 		return
@@ -202,8 +243,14 @@ func (b *Bot) handleMarkSpam(ev *slack.MessageEvent, client *socketmode.Client, 
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
 	db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "warn",
+		Action:    "mark_spam",
+		Message:   "PR marked as spam",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Platform:  pr.Platform,
+		Actor:     "slack",
 	})
 	existing, _ := db.GetSpamAuthor(pr.Author, pr.Platform)
 	if existing != nil {
@@ -225,8 +272,15 @@ func (b *Bot) handleMarkSpam(ev *slack.MessageEvent, client *socketmode.Client, 
 		if pClient != nil {
 			owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 			if err := pClient.ClosePR(context.Background(), owner, repo, pr.PRNumber); err != nil {
-				db.AppendAuditLog("error", "PR spam close failed", map[string]interface{}{
-					"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "error": err.Error(),
+				db.AppendAuditLogEx(models.AuditLog{
+					Level:     "error",
+					Action:    "mark_spam",
+					Message:   "PR spam close failed",
+					PRNumber:  pr.PRNumber,
+					RepoGroup: pr.RepoGroup,
+					Platform:  pr.Platform,
+					Actor:     "slack",
+					Context:   map[string]interface{}{"error": err.Error()},
 				})
 			}
 		}
@@ -247,7 +301,7 @@ func (b *Bot) handleRevertPR(ev *slack.MessageEvent, client *socketmode.Client, 
 	}
 	repoGroup := args[1]
 	prID := args[2]
-	pr, _ := platformutil.GetPRByID(repoGroup, prID)
+	pr, _ := commonutil.GetPRByID(repoGroup, prID)
 	if pr == nil {
 		b.postMessage(client, ev.Channel, "PR not found.")
 		return
@@ -270,8 +324,15 @@ func (b *Bot) handleRevertPR(ev *slack.MessageEvent, client *socketmode.Client, 
 	ctx := context.Background()
 	revertPR, err := pClient.RevertPR(ctx, owner, repo, pr.PRNumber)
 	if err != nil {
-		db.AppendAuditLog("error", "PR revert failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Action:    "revert",
+			Message:   "PR revert failed",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Platform:  pr.Platform,
+			Actor:     "slack",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		b.postMessage(client, ev.Channel, fmt.Sprintf("Failed to revert PR: %v", err))
 		return
@@ -289,8 +350,14 @@ func (b *Bot) handleRevertPR(ev *slack.MessageEvent, client *socketmode.Client, 
 		}
 	}
 	_ = pClient.CommentPR(ctx, owner, repo, pr.PRNumber, fmt.Sprintf("Revert PR #%d has been created by %s via Slack.", pr.PRNumber, ev.User))
-	db.AppendAuditLog("info", "PR reverted", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Action:    "revert",
+		Message:   "PR reverted",
+		PRNumber:  pr.PRNumber,
+		RepoGroup: pr.RepoGroup,
+		Platform:  pr.Platform,
+		Actor:     "slack",
 	})
 	if b.notifier != nil {
 		title := fmt.Sprintf("[Revert] PR #%d reverted", pr.PRNumber)
@@ -362,9 +429,9 @@ func (b *Bot) handleRebasePR(ev *slack.MessageEvent, client *socketmode.Client, 
 		return
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	var result map[string]interface{}
-	if json.Unmarshal(body, &result) != nil {
+	if json.Unmarshal(respBody, &result) != nil {
 		b.postMessage(client, ev.Channel, "Rebase request submitted (async).")
 		return
 	}
@@ -459,7 +526,7 @@ func (b *Bot) handleBatchApprovePR(ev *slack.MessageEvent, client *socketmode.Cl
 	failCount := 0
 	var failDetails []string
 	for _, prID := range args[2:] {
-		pr, err := platformutil.GetPRByID(repoGroup, prID)
+		pr, err := commonutil.GetPRByID(repoGroup, prID)
 		if err != nil || pr == nil {
 			failCount++
 			failDetails = append(failDetails, fmt.Sprintf("%s: not found", prID))
@@ -476,8 +543,15 @@ func (b *Bot) handleBatchApprovePR(ev *slack.MessageEvent, client *socketmode.Cl
 		if err := pClient.ApprovePR(ctx, owner, repo, pr.PRNumber); err != nil {
 			failCount++
 			failDetails = append(failDetails, fmt.Sprintf("#%d: %v", pr.PRNumber, err))
-			db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
-				"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "error": err.Error(),
+			db.AppendAuditLogEx(models.AuditLog{
+				Level:     "error",
+				Action:    "approve",
+				Message:   "PR approve failed",
+				PRNumber:  pr.PRNumber,
+				RepoGroup: pr.RepoGroup,
+				Platform:  pr.Platform,
+				Actor:     "slack",
+				Context:   map[string]interface{}{"error": err.Error(), "batch": true},
 			})
 			continue
 		}
@@ -499,8 +573,15 @@ func (b *Bot) handleBatchApprovePR(ev *slack.MessageEvent, client *socketmode.Cl
 				}
 			}
 		}
-		db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack",
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "info",
+			Action:    "approve",
+			Message:   "PR approved",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Platform:  pr.Platform,
+			Actor:     "slack",
+			Context:   map[string]interface{}{"batch": true},
 		})
 		successCount++
 	}
@@ -530,7 +611,7 @@ func (b *Bot) handleBatchClosePR(ev *slack.MessageEvent, client *socketmode.Clie
 	failCount := 0
 	var failDetails []string
 	for _, prID := range args[2:] {
-		pr, _ := platformutil.GetPRByID(repoGroup, prID)
+		pr, _ := commonutil.GetPRByID(repoGroup, prID)
 		if pr == nil {
 			failCount++
 			failDetails = append(failDetails, fmt.Sprintf("%s: not found", prID))
@@ -547,8 +628,15 @@ func (b *Bot) handleBatchClosePR(ev *slack.MessageEvent, client *socketmode.Clie
 		if err := pClient.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
 			failCount++
 			failDetails = append(failDetails, fmt.Sprintf("#%d: %v", pr.PRNumber, err))
-			db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
-				"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack", "error": err.Error(),
+			db.AppendAuditLogEx(models.AuditLog{
+				Level:     "error",
+				Action:    "close",
+				Message:   "PR close failed",
+				PRNumber:  pr.PRNumber,
+				RepoGroup: pr.RepoGroup,
+				Platform:  pr.Platform,
+				Actor:     "slack",
+				Context:   map[string]interface{}{"error": err.Error(), "batch": true},
 			})
 			continue
 		}
@@ -556,8 +644,15 @@ func (b *Bot) handleBatchClosePR(ev *slack.MessageEvent, client *socketmode.Clie
 		prData, _ := json.Marshal(pr)
 		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 		db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
-		db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "slack",
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "info",
+			Action:    "close",
+			Message:   "PR closed",
+			PRNumber:  pr.PRNumber,
+			RepoGroup: pr.RepoGroup,
+			Platform:  pr.Platform,
+			Actor:     "slack",
+			Context:   map[string]interface{}{"batch": true},
 		})
 		successCount++
 	}

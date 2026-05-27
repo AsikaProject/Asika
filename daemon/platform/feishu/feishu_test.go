@@ -32,7 +32,7 @@ func setupFeishuTest(t *testing.T) (*Bot, func()) {
 	qm := queue.NewManager(cfg, clients)
 	s := syncer.NewSyncer(cfg, clients)
 	sd := syncer.NewSpamDetectorWithClients(cfg, clients)
-	b := NewBot(cfg, clients, qm, s, sd, nil)
+	b := NewBot(cfg, clients, qm, s, sd, nil, cfg.Feishu.AdminIDs, cfg.Feishu.OperatorIDs, cfg.Feishu.ViewerIDs)
 	return b, func() { db.Close() }
 }
 

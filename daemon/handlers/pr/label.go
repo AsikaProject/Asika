@@ -9,6 +9,7 @@ import (
 
 	"asika/common/config"
 	"asika/common/db"
+	"asika/common/models"
 )
 
 func BatchLabelPR(c *gin.Context) {
@@ -62,13 +63,15 @@ func BatchLabelPR(c *gin.Context) {
 			slog.Warn("batch label failed", "pr_id", prID, "error", err)
 		} else {
 			results[prID] = "success"
-			db.AppendAuditLog("info", "PR labeled (batch)", map[string]interface{}{
-				"pr_number":  prNumber,
-				"repo_group": repoGroup,
-				"actor":      c.GetString("username"),
-				"platform":   platform,
-				"label":      req.Label,
-				"batch":      true,
+			db.AppendAuditLogEx(models.AuditLog{
+				Level:     "info",
+				Message:   "PR labeled (batch)",
+				Actor:     c.GetString("username"),
+				RepoGroup: repoGroup,
+				PRNumber:  prNumber,
+				Platform:  platform,
+				Action:    "label",
+				Context:   map[string]interface{}{"label": req.Label, "batch": true},
 			})
 		}
 	}

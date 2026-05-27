@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"log/slog"
+	"sync"
 
 	"gopkg.in/telebot.v3"
 
@@ -27,6 +28,7 @@ type Bot struct {
 	viewerIDs     map[int64]bool
 	internalToken string
 	stop          chan struct{}
+	stopOnce      sync.Once
 }
 
 // NewBot creates a new Telegram bot with interactive decision support.
@@ -83,7 +85,9 @@ func (b *Bot) Start() {
 
 // Stop stops the bot gracefully.
 func (b *Bot) Stop() {
-	close(b.stop)
+	b.stopOnce.Do(func() {
+		close(b.stop)
+	})
 	if b.bot != nil {
 		b.bot.Stop()
 	}

@@ -80,9 +80,9 @@ func (b *Bot) handleListUsers(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	var users []map[string]interface{}
-	if json.Unmarshal(body, &users) != nil {
+	if json.Unmarshal(respBody, &users) != nil {
 		s.ChannelMessageSend(m.ChannelID, "Error parsing users response")
 		return
 	}
@@ -240,9 +240,9 @@ func (b *Bot) handleAPIKeyList(s *discordgo.Session, m *discordgo.MessageCreate)
 		return
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	var keys []map[string]interface{}
-	if json.Unmarshal(body, &keys) != nil {
+	if json.Unmarshal(respBody, &keys) != nil {
 		s.ChannelMessageSend(m.ChannelID, "Error parsing response")
 		return
 	}

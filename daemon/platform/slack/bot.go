@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"strings"
+	"sync"
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
@@ -31,6 +32,7 @@ type Bot struct {
 	viewerIDs     map[string]bool
 	internalToken string
 	stop          chan struct{}
+	stopOnce      sync.Once
 }
 
 // NewBot creates a new Slack bot.
@@ -107,7 +109,9 @@ func (b *Bot) Start() {
 
 // Stop stops the Slack bot gracefully.
 func (b *Bot) Stop() {
-	close(b.stop)
+	b.stopOnce.Do(func() {
+		close(b.stop)
+	})
 	slog.Info("slack bot stopped")
 }
 

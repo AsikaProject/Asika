@@ -86,8 +86,8 @@ func getWebAuthnUser(username string) (*WebAuthnUser, error) {
 		}
 		if cred.UserID == username {
 			credentials = append(credentials, webauthn.Credential{
-				ID:              cred.CredentialID,
-				PublicKey:       cred.PublicKey,
+				ID:        cred.CredentialID,
+				PublicKey: cred.PublicKey,
 				Authenticator: webauthn.Authenticator{
 					SignCount: cred.SignCount,
 					AAGUID:    cred.AAGUID,
@@ -204,7 +204,7 @@ func PasskeyRegisterBegin(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"options":   options,
+		"options":    options,
 		"session_id": sessionID,
 	})
 }

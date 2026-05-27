@@ -177,12 +177,18 @@ func performRebase(ctx context.Context, group *models.RepoGroup, repoGroup, prID
 		db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 	}
 
-	db.AppendAuditLog("info", "PR rebased successfully", map[string]interface{}{
-		"pr_id":       prID,
-		"repo_group":  repoGroup,
-		"platform":    platform,
-		"head_branch": branchInfo.HeadBranch,
-		"base_branch": branchInfo.BaseBranch,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR rebased successfully",
+		Actor:     "system",
+		RepoGroup: repoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  platform,
+		Action:    "rebase",
+		Context: map[string]interface{}{
+			"head_branch": branchInfo.HeadBranch,
+			"base_branch": branchInfo.BaseBranch,
+		},
 	})
 
 	return &RebaseResponse{
@@ -365,12 +371,18 @@ func performCherryPick(ctx context.Context, group *models.RepoGroup, repoGroup, 
 		db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 	}
 
-	db.AppendAuditLog("info", "PR cherry-picked successfully", map[string]interface{}{
-		"pr_id":         prID,
-		"repo_group":    repoGroup,
-		"platform":      platform,
-		"merge_commit":  pr.MergeCommitSHA,
-		"target_branch": targetBranch,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR cherry-picked successfully",
+		Actor:     "system",
+		RepoGroup: repoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  platform,
+		Action:    "cherry_pick",
+		Context: map[string]interface{}{
+			"merge_commit":  pr.MergeCommitSHA,
+			"target_branch": targetBranch,
+		},
 	})
 
 	return &CherryPickResponse{

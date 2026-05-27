@@ -159,12 +159,18 @@ func batchRebaseSinglePR(c *gin.Context, group *models.RepoGroup, repoGroup, prI
 		db.PutPRWithIndex(prKey, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 	}
 
-	db.AppendAuditLog("info", "PR batch rebased", map[string]interface{}{
-		"pr_id":       prID,
-		"repo_group":  repoGroup,
-		"platform":    platform,
-		"head_branch": branchInfo.HeadBranch,
-		"base_branch": branchInfo.BaseBranch,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR batch rebased",
+		Actor:     "system",
+		RepoGroup: repoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  platform,
+		Action:    "batch_rebase",
+		Context: map[string]interface{}{
+			"head_branch": branchInfo.HeadBranch,
+			"base_branch": branchInfo.BaseBranch,
+		},
 	})
 
 	return BatchRebaseResult{

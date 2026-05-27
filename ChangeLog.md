@@ -12,6 +12,7 @@
 - **Feature**: Add reviewer load balancing configuration: `[reviewer_load]` section with `enabled`, `max_reviewers_per_pr`, `active_days` options.
 - **Feature**: Add passkey configuration: `[auth]` section with `passkey_enabled`, `passkey_rp_id`, `passkey_rp_name`, `passkey_rp_origin` options.
 - **Fix**: Fix `pathEscapeSegments` function name case in platforms test.
+- **Refactor**: Unify variable naming inconsistencies across codebase. Standardize `AppendAuditLogEx` API, `respBody` for HTTP responses, `args` for command parameters, `userID` for user identifiers, `commonutil` import alias, `hookpath` in error messages, `stopOnce` for safe shutdown, and Feishu `NewBot` constructor signature.
 
 ## v20260526DEV
 

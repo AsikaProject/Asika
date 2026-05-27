@@ -50,8 +50,15 @@ func (b *Bot) handleApprovePR(s *discordgo.Session, m *discordgo.MessageCreate, 
 	ctx := context.Background()
 	if err := client.ApprovePR(ctx, owner, repo, pr.PRNumber); err != nil {
 		slog.Error("discord bot: approve failed", "error", err)
-		db.AppendAuditLog("error", "PR approve failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR approve failed",
+			Actor:     "discord",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "approve",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to approve PR: %v", err))
 		return
@@ -76,8 +83,15 @@ func (b *Bot) handleApprovePR(s *discordgo.Session, m *discordgo.MessageCreate, 
 			}
 		}
 	}
-	db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord", "added_to_queue": addedToQueue,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR approved",
+		Actor:     "discord",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  pr.Platform,
+		Action:    "approve",
+		Context:   map[string]interface{}{"added_to_queue": addedToQueue},
 	})
 	if addedToQueue {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d approved and added to merge queue.", pr.PRNumber))
@@ -115,8 +129,15 @@ func (b *Bot) handleClosePR(s *discordgo.Session, m *discordgo.MessageCreate, ar
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	ctx := context.Background()
 	if err := client.ClosePR(ctx, owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR close failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR close failed",
+			Actor:     "discord",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "close",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to close PR: %v", err))
 		return
@@ -130,8 +151,15 @@ func (b *Bot) handleClosePR(s *discordgo.Session, m *discordgo.MessageCreate, ar
 	prData, _ := json.Marshal(pr)
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord", "reason": reason,
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR closed",
+		Actor:     "discord",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  pr.Platform,
+		Action:    "close",
+		Context:   map[string]interface{}{"reason": reason},
 	})
 	if reason != "" {
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d closed with reason: %s", pr.PRNumber, reason))
@@ -165,8 +193,15 @@ func (b *Bot) handleReopenPR(s *discordgo.Session, m *discordgo.MessageCreate, a
 	owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 	ctx := context.Background()
 	if err := client.ReopenPR(ctx, owner, repo, pr.PRNumber); err != nil {
-		db.AppendAuditLog("error", "PR reopen failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR reopen failed",
+			Actor:     "discord",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "reopen",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to reopen PR: %v", err))
 		return
@@ -176,8 +211,14 @@ func (b *Bot) handleReopenPR(s *discordgo.Session, m *discordgo.MessageCreate, a
 	pr.UpdatedAt = time.Now()
 	data, _ := json.Marshal(pr)
 	db.PutPRWithIndex(fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber), data, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("info", "PR reopened", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR reopened",
+		Actor:     "discord",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  pr.Platform,
+		Action:    "reopen",
 	})
 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d reopened.", pr.PRNumber))
 }
@@ -212,8 +253,15 @@ func (b *Bot) handleRevertPR(s *discordgo.Session, m *discordgo.MessageCreate, a
 	ctx := context.Background()
 	revertPR, err := client.RevertPR(ctx, owner, repo, pr.PRNumber)
 	if err != nil {
-		db.AppendAuditLog("error", "PR revert failed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord", "error": err.Error(),
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "error",
+			Message:   "PR revert failed",
+			Actor:     "discord",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "revert",
+			Context:   map[string]interface{}{"error": err.Error()},
 		})
 		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Failed to revert PR: %v", err))
 		return
@@ -231,8 +279,14 @@ func (b *Bot) handleRevertPR(s *discordgo.Session, m *discordgo.MessageCreate, a
 		}
 	}
 	_ = client.CommentPR(ctx, owner, repo, pr.PRNumber, fmt.Sprintf("Revert PR #%d has been created by %s via Discord.", pr.PRNumber, m.Author.Username))
-	db.AppendAuditLog("info", "PR reverted", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR reverted",
+		Actor:     "discord",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  pr.Platform,
+		Action:    "revert",
 	})
 	if b.notifier != nil {
 		title := fmt.Sprintf("[Revert] PR #%d reverted", pr.PRNumber)
@@ -261,8 +315,14 @@ func (b *Bot) handleMarkSpam(s *discordgo.Session, m *discordgo.MessageCreate, a
 	key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 	data, _ := json.Marshal(pr)
 	db.PutPRWithIndex(key, data, pr.ID, pr.RepoGroup, pr.PRNumber)
-	db.AppendAuditLog("warn", "PR marked as spam", map[string]interface{}{
-		"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "warn",
+		Message:   "PR marked as spam",
+		Actor:     "discord",
+		RepoGroup: pr.RepoGroup,
+		PRNumber:  pr.PRNumber,
+		Platform:  pr.Platform,
+		Action:    "mark_spam",
 	})
 	existing, _ := db.GetSpamAuthor(pr.Author, pr.Platform)
 	if existing != nil {
@@ -284,8 +344,15 @@ func (b *Bot) handleMarkSpam(s *discordgo.Session, m *discordgo.MessageCreate, a
 		if client != nil {
 			owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
 			if err := client.ClosePR(context.Background(), owner, repo, pr.PRNumber); err != nil {
-				db.AppendAuditLog("error", "PR spam close failed", map[string]interface{}{
-					"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord", "error": err.Error(),
+				db.AppendAuditLogEx(models.AuditLog{
+					Level:     "error",
+					Message:   "PR spam close failed",
+					Actor:     "discord",
+					RepoGroup: pr.RepoGroup,
+					PRNumber:  pr.PRNumber,
+					Platform:  pr.Platform,
+					Action:    "mark_spam",
+					Context:   map[string]interface{}{"error": err.Error()},
 				})
 			}
 		}
@@ -299,13 +366,13 @@ func (b *Bot) handleMarkSpam(s *discordgo.Session, m *discordgo.MessageCreate, a
 	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("PR #%d marked as spam.", pr.PRNumber))
 }
 
-func (b *Bot) handleRebasePR(s *discordgo.Session, m *discordgo.MessageCreate, parts []string) {
-	if len(parts) < 3 {
+func (b *Bot) handleRebasePR(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if len(args) < 3 {
 		s.ChannelMessageSend(m.ChannelID, "Usage: !rebase repo_group pr_number")
 		return
 	}
-	repoGroup := parts[1]
-	prNumber := commonutil.ParseInt(parts[2])
+	repoGroup := args[1]
+	prNumber := commonutil.ParseInt(args[2])
 	if prNumber == 0 {
 		s.ChannelMessageSend(m.ChannelID, "Invalid PR number.")
 		return
@@ -368,9 +435,9 @@ func (b *Bot) handleRebasePR(s *discordgo.Session, m *discordgo.MessageCreate, p
 		return
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	var result map[string]interface{}
-	if json.Unmarshal(body, &result) != nil {
+	if json.Unmarshal(respBody, &result) != nil {
 		s.ChannelMessageSend(m.ChannelID, "Rebase completed (async)")
 		return
 	}
@@ -384,18 +451,18 @@ func (b *Bot) handleRebasePR(s *discordgo.Session, m *discordgo.MessageCreate, p
 	}
 }
 
-func (b *Bot) handleCherryPickPR(s *discordgo.Session, m *discordgo.MessageCreate, parts []string) {
-	if len(parts) < 4 {
+func (b *Bot) handleCherryPickPR(s *discordgo.Session, m *discordgo.MessageCreate, args []string) {
+	if len(args) < 4 {
 		s.ChannelMessageSend(m.ChannelID, "Usage: !cherry-pick repo_group pr_number target_branch")
 		return
 	}
-	repoGroup := parts[1]
-	prNumber := commonutil.ParseInt(parts[2])
+	repoGroup := args[1]
+	prNumber := commonutil.ParseInt(args[2])
 	if prNumber == 0 {
 		s.ChannelMessageSend(m.ChannelID, "Invalid PR number.")
 		return
 	}
-	targetBranch := parts[3]
+	targetBranch := args[3]
 	group := config.GetRepoGroupByName(b.cfg, repoGroup)
 	if group == nil {
 		s.ChannelMessageSend(m.ChannelID, "Repo group not found: "+repoGroup)
@@ -475,8 +542,14 @@ func (b *Bot) handleBatchApprovePR(s *discordgo.Session, m *discordgo.MessageCre
 			db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 		}
 		successCount++
-		db.AppendAuditLog("info", "PR approved", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "info",
+			Message:   "PR approved",
+			Actor:     "discord",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "approve",
 		})
 	}
 	if failCount > 0 {
@@ -530,8 +603,14 @@ func (b *Bot) handleBatchClosePR(s *discordgo.Session, m *discordgo.MessageCreat
 		key := fmt.Sprintf("%s#%s#%d", pr.RepoGroup, pr.Platform, pr.PRNumber)
 		db.PutPRWithIndex(key, prData, pr.ID, pr.RepoGroup, pr.PRNumber)
 		successCount++
-		db.AppendAuditLog("info", "PR closed", map[string]interface{}{
-			"pr_number": pr.PRNumber, "repo_group": pr.RepoGroup, "platform": pr.Platform, "actor": "discord",
+		db.AppendAuditLogEx(models.AuditLog{
+			Level:     "info",
+			Message:   "PR closed",
+			Actor:     "discord",
+			RepoGroup: pr.RepoGroup,
+			PRNumber:  pr.PRNumber,
+			Platform:  pr.Platform,
+			Action:    "close",
 		})
 	}
 	if failCount > 0 {
