@@ -413,10 +413,46 @@ type Config struct {
 	LDAP               LDAPConfig         `toml:"ldap" json:"ldap"`
 	MultiTenant        MultiTenantConfig  `toml:"multi_tenant" json:"multi_tenant"`
 	Deployment         DeploymentConfig   `toml:"deployment" json:"deployment"`
+	ReviewerLoad       ReviewerLoadConfig `toml:"reviewer_load" json:"reviewer_load"`
 }
 
 type ScheduleConfig struct {
 	Enabled    bool   `toml:"enabled" json:"enabled"`
 	Cron       string `toml:"cron" json:"cron"`
 	PeriodDays int    `toml:"period_days" json:"period_days"`
+}
+
+// ReviewerLoad tracks reviewer workload for load balancing
+type ReviewerLoad struct {
+	Username     string    `json:"username"`
+	PendingCount int       `json:"pending_count"`
+	LastReviewAt time.Time `json:"last_review_at"`
+}
+
+// ReviewerLoadConfig controls reviewer load balancing behavior
+type ReviewerLoadConfig struct {
+	Enabled            bool `toml:"enabled" json:"enabled"`
+	MaxReviewersPerPR  int  `toml:"max_reviewers_per_pr" json:"max_reviewers_per_pr"`
+	ActiveDays         int  `toml:"active_days" json:"active_days"`
+}
+
+// WebAuthnCredential stores a WebAuthn credential for passkey login
+type WebAuthnCredential struct {
+	ID           string    `json:"id"`
+	UserID       string    `json:"user_id"`
+	CredentialID []byte    `json:"credential_id"`
+	PublicKey    []byte    `json:"public_key"`
+	SignCount    uint32    `json:"sign_count"`
+	AAGUID       []byte    `json:"aaguid"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastUsedAt   time.Time `json:"last_used_at"`
+	Name         string    `json:"name"`
+}
+
+// WebAuthnSession stores temporary WebAuthn session data during registration/login
+type WebAuthnSession struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	Challenge string    `json:"challenge"`
+	CreatedAt time.Time `json:"created_at"`
 }

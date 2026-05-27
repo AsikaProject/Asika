@@ -20,6 +20,10 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		return parseGitLabNoteWebhook(body, repoGroup)
 	}
 
+	if kindCheck.ObjectKind == "merge_request_review" {
+		return parseGitLabReviewWebhook(body, repoGroup)
+	}
+
 	var payload struct {
 		ObjectKind       string `json:"object_kind"`
 		EventName        string `json:"event_name"`
@@ -100,6 +104,46 @@ func parseGitLabWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 	}
 
 	return eventType, pr, nil
+}
+
+// parseGitLabReviewWebhook handles GitLab merge_request_review events
+func parseGitLabReviewWebhook(body []byte, repoGroup string) (string, *models.PRRecord, error) {
+	var payload struct {
+		ObjectKind string `json:"object_kind"`
+		User       struct {
+			Username string `json:"username"`
+		} `json:"user"`
+		MergeRequest struct {
+			IID   int    `json:"iid"`
+			Title string `json:"title"`
+			State string `json:"state"`
+		} `json:"merge_request"`
+		ObjectAttributes struct {
+			Action string `json:"action"`
+		} `json:"object_attributes"`
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return "", nil, err
+	}
+
+	pr := &models.PRRecord{
+		Platform:  "gitlab",
+		PRNumber:  payload.MergeRequest.IID,
+		Title:     payload.MergeRequest.Title,
+		Author:    payload.User.Username,
+		State:     payload.MergeRequest.State,
+		RepoGroup: repoGroup,
+	}
+
+	switch payload.ObjectAttributes.Action {
+	case "approved":
+		return string(events.EventPRApproved), pr, nil
+	case "unapproved":
+		return string(events.EventPRChangesRequested), pr, nil
+	}
+
+	return "", pr, nil
 }
 
 // parseGitLabNoteWebhook handles GitLab Note Hook events for MR comments

@@ -89,6 +89,9 @@ func parseGitHubWebhook(body []byte, repoGroup string) (string, *models.PRRecord
 		if reviewPayload.Review.State == "approved" {
 			return string(events.EventPRApproved), pr, nil
 		}
+		if reviewPayload.Review.State == "changes_requested" {
+			return string(events.EventPRChangesRequested), pr, nil
+		}
 		return "", pr, nil
 	}
 

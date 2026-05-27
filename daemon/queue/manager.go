@@ -11,6 +11,7 @@ import (
 
 	"asika/common/config"
 	"asika/common/db"
+	"asika/common/events"
 	"asika/common/gitutil"
 	"asika/common/models"
 	"asika/common/platforms"
@@ -165,7 +166,21 @@ func (m *Manager) AddToQueueScheduled(pr *models.PRRecord, scheduleAt time.Time)
 	}
 
 	slog.Info("PR added to merge queue", "pr_id", pr.ID, "repo_group", pr.RepoGroup)
-	return db.Put(db.BucketQueueItems, key, data)
+	if err := db.Put(db.BucketQueueItems, key, data); err != nil {
+		return err
+	}
+
+	// Publish queued event
+	events.PublishPR(events.EventPRQueued, pr.RepoGroup, pr.Platform, pr, nil)
+
+	// Add queued event to PR record
+	pr.Events = append(pr.Events, models.PREvent{
+		Timestamp: time.Now(),
+		Action:    "queued",
+		Actor:     "system",
+	})
+
+	return nil
 }
 
 // IsReadyToMerge checks if a PR currently satisfies all merge conditions
@@ -430,7 +445,27 @@ func (m *Manager) RemoveFromQueue(repoGroup, prID string) error {
 	if err != nil || data == nil {
 		return fmt.Errorf("queue item not found: %s", key)
 	}
-	return db.Delete(db.BucketQueueItems, key)
+
+	// Find PR record to publish event
+	pr, _ := FindPRByID(prID, repoGroup)
+
+	if err := db.Delete(db.BucketQueueItems, key); err != nil {
+		return err
+	}
+
+	// Publish dequeued event if PR found
+	if pr != nil {
+		events.PublishPR(events.EventPRDequeued, pr.RepoGroup, pr.Platform, pr, nil)
+
+		// Add dequeued event to PR record
+		pr.Events = append(pr.Events, models.PREvent{
+			Timestamp: time.Now(),
+			Action:    "dequeued",
+			Actor:     "system",
+		})
+	}
+
+	return nil
 }
 
 // ClearQueue removes all queue items for a repo group.

@@ -21,6 +21,14 @@ func NewReviewer(clients map[platforms.PlatformType]platforms.PlatformClient) *R
 	return &Reviewer{clients: clients}
 }
 
+// selectReviewersWithLoadBalancing selects reviewers using load balancing
+func (r *Reviewer) selectReviewersWithLoadBalancing(cfg *models.Config, candidates []string) []string {
+	if !cfg.ReviewerLoad.Enabled {
+		return candidates
+	}
+	return FilterAndSortByLoad(candidates, cfg.ReviewerLoad.ActiveDays, cfg.ReviewerLoad.MaxReviewersPerPR)
+}
+
 // HandlePROpened processes a PR opened event and assigns reviewers if rules match.
 func (r *Reviewer) HandlePROpened(pr *models.PRRecord, repoGroup string) {
 	cfg := config.Current()
@@ -69,14 +77,18 @@ func (r *Reviewer) HandlePROpened(pr *models.PRRecord, repoGroup string) {
 		return
 	}
 
-	reviewers := make([]string, 0, len(reviewerSet))
+	candidates := make([]string, 0, len(reviewerSet))
 	for rev := range reviewerSet {
-		reviewers = append(reviewers, rev)
+		candidates = append(candidates, rev)
 	}
+
+	reviewers := r.selectReviewersWithLoadBalancing(cfg, candidates)
 
 	slog.Info("requesting reviewers", "pr", pr.PRNumber, "reviewers", reviewers)
 	if err := client.RequestReview(ctx, owner, repo, pr.PRNumber, reviewers); err != nil {
 		slog.Error("failed to request reviewers", "error", err, "pr", pr.PRNumber)
+	} else {
+		IncrementPendingLoad(reviewers)
 	}
 }
 
@@ -141,14 +153,18 @@ func (r *Reviewer) HandlePROpenedWithCodeOwners(pr *models.PRRecord, repoGroup s
 		return
 	}
 
-	reviewers := make([]string, 0, len(reviewerSet))
+	candidates := make([]string, 0, len(reviewerSet))
 	for rev := range reviewerSet {
-		reviewers = append(reviewers, rev)
+		candidates = append(candidates, rev)
 	}
+
+	reviewers := r.selectReviewersWithLoadBalancing(cfg, candidates)
 
 	slog.Info("requesting reviewers", "pr", pr.PRNumber, "reviewers", reviewers)
 	if err := client.RequestReview(ctx, owner, repo, pr.PRNumber, reviewers); err != nil {
 		slog.Error("failed to request reviewers", "error", err, "pr", pr.PRNumber)
+	} else {
+		IncrementPendingLoad(reviewers)
 	}
 }
 

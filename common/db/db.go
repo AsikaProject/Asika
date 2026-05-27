@@ -158,6 +158,11 @@ func InitWithStorage(s Storage) {
 	defaultStorage = s
 }
 
+// IsInitialized returns true if the database has been initialized.
+func IsInitialized() bool {
+	return defaultStorage != nil
+}
+
 func mustStorage() Storage {
 	if defaultStorage == nil {
 		panic("database not initialized: call db.Init() or db.InitWithStorage() first")

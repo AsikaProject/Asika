@@ -39,6 +39,10 @@ type AuthConfig struct {
 	SessionInactivityTimeout string         `toml:"session_inactivity_timeout"`
 	SessionCleanupInterval   string         `toml:"session_cleanup_interval"`
 	OIDCProviders            []OIDCProvider `toml:"oidc_providers"`
+	PasskeyEnabled           bool           `toml:"passkey_enabled"`
+	PasskeyRPID              string         `toml:"passkey_rp_id"`
+	PasskeyRPName            string         `toml:"passkey_rp_name"`
+	PasskeyRPOrigin          string         `toml:"passkey_rp_origin"`
 }
 
 // OIDCProvider represents an OAuth2/OIDC identity provider configuration

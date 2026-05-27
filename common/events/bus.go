@@ -28,6 +28,9 @@ const (
 	EventNotificationEscalated EventType = "notification_escalated"
 	EventBranchPushed          EventType = "branch_pushed"
 	EventTagPushed             EventType = "tag_pushed"
+	EventPRChangesRequested    EventType = "changes_requested"
+	EventPRQueued              EventType = "pr_queued"
+	EventPRDequeued            EventType = "pr_dequeued"
 )
 
 // Event is the internal unified event

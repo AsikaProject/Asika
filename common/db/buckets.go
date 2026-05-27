@@ -40,4 +40,6 @@ const (
 	BucketSessionsByUser      = "sessions_by_user"
 	BucketOIDCLinks           = "oidc_links"
 	BucketPasswordResetTokens = "password_reset_tokens"
+	BucketReviewerLoad        = "reviewer_load"
+	BucketWebAuthnCredentials = "webauthn_credentials"
 )

@@ -10,6 +10,7 @@ import (
 	"asika/common/events"
 	"asika/common/models"
 	"asika/daemon/handlers"
+	"asika/daemon/reviewer"
 )
 
 func (c *Consumer) handlePROpened(event events.Event) {
@@ -159,6 +160,13 @@ func (c *Consumer) handlePRApproved(event events.Event) {
 
 	slog.Info("PR approved", "title", pr.Title)
 
+	// Update reviewer load - the approver has completed a review
+	if event.Payload != nil {
+		if approver, ok := event.Payload.(string); ok && approver != "" {
+			reviewer.DecrementPendingLoad(approver)
+		}
+	}
+
 	if c.autoMerge != nil {
 		c.autoMerge.EvaluatePR(pr)
 	}
@@ -182,6 +190,29 @@ func (c *Consumer) handlePRApproved(event events.Event) {
 		}
 		slog.Info("PR not ready for merge queue, added to pending queue", "pr_id", pr.ID, "repo_group", pr.RepoGroup)
 	}
+}
+
+func (c *Consumer) handlePRChangesRequested(event events.Event) {
+	pr := event.PR
+	if pr == nil {
+		return
+	}
+
+	slog.Info("PR changes requested", "title", pr.Title)
+
+	// Add changes_requested event to PR record
+	actor := "system"
+	if event.Payload != nil {
+		if reviewer, ok := event.Payload.(string); ok && reviewer != "" {
+			actor = reviewer
+		}
+	}
+	pr.Events = append(pr.Events, models.PREvent{
+		Timestamp: time.Now(),
+		Action:    "changes_requested",
+		Actor:     actor,
+	})
+	c.updatePR(event, pr)
 }
 
 func (c *Consumer) handleSpamDetected(event events.Event) {

@@ -23,6 +23,14 @@ func Init(secret string, expiry time.Duration) {
 	tokenExpiry = expiry
 }
 
+// GetTokenExpiry returns the configured token expiry duration
+func GetTokenExpiry() time.Duration {
+	if tokenExpiry == 0 {
+		return 24 * time.Hour // default 24 hours
+	}
+	return tokenExpiry
+}
+
 // HashPassword hashes a password using bcrypt
 func HashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)

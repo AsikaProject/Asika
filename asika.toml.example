@@ -32,6 +32,40 @@ fingerprint_enabled  = false
 fingerprint_secret   = "change-me-fingerprint-secret"
 fingerprint_expiry   = "168h"
 
+# Two-Factor Authentication (TOTP)
+# totp_required = false  # if true, all users must enable 2FA to log in
+
+# Passkey (WebAuthn) authentication
+# passkey_enabled   = false
+# passkey_rp_id     = "asika.example.com"    # Relying Party ID (domain)
+# passkey_rp_name   = "Asika"                # Display name
+# passkey_rp_origin = "https://asika.example.com"  # Allowed origin
+
+# Session management
+# session_inactivity_timeout = "720h"  # revoke sessions inactive for 30 days (0 = disable)
+# session_cleanup_interval   = "1h"     # how often to check for inactive sessions
+
+# OIDC/SSO providers (optional)
+# [[auth.oidc_providers]]
+#   name         = "github"
+#   display_name = "GitHub"
+#   client_id    = "your-client-id"
+#   client_secret = "your-client-secret"
+#   issuer_url   = "https://github.com"
+#   scopes       = ["read:user", "user:email"]
+#   auto_create  = true
+#   default_role = "operator"
+#
+# [[auth.oidc_providers]]
+#   name         = "google"
+#   display_name = "Google"
+#   client_id    = "your-client-id"
+#   client_secret = "your-client-secret"
+#   issuer_url   = "https://accounts.google.com"
+#   scopes       = ["openid", "email", "profile"]
+#   auto_create  = true
+#   default_role = "operator"
+
 # Event source: "webhook" or "polling"
 [events]
 mode                  = "webhook"
@@ -70,6 +104,13 @@ fast_forward_only  = false  # if true, auto-rebase PR before merge to ensure lin
 # Example: "approvals >= 2 AND ci == success AND NOT conflict"
 # Example: "core_approved >= 1 OR author IN core_contributors"
 # allow_expression_override_ci = false  # if true, expression can override CI/conflict hard gates
+
+# Reviewer load balancing (optional)
+# When enabled, assigns reviewers based on workload and activity.
+# [reviewer_load]
+# enabled              = true
+# max_reviewers_per_pr = 2      # max reviewers to assign per PR
+# active_days          = 14     # reviewers inactive for more than N days are excluded
 
 # Approval rules — file-path-based approval requirements (optional)
 # When files matching a pattern are changed, specified approvers must approve.

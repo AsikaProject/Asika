@@ -283,6 +283,12 @@ func (c *Consumer) dispatch(event events.Event) {
 		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePRLabeled(event) }) })
 	case events.EventBranchDeleted:
 		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handleBranchDeleted(event) }) })
+	case events.EventPRChangesRequested:
+		c.debounce(event, func(workers *workerPool) { workers.Submit(func() { c.handlePRChangesRequested(event) }) })
+	case events.EventPRQueued:
+		slog.Info("PR queued", "repo_group", event.RepoGroup, "pr_id", event.PR.ID)
+	case events.EventPRDequeued:
+		slog.Info("PR dequeued", "repo_group", event.RepoGroup, "pr_id", event.PR.ID)
 	case events.EventSyncCompleted:
 		slog.Info("sync completed", "repo_group", event.RepoGroup)
 	case events.EventSyncFailed:

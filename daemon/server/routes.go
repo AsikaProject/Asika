@@ -380,6 +380,18 @@ func (s *Server) setupRoutes() {
 			fp.DELETE("", handlers.RevokeAllFingerprints)
 		}
 
+		passkey := protected.Group("/auth/passkey")
+		{
+			passkey.POST("/register/begin", handlers.PasskeyRegisterBegin)
+			passkey.POST("/register/finish", handlers.PasskeyRegisterFinish)
+			passkey.GET("/credentials", handlers.ListPasskeyCredentials)
+			passkey.DELETE("/credentials/:id", handlers.DeletePasskeyCredential)
+		}
+
+		// Public passkey login endpoints
+		auth.POST("/passkey/login/begin", handlers.PasskeyLoginBegin)
+		auth.POST("/passkey/login/finish", handlers.PasskeyLoginFinish)
+
 		spaces := protected.Group("/spaces")
 		spaces.Use(RequireAnyRole("viewer", "operator", "admin"))
 		{
@@ -411,6 +423,14 @@ func (s *Server) setupRoutes() {
 			staleGroup.POST("/check", handlers.HandleStaleCheck)
 			staleGroup.POST("/check/:repo_group", handlers.HandleStaleCheck)
 			staleGroup.POST("/unmark/:repo_group/:pr_number", handlers.HandleStaleUnmark)
+		}
+
+		// Reviewer load
+		reviewerLoad := protected.Group("/reviewers")
+		reviewerLoad.Use(RequireAnyRole("viewer", "operator", "admin"))
+		{
+			reviewerLoad.GET("/load", handlers.GetReviewerLoads)
+			reviewerLoad.GET("/load/:username", handlers.GetReviewerLoad)
 		}
 	}
 

@@ -117,16 +117,87 @@
             var allEvents = [];
             if (p.events && p.events.length > 0) {
                 allEvents = p.events.map(function(e) {
-                    return { action: e.action, actor: e.actor, timestamp: e.timestamp, detail: e.detail || '', source: 'pr' };
+                    return { action: e.action, actor: e.actor, timestamp: e.timestamp, detail: e.detail || '', source: 'pr', html_url: e.html_url || '' };
                 });
             }
             allEvents.sort(function(a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
             if (allEvents.length > 0) {
                 document.getElementById('eventList').innerHTML = allEvents.map(function(e) {
-                    var color = e.source === 'audit' ? '#28a745' : '#0066cc';
-                    return '<div style="padding:10px;border-left:3px solid '+color+';margin:10px 0;">' +
-                        '<strong>'+escapeHtml(e.action)+'</strong> by '+escapeHtml(e.actor)+' at '+new Date(e.timestamp).toLocaleString() +
+                    var actionText = e.action;
+                    var borderColor = '#0066cc';
+                    var icon = '';
+
+                    switch(e.action) {
+                        case 'approved':
+                            actionText = '✓ Approved';
+                            borderColor = '#28a745';
+                            icon = '✅';
+                            break;
+                        case 'changes_requested':
+                            actionText = '✕ Changes Requested';
+                            borderColor = '#dc3545';
+                            icon = '❌';
+                            break;
+                        case 'closed':
+                            actionText = 'Closed';
+                            borderColor = '#6c757d';
+                            icon = '🔒';
+                            break;
+                        case 'merged':
+                            actionText = 'Merged';
+                            borderColor = '#6f42c1';
+                            icon = '🔀';
+                            break;
+                        case 'queued':
+                            actionText = 'Added to Merge Queue';
+                            borderColor = '#007bff';
+                            icon = '📥';
+                            break;
+                        case 'dequeued':
+                            actionText = 'Removed from Merge Queue';
+                            borderColor = '#ffc107';
+                            icon = '📤';
+                            break;
+                        case 'commented':
+                            actionText = 'Commented';
+                            borderColor = '#17a2b8';
+                            icon = '💬';
+                            break;
+                        case 'opened':
+                            actionText = 'Opened';
+                            borderColor = '#28a745';
+                            icon = '🆕';
+                            break;
+                        case 'reopened':
+                            actionText = 'Reopened';
+                            borderColor = '#28a745';
+                            icon = '🔄';
+                            break;
+                        case 'labeled':
+                            actionText = 'Labeled';
+                            borderColor = '#17a2b8';
+                            icon = '🏷️';
+                            break;
+                    }
+
+                    var linkHtml = '';
+                    if (e.html_url) {
+                        linkHtml = '<div style="margin-top:4px;"><a href="'+escapeHtml(e.html_url)+'" target="_blank" style="color:#0066cc;font-size:12px;">View on platform ↗</a></div>';
+                    }
+
+                    var color = e.source === 'audit' ? '#28a745' : borderColor;
+                    return '<div style="padding:10px;border-left:3px solid '+color+';margin:10px 0;background:var(--bg-secondary);border-radius:0 4px 4px 0;">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+                        '<div>' +
+                        '<strong style="color:'+borderColor+';">'+icon+' '+escapeHtml(actionText)+'</strong>' +
+                        (e.actor !== 'system' ? ' by <a href="/users/'+escapeHtml(e.actor)+'" style="color:#0066cc;">'+escapeHtml(e.actor)+'</a>' : '') +
+                        '</div>' +
+                        '<div style="color:#666;font-size:12px;white-space:nowrap;margin-left:12px;">' +
+                        new Date(e.timestamp).toLocaleString() +
+                        '</div>' +
+                        '</div>' +
                         (e.detail ? '<p style="margin:5px 0 0 0;color:#666;font-size:13px;">'+escapeHtml(e.detail)+'</p>' : '') +
+                        linkHtml +
                         '</div>';
                 }).join('');
             } else {
