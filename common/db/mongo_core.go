@@ -78,6 +78,21 @@ func (s *mongoStorage) ensureIndexes(ctx context.Context) error {
 		{BucketPRDependencies, mongo.IndexModel{
 			Keys: bson.D{{Key: "depends_on_pr_id", Value: 1}},
 		}, "idx_pr_dep_on"},
+		{BucketPasswordResetTokens, mongo.IndexModel{
+			Keys:    bson.D{{Key: "expires_at", Value: 1}},
+			Options: options.Index().SetExpireAfterSeconds(0),
+		}, "idx_prt_expires"},
+		{BucketReviewerLoad, mongo.IndexModel{
+			Keys:    bson.D{{Key: "username", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		}, "idx_rl_username"},
+		{BucketWebAuthnCredentials, mongo.IndexModel{
+			Keys: bson.D{{Key: "user_id", Value: 1}},
+		}, "idx_wa_user_id"},
+		{BucketWebAuthnCredentials, mongo.IndexModel{
+			Keys:    bson.D{{Key: "credential_id", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		}, "idx_wa_cred_id"},
 	}
 	var errs []error
 	for _, idx := range indexes {
