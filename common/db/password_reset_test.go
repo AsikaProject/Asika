@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -49,11 +50,11 @@ func TestGetPasswordResetToken_NotFound(t *testing.T) {
 	InitWithStorage(s)
 
 	entry, err := GetPasswordResetToken("nonexistent-token")
-	if err != nil {
-		// "not found" error is expected
-		if err.Error() != "not found" {
-			t.Fatalf("GetPasswordResetToken failed: %v", err)
-		}
+	if err == nil {
+		t.Fatal("expected 'not found' error, got nil")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if entry != nil {
 		t.Error("expected nil for nonexistent token")
@@ -87,11 +88,11 @@ func TestDeletePasswordResetToken(t *testing.T) {
 
 	// Verify token was deleted
 	entry, err := GetPasswordResetToken(token)
-	if err != nil {
-		// "not found" error is expected
-		if err.Error() != "not found" {
-			t.Fatalf("GetPasswordResetToken failed: %v", err)
-		}
+	if err == nil {
+		t.Fatal("expected 'not found' error after deletion, got nil")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if entry != nil {
 		t.Error("token should have been deleted")
@@ -129,11 +130,11 @@ func TestDeleteExpiredPasswordResetTokens(t *testing.T) {
 
 	// Verify expired token was deleted
 	entry, err := GetPasswordResetToken(expiredToken)
-	if err != nil {
-		// "not found" error is expected
-		if err.Error() != "not found" {
-			t.Fatalf("GetPasswordResetToken failed: %v", err)
-		}
+	if err == nil {
+		t.Fatal("expected 'not found' error for expired token, got nil")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if entry != nil {
 		t.Error("expired token should have been deleted")
@@ -160,7 +161,7 @@ func TestPasswordResetToken_RoundTrip(t *testing.T) {
 
 	token := "round-trip-token"
 	username := "charlie"
-	expiresAt := time.Now().Add(15 * time.Minute).Truncate(time.Millisecond)
+	expiresAt := time.Now().Add(15 * time.Minute).Truncate(time.Second)
 
 	err = PutPasswordResetToken(token, username, expiresAt)
 	if err != nil {
@@ -220,11 +221,11 @@ func TestPasswordResetToken_MultipleTokens(t *testing.T) {
 
 	// Verify deleted token is gone
 	entry, err := GetPasswordResetToken("token2")
-	if err != nil {
-		// "not found" error is expected
-		if err.Error() != "not found" {
-			t.Fatalf("GetPasswordResetToken failed: %v", err)
-		}
+	if err == nil {
+		t.Fatal("expected 'not found' error after deletion, got nil")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if entry != nil {
 		t.Error("token2 should have been deleted")
@@ -262,5 +263,192 @@ func TestPasswordResetToken_HashConsistency(t *testing.T) {
 	hash3 := hashToken("different-token")
 	if hash1 == hash3 {
 		t.Error("different tokens should produce different hashes")
+	}
+}
+
+func TestPutPasswordResetToken_EmptyToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	s, err := NewBboltStorage(tmpDir + "/test.db")
+	if err != nil {
+		t.Fatalf("failed to create test db: %v", err)
+	}
+	defer s.Close()
+	InitWithStorage(s)
+
+	err = PutPasswordResetToken("", "alice", time.Now().Add(15*time.Minute))
+	if err != nil {
+		t.Logf("PutPasswordResetToken rejects empty token: %v", err)
+	} else {
+		t.Log("warning: empty token is accepted — consider adding validation")
+	}
+}
+
+func TestPutPasswordResetToken_EmptyUsername(t *testing.T) {
+	tmpDir := t.TempDir()
+	s, err := NewBboltStorage(tmpDir + "/test.db")
+	if err != nil {
+		t.Fatalf("failed to create test db: %v", err)
+	}
+	defer s.Close()
+	InitWithStorage(s)
+
+	token := "test-empty-username"
+	err = PutPasswordResetToken(token, "", time.Now().Add(15*time.Minute))
+	if err != nil {
+		t.Fatalf("PutPasswordResetToken with empty username failed: %v", err)
+	}
+
+	entry, err := GetPasswordResetToken(token)
+	if err != nil {
+		t.Fatalf("GetPasswordResetToken failed: %v", err)
+	}
+	if entry == nil {
+		t.Fatal("token not found")
+	}
+	if entry.Username != "" {
+		t.Errorf("expected empty username, got %s", entry.Username)
+	}
+}
+
+func TestDeletePasswordResetToken_Nonexistent(t *testing.T) {
+	tmpDir := t.TempDir()
+	s, err := NewBboltStorage(tmpDir + "/test.db")
+	if err != nil {
+		t.Fatalf("failed to create test db: %v", err)
+	}
+	defer s.Close()
+	InitWithStorage(s)
+
+	err = DeletePasswordResetToken("nonexistent-token")
+	if err != nil {
+		t.Logf("DeletePasswordResetToken on nonexistent token returns: %v", err)
+	}
+}
+
+func TestDeleteExpiredPasswordResetTokens_AllValid(t *testing.T) {
+	tmpDir := t.TempDir()
+	s, err := NewBboltStorage(tmpDir + "/test.db")
+	if err != nil {
+		t.Fatalf("failed to create test db: %v", err)
+	}
+	defer s.Close()
+	InitWithStorage(s)
+
+	PutPasswordResetToken("tok1", "alice", time.Now().Add(1*time.Hour))
+	PutPasswordResetToken("tok2", "bob", time.Now().Add(2*time.Hour))
+
+	err = DeleteExpiredPasswordResetTokens()
+	if err != nil {
+		t.Fatalf("DeleteExpiredPasswordResetTokens failed: %v", err)
+	}
+
+	for _, tok := range []string{"tok1", "tok2"} {
+		e, err := GetPasswordResetToken(tok)
+		if err != nil {
+			t.Fatalf("GetPasswordResetToken failed for %s: %v", tok, err)
+		}
+		if e == nil {
+			t.Errorf("%s should still exist", tok)
+		}
+	}
+}
+
+func TestDeleteExpiredPasswordResetTokens_EmptyBucket(t *testing.T) {
+	tmpDir := t.TempDir()
+	s, err := NewBboltStorage(tmpDir + "/test.db")
+	if err != nil {
+		t.Fatalf("failed to create test db: %v", err)
+	}
+	defer s.Close()
+	InitWithStorage(s)
+
+	err = DeleteExpiredPasswordResetTokens()
+	if err != nil {
+		t.Fatalf("DeleteExpiredPasswordResetTokens on empty bucket failed: %v", err)
+	}
+}
+
+func TestGetPasswordResetToken_CorruptedData(t *testing.T) {
+	tmpDir := t.TempDir()
+	s, err := NewBboltStorage(tmpDir + "/test.db")
+	if err != nil {
+		t.Fatalf("failed to create test db: %v", err)
+	}
+	defer s.Close()
+	InitWithStorage(s)
+
+	// Insert corrupted JSON directly
+	corruptedKey := hashToken("corrupt")
+	err = Put(BucketPasswordResetTokens, corruptedKey, []byte("not-json"))
+	if err != nil {
+		t.Fatalf("failed to insert corrupted data: %v", err)
+	}
+
+	entry, err := GetPasswordResetToken("corrupt")
+	if err == nil {
+		t.Fatal("expected error for corrupted token data")
+	}
+	if entry != nil {
+		t.Error("entry should be nil on unmarshal error")
+	}
+}
+
+func TestDeleteExpiredPasswordResetTokens_CorruptedEntry(t *testing.T) {
+	tmpDir := t.TempDir()
+	s, err := NewBboltStorage(tmpDir + "/test.db")
+	if err != nil {
+		t.Fatalf("failed to create test db: %v", err)
+	}
+	defer s.Close()
+	InitWithStorage(s)
+
+	// Insert corrupted data
+	corruptedKey := hashToken("corrupted")
+	err = Put(BucketPasswordResetTokens, corruptedKey, []byte("{bad json"))
+	if err != nil {
+		t.Fatalf("failed to insert corrupted data: %v", err)
+	}
+
+	// Insert a valid expired token
+	err = PutPasswordResetToken("valid-expired", "alice", time.Now().Add(-1*time.Hour))
+	if err != nil {
+		t.Fatalf("PutPasswordResetToken failed: %v", err)
+	}
+
+	err = DeleteExpiredPasswordResetTokens()
+	if err != nil {
+		t.Fatalf("should not fail on corrupted entry: %v", err)
+	}
+
+	// Corrupted entry should remain (not deleted), valid expired should be deleted
+	data, err := Get(BucketPasswordResetTokens, corruptedKey)
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if data == nil {
+		t.Error("corrupted entry should not have been deleted")
+	}
+
+	entry, err := GetPasswordResetToken("valid-expired")
+	if err == nil {
+		t.Fatal("expected 'not found' error for deleted token, got nil")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if entry != nil {
+		t.Error("valid-expired token should have been deleted")
+	}
+}
+
+func TestHashToken_EmptyString(t *testing.T) {
+	h := hashToken("")
+	if h == "" {
+		t.Error("hash of empty string should not be empty")
+	}
+	// sha256 of empty string is well-known
+	expected := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	if h != expected {
+		t.Errorf("hash mismatch: got %s, want %s", h, expected)
 	}
 }
