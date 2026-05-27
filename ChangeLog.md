@@ -1,5 +1,18 @@
 # ChangeLog for Asika
 
+## v20260527DEV
+
+- **Feature**: Add reviewer load balancing with activity-based filtering. Reviewers inactive for more than `active_days` (default 14) are excluded from assignment. Load-balanced selection assigns reviewers with lowest pending count first.
+- **Feature**: Add WebAuthn/Passkey login support. Users can register passkeys via `POST /api/v1/auth/passkey/register/begin` and `POST /api/v1/auth/passkey/register/finish`, and login via `POST /api/v1/auth/passkey/login/begin` and `POST /api/v1/auth/passkey/login/finish`.
+- **Feature**: Enhance PR detail page with color-coded activity events. Events now show icons and colors: approved (green), changes_requested (red), closed (gray), merged (purple), queued (blue), dequeued (yellow).
+- **Feature**: Add `changes_requested`, `pr_queued`, `pr_dequeued` event types to event bus.
+- **Feature**: Update GitHub webhook parser to emit `changes_requested` events for pull request reviews.
+- **Feature**: Update GitLab webhook parser to handle `merge_request_review` events for approvals.
+- **Feature**: Add `reviewer_load` and `webauthn_credentials` database buckets.
+- **Feature**: Add reviewer load balancing configuration: `[reviewer_load]` section with `enabled`, `max_reviewers_per_pr`, `active_days` options.
+- **Feature**: Add passkey configuration: `[auth]` section with `passkey_enabled`, `passkey_rp_id`, `passkey_rp_name`, `passkey_rp_origin` options.
+- **Fix**: Fix `pathEscapeSegments` function name case in platforms test.
+
 ## v20260526DEV
 
 - **Feature**: Add email-based password reset flow. Users can request a reset link via `POST /api/v1/auth/forgot-password`, receive a time-limited single-use token via email (using existing SMTP notifier), and set a new password via `POST /api/v1/auth/reset-password`.
