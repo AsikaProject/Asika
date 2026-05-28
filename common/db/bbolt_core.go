@@ -34,7 +34,7 @@ func newBboltStorage(dbPath string) (*bboltStorage, error) {
 			BucketUsers, BucketSyncHistory, BucketPRIndexByID, BucketPRIndexByRG,
 			BucketWebhookRetries, BucketConfigHistory, BucketAPIKeys, BucketSpamAuthors,
 			BucketWebhookHealth, BucketReportHistory, BucketNotificationPrefs,
-			BucketNotificationDedup, BucketTeamSpaces, BucketSpaceMembers,
+			BucketNotificationDedup, BucketNotificationDigest, BucketTeamSpaces, BucketSpaceMembers,
 			BucketSpaceSettings,
 			BucketIssuePRLinks, BucketIssuePRLinksByPR, BucketPRDependencies, BucketPRDependents, BucketPRTemplates,
 			BucketSerialQueue, BucketCrossSpaceDeps, BucketEscalationRules,
