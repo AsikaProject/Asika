@@ -1,13 +1,14 @@
 package feishu
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"asika/common/utils"
 )
 
 func (b *Bot) handleAddUser(userID string, parts []string) string {
@@ -24,7 +25,10 @@ func (b *Bot) handleAddUser(userID string, parts []string) string {
 		return fmt.Sprintf("Invalid role: %s. Must be admin, operator, or viewer.", role)
 	}
 
-	password := generateFeishuRandomPassword(16)
+	password, err := utils.GenerateRandomPassword(16)
+	if err != nil {
+		return "Failed to create user: " + err.Error()
+	}
 
 	body := map[string]interface{}{
 		"username": username,
@@ -41,16 +45,6 @@ func (b *Bot) handleAddUser(userID string, parts []string) string {
 	reply := b.doUserAPI("POST", "/api/v1/users", body, "User created")
 	b.sendDM(userID, "Temporary password for "+username+": "+password+"\nUser must change password on first login.")
 	return reply
-}
-
-func generateFeishuRandomPassword(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
-	bb := make([]byte, length)
-	rand.Read(bb)
-	for i := range bb {
-		bb[i] = charset[int(bb[i])%len(charset)]
-	}
-	return string(bb)
 }
 
 func (b *Bot) handleDelUser(userID string, parts []string) string {

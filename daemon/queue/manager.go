@@ -191,9 +191,18 @@ func (m *Manager) IsReadyToMerge(pr *models.PRRecord) (bool, error) {
 	return m.checker.IsReadyToMerge(pr)
 }
 
-// CheckQueue checks all items in the queue
+// CheckQueue checks all items in the queue. Only one CheckQueue run can be
+// in-flight at a time; concurrent invocations return immediately. The lock is
+// held for the entire run so the read-and-process loop sees a stable view of
+// the queue, but external API calls (ShouldMerge / merge) are deliberately
+// allowed inside it because the lock is per-Manager and gates only this loop.
+// To avoid one slow remote call blocking the whole queue, the per-item check
+// has its own context timeout in m.checker.ShouldMerge.
 func (m *Manager) CheckQueue() {
-	m.checkMu.Lock()
+	if !m.checkMu.TryLock() {
+		slog.Debug("CheckQueue already running, skipping concurrent invocation")
+		return
+	}
 	defer m.checkMu.Unlock()
 
 	// First, read all items and collect done keys for cleanup

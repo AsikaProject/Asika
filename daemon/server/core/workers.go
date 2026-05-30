@@ -147,6 +147,7 @@ func StartWorkers(
 
 	// Token blacklist & fingerprint cleanup worker
 	cleanupStop := make(chan struct{})
+	cleanupStops = append(cleanupStops, cleanupStop)
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
 		defer ticker.Stop()
@@ -297,6 +298,28 @@ func startWebhookHealthChecker(cfg *models.Config, poller *polling.Poller) {
 }
 
 var webhookHealthCheckerStops []chan struct{}
+
+var cleanupStops []chan struct{}
+
+// StopAllWorkers signals every background worker to exit. Idempotent: safe to
+// call multiple times because closed channels are skipped on subsequent calls.
+func StopAllWorkers() {
+	closeAll := func(chs *[]chan struct{}) {
+		for _, ch := range *chs {
+			select {
+			case <-ch:
+				// already closed
+			default:
+				close(ch)
+			}
+		}
+		*chs = nil
+	}
+	closeAll(&autoMergeScannerStops)
+	closeAll(&staleCheckerStops)
+	closeAll(&webhookHealthCheckerStops)
+	closeAll(&cleanupStops)
+}
 
 func checkWebhookHealth(cfg *models.Config, poller *polling.Poller, threshold time.Duration) {
 	healthData, err := db.ListWebhookHealth()

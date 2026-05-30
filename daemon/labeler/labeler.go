@@ -1,6 +1,7 @@
 package labeler
 
 import (
+	"container/list"
 	"context"
 	"log/slog"
 	"path"
@@ -210,10 +211,24 @@ func matchPattern(pattern string, files []string) bool {
 
 const maxCompiledPatterns = 1000
 
+type compiledEntry struct {
+	pattern string
+	re      *regexp.Regexp
+}
+
 var (
-	compiledPatterns   = make(map[string]*regexp.Regexp)
-	compiledPatternsMu sync.RWMutex
+	compiledPatterns   = make(map[string]*list.Element)
+	compiledPatternsLR = list.New()
+	compiledPatternsMu sync.Mutex
 )
+
+// resetCompiledPatternCache clears the LRU regex cache. Used by tests.
+func resetCompiledPatternCache() {
+	compiledPatternsMu.Lock()
+	defer compiledPatternsMu.Unlock()
+	compiledPatterns = make(map[string]*list.Element)
+	compiledPatternsLR = list.New()
+}
 
 func matchSinglePattern(pattern, file string) bool {
 	if strings.ContainsAny(pattern, "*?[") {
@@ -224,22 +239,26 @@ func matchSinglePattern(pattern, file string) bool {
 	}
 
 	compiledPatternsMu.Lock()
-	re, ok := compiledPatterns[pattern]
-	if !ok {
-		if len(compiledPatterns) >= maxCompiledPatterns {
-			for k := range compiledPatterns {
-				delete(compiledPatterns, k)
-				break
-			}
-		}
-		var err error
-		re, err = regexp.Compile(pattern)
-		if err != nil {
-			compiledPatternsMu.Unlock()
-			return false
-		}
-		compiledPatterns[pattern] = re
+	if elem, ok := compiledPatterns[pattern]; ok {
+		compiledPatternsLR.MoveToFront(elem)
+		re := elem.Value.(*compiledEntry).re
+		compiledPatternsMu.Unlock()
+		return re.MatchString(file)
 	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		compiledPatternsMu.Unlock()
+		return false
+	}
+	if compiledPatternsLR.Len() >= maxCompiledPatterns {
+		oldest := compiledPatternsLR.Back()
+		if oldest != nil {
+			compiledPatternsLR.Remove(oldest)
+			delete(compiledPatterns, oldest.Value.(*compiledEntry).pattern)
+		}
+	}
+	elem := compiledPatternsLR.PushFront(&compiledEntry{pattern: pattern, re: re})
+	compiledPatterns[pattern] = elem
 	compiledPatternsMu.Unlock()
 	return re.MatchString(file)
 }

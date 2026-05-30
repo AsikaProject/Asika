@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/robfig/cron/v3"
@@ -25,9 +26,10 @@ var defaultSchedule = ScheduleConfig{
 }
 
 type Scheduler struct {
-	cfg  ScheduleConfig
-	cron *cron.Cron
-	stop chan struct{}
+	cfg      ScheduleConfig
+	cron     *cron.Cron
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 func NewScheduler(cfg ScheduleConfig) *Scheduler {
@@ -68,10 +70,12 @@ func (s *Scheduler) Start() {
 }
 
 func (s *Scheduler) Stop() {
-	if s.cron != nil {
-		s.cron.Stop()
-	}
-	close(s.stop)
+	s.stopOnce.Do(func() {
+		if s.cron != nil {
+			s.cron.Stop()
+		}
+		close(s.stop)
+	})
 }
 
 func isValidCron(expr string) bool {

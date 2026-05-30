@@ -290,7 +290,13 @@ func (c *GerritClient) CreateLabel(ctx context.Context, owner, repo, name, color
 
 func (c *GerritClient) GetBranch(ctx context.Context, owner, repo, branch string) (bool, error) {
 	_, _, err := c.client.Projects.GetBranch(ctx, owner, branch)
-	return err == nil, nil
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check gerrit branch: %w", err)
+	}
+	return true, nil
 }
 
 func (c *GerritClient) ListBranches(ctx context.Context, owner, repo string) ([]string, error) {

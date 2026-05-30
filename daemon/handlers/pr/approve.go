@@ -150,18 +150,18 @@ func ApprovePR(c *gin.Context) {
 	db.PutPRWithIndex(dbKey, updated, pr.ID, pr.RepoGroup, pr.PRNumber)
 
 	addedToQueue := false
-	if queueMgr != nil {
+	if mgr := getQueueMgr(); mgr != nil {
 		if pr.State != "" && pr.State != "open" {
 			slog.Info("skipping queue add for non-open PR", "pr_number", prNumber, "repo_group", repoGroup, "state", pr.State)
 		} else {
-			if err := queueMgr.AddToQueue(pr); err != nil {
+			if err := mgr.AddToQueue(pr); err != nil {
 				slog.Warn("failed to add PR to queue", "error", err, "pr_number", prNumber)
 			} else {
 				addedToQueue = true
 				if isNew {
 					slog.Info("PR added to merge queue after approval", "pr_number", prNumber, "repo_group", repoGroup)
 				}
-				go queueMgr.CheckQueue()
+				go mgr.CheckQueue()
 			}
 		}
 	}

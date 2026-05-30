@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,37 +22,48 @@ import (
 	"asika/daemon/syncer"
 )
 
-var clients map[platforms.PlatformType]platforms.PlatformClient
-
-var queueMgr *queue.Manager
-
-var serialWorker *queue.SerialWorker
-
-var syncerRef *syncer.Syncer
-
-var pollerRef *polling.Poller
+var (
+	prGlobalsMu  sync.RWMutex
+	clients      map[platforms.PlatformType]platforms.PlatformClient
+	queueMgr     *queue.Manager
+	serialWorker *queue.SerialWorker
+	syncerRef    *syncer.Syncer
+	pollerRef    *polling.Poller
+)
 
 func GetClients() map[platforms.PlatformType]platforms.PlatformClient {
+	prGlobalsMu.RLock()
+	defer prGlobalsMu.RUnlock()
 	return clients
 }
 
 func InitClients(c map[platforms.PlatformType]platforms.PlatformClient) {
+	prGlobalsMu.Lock()
+	defer prGlobalsMu.Unlock()
 	clients = c
 }
 
 func InitQueueMgr(mgr *queue.Manager) {
+	prGlobalsMu.Lock()
+	defer prGlobalsMu.Unlock()
 	queueMgr = mgr
 }
 
 func InitSerialWorker(w *queue.SerialWorker) {
+	prGlobalsMu.Lock()
+	defer prGlobalsMu.Unlock()
 	serialWorker = w
 }
 
 func InitSyncer(s *syncer.Syncer) {
+	prGlobalsMu.Lock()
+	defer prGlobalsMu.Unlock()
 	syncerRef = s
 }
 
 func InitPoller(p *polling.Poller) {
+	prGlobalsMu.Lock()
+	defer prGlobalsMu.Unlock()
 	pollerRef = p
 }
 
@@ -59,6 +71,8 @@ func getClientForGroup(group *models.RepoGroup, platform string) platforms.Platf
 	if platform == "" {
 		platform = "github"
 	}
+	prGlobalsMu.RLock()
+	defer prGlobalsMu.RUnlock()
 	if clients == nil {
 		return nil
 	}
@@ -69,52 +83,80 @@ func GetClientForGroup(group *models.RepoGroup, platform string) platforms.Platf
 	return getClientForGroup(group, platform)
 }
 
+func getQueueMgr() *queue.Manager {
+	prGlobalsMu.RLock()
+	defer prGlobalsMu.RUnlock()
+	return queueMgr
+}
+
+func getSyncerRef() *syncer.Syncer {
+	prGlobalsMu.RLock()
+	defer prGlobalsMu.RUnlock()
+	return syncerRef
+}
+
+func getPollerRef() *polling.Poller {
+	prGlobalsMu.RLock()
+	defer prGlobalsMu.RUnlock()
+	return pollerRef
+}
+
+func getSerialWorker() *queue.SerialWorker {
+	prGlobalsMu.RLock()
+	defer prGlobalsMu.RUnlock()
+	return serialWorker
+}
+
 func AddToQueue(pr *models.PRRecord) error {
-	if queueMgr == nil {
+	mgr := getQueueMgr()
+	if mgr == nil {
 		return nil
 	}
-	return queueMgr.AddToQueue(pr)
+	return mgr.AddToQueue(pr)
 }
 
 func AddToQueueScheduled(pr *models.PRRecord, scheduleAt time.Time) error {
-	if queueMgr == nil {
+	mgr := getQueueMgr()
+	if mgr == nil {
 		return nil
 	}
-	return queueMgr.AddToQueueScheduled(pr, scheduleAt)
+	return mgr.AddToQueueScheduled(pr, scheduleAt)
 }
 
 func TriggerQueueCheck() {
-	if queueMgr != nil {
-		go queueMgr.CheckQueue()
+	if mgr := getQueueMgr(); mgr != nil {
+		go mgr.CheckQueue()
 	}
 }
 
 func GetQueueMgr() *queue.Manager {
-	return queueMgr
+	return getQueueMgr()
 }
 
 func GetSyncer() *syncer.Syncer {
-	return syncerRef
+	return getSyncerRef()
 }
 
 func RecheckQueue() {
-	if queueMgr != nil {
-		go queueMgr.CheckQueue()
+	if mgr := getQueueMgr(); mgr != nil {
+		go mgr.CheckQueue()
 	}
 }
 
 func RemoveFromQueue(repoGroup, prID string) error {
-	if queueMgr == nil {
+	mgr := getQueueMgr()
+	if mgr == nil {
 		return nil
 	}
-	return queueMgr.RemoveFromQueue(repoGroup, prID)
+	return mgr.RemoveFromQueue(repoGroup, prID)
 }
 
 func ClearQueue(repoGroup string) (int, error) {
-	if queueMgr == nil {
+	mgr := getQueueMgr()
+	if mgr == nil {
 		return 0, nil
 	}
-	return queueMgr.ClearQueue(repoGroup)
+	return mgr.ClearQueue(repoGroup)
 }
 
 func ListPRs(c *gin.Context) {
@@ -134,8 +176,10 @@ func ListPRs(c *gin.Context) {
 	perPageStr := c.Query("per_page")
 	refresh := c.Query("refresh")
 
-	if refresh == "1" && pollerRef != nil {
-		pollerRef.PollOnce()
+	if refresh == "1" {
+		if poller := getPollerRef(); poller != nil {
+			poller.PollOnce()
+		}
 	}
 
 	records := make([]models.PRRecord, 0)

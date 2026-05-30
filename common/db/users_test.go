@@ -11,13 +11,13 @@ func TestPutAPIKey_And_GetAPIKey(t *testing.T) {
 	initTestDB(t)
 
 	key := &models.APIKey{
-		ID:        "key-1",
-		Name:      "Test API Key",
-		KeyHash:   "hash123",
-		KeyHMAC:   "hmac456",
-		Role:      "operator",
-		CreatedAt: time.Now(),
-		CreatedBy: "admin",
+		ID:                "key-1",
+		Name:              "Test API Key",
+		KeyHash:           "hash123",
+		KeyHMAC:           "hmac456",
+		Role:              "operator",
+		CreatedAt:         time.Now(),
+		CreatedBy:         "admin",
 		AllowedRepoGroups: []string{"frontend", "backend"},
 		Permissions: models.UserPermissions{
 			CanApprove: true,

@@ -76,7 +76,7 @@ func batchRebaseSinglePR(c *gin.Context, group *models.RepoGroup, repoGroup, prI
 			Message: "failed to parse PR",
 		}
 	}
-	if pr.RepoGroup != "" && pr.RepoGroup != repoGroup {
+	if pr.RepoGroup != repoGroup {
 		return BatchRebaseResult{
 			PRID:    prID,
 			Success: false,

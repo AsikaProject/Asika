@@ -3,6 +3,7 @@ package consumer
 import (
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"asika/common/db"
 	"asika/common/models"
@@ -25,6 +26,7 @@ type writeRequest struct {
 type writerActor struct {
 	requests chan writeRequest
 	stop     chan struct{}
+	stopOnce sync.Once
 	restarts int
 }
 
@@ -46,6 +48,16 @@ func (w *writerActor) run() {
 			if w.restarts < 3 {
 				w.restarts++
 				go w.run()
+				return
+			}
+			// Give up: signal stop so callers waiting on req.result via the
+			// stop channel unblock and propagate "writer actor stopped".
+			slog.Error("writer actor exceeded restart limit, stopping permanently")
+			select {
+			case <-w.stop:
+				// already closed
+			default:
+				close(w.stop)
 			}
 		}
 	}()
@@ -141,5 +153,7 @@ func (w *writerActor) writeSyncRecord(key string, value []byte) error {
 
 // Stop gracefully stops the writer goroutine.
 func (w *writerActor) Stop() {
-	close(w.stop)
+	w.stopOnce.Do(func() {
+		close(w.stop)
+	})
 }

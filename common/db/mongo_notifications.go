@@ -97,7 +97,7 @@ func (s *mongoStorage) ListNotificationDigests() (map[string][]DigestEntry, erro
 		}
 		result[entry.Username] = append(result[entry.Username], entry)
 	}
-	return result, nil
+	return result, cursor.Err()
 }
 
 func (s *mongoStorage) DeleteNotificationDigests(username string) error {
@@ -132,7 +132,7 @@ func (s *mongoStorage) ListNotificationPrefs(usernames []string) ([]models.Notif
 		}
 		prefs = append(prefs, p)
 	}
-	return prefs, nil
+	return prefs, cursor.Err()
 }
 
 func (s *mongoStorage) PutPendingPR(pr *PendingPR) error {
@@ -209,5 +209,5 @@ func (s *mongoStorage) ListPendingPRs() ([]*PendingPR, error) {
 			ApprovalCount: int(doc["approval_count"].(int32)),
 		})
 	}
-	return prs, nil
+	return prs, cursor.Err()
 }

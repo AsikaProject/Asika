@@ -583,7 +583,10 @@ func (c *GitHubClient) RevertPR(ctx context.Context, owner, repo string, number 
 		return nil, fmt.Errorf("failed to send revert request: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read github revert response: %w", err)
+	}
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("github revert failed (status %d): %s", resp.StatusCode, string(body))
 	}

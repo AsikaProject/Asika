@@ -1,7 +1,6 @@
 package telegram
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +9,8 @@ import (
 	"time"
 
 	"gopkg.in/telebot.v3"
+
+	"asika/common/utils"
 )
 
 func (b *Bot) handleAddUser(c telebot.Context) error {
@@ -27,7 +28,10 @@ func (b *Bot) handleAddUser(c telebot.Context) error {
 		return c.Send(fmt.Sprintf("Invalid role: %s. Must be admin, operator, or viewer.", role))
 	}
 
-	password := generateRandomPassword(16)
+	password, err := utils.GenerateRandomPassword(16)
+	if err != nil {
+		return c.Send("Failed to create user: " + err.Error())
+	}
 
 	body := map[string]interface{}{
 		"username": username,
@@ -47,16 +51,6 @@ func (b *Bot) handleAddUser(c telebot.Context) error {
 		return c.Send("Failed to create user: " + err.Error())
 	}
 	return c.Send(reply + "\nTemporary password: " + password + "\nUser must change password on first login.")
-}
-
-func generateRandomPassword(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
-	b := make([]byte, length)
-	rand.Read(b)
-	for i := range b {
-		b[i] = charset[int(b[i])%len(charset)]
-	}
-	return string(b)
 }
 
 func (b *Bot) doUserAPIWithResponse(method, path string, bodyData interface{}, successMsg string) (string, error) {

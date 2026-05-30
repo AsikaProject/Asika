@@ -398,27 +398,39 @@ func (s *mongoStorage) AppendAuditLogEx(entry models.AuditLog) error {
 	logKey := doc["_id"].(bson.ObjectID).Hex()
 
 	if entry.Actor != "" {
-		s.writeAuditIndex(ctx, fmt.Sprintf("actor:%s:%s", entry.Actor, logKey), logKey)
+		if err := s.writeAuditIndex(ctx, fmt.Sprintf("actor:%s:%s", entry.Actor, logKey), logKey); err != nil {
+			return fmt.Errorf("audit actor index: %w", err)
+		}
 	}
 	if entry.RepoGroup != "" {
-		s.writeAuditIndex(ctx, fmt.Sprintf("repo_group:%s:%s", entry.RepoGroup, logKey), logKey)
+		if err := s.writeAuditIndex(ctx, fmt.Sprintf("repo_group:%s:%s", entry.RepoGroup, logKey), logKey); err != nil {
+			return fmt.Errorf("audit repo_group index: %w", err)
+		}
 	}
 	if entry.Action != "" {
-		s.writeAuditIndex(ctx, fmt.Sprintf("action:%s:%s", entry.Action, logKey), logKey)
+		if err := s.writeAuditIndex(ctx, fmt.Sprintf("action:%s:%s", entry.Action, logKey), logKey); err != nil {
+			return fmt.Errorf("audit action index: %w", err)
+		}
 	}
 	if entry.Category != "" {
-		s.writeAuditIndex(ctx, fmt.Sprintf("category:%s:%s", entry.Category, logKey), logKey)
+		if err := s.writeAuditIndex(ctx, fmt.Sprintf("category:%s:%s", entry.Category, logKey), logKey); err != nil {
+			return fmt.Errorf("audit category index: %w", err)
+		}
 	}
 	if entry.RepoGroup != "" && entry.PRNumber > 0 {
-		s.writeAuditIndex(ctx, fmt.Sprintf("pr:%s:%d:%s", entry.RepoGroup, entry.PRNumber, logKey), logKey)
+		if err := s.writeAuditIndex(ctx, fmt.Sprintf("pr:%s:%d:%s", entry.RepoGroup, entry.PRNumber, logKey), logKey); err != nil {
+			return fmt.Errorf("audit pr index: %w", err)
+		}
 	}
 	return nil
 }
 
-func (s *mongoStorage) writeAuditIndex(ctx context.Context, idxKey, logKey string) {
+func (s *mongoStorage) writeAuditIndex(ctx context.Context, idxKey, logKey string) error {
 	if _, err := s.coll(BucketAuditLogIndex).ReplaceOne(ctx, bson.M{"_id": idxKey}, bson.M{"_id": idxKey, "target": logKey}, options.Replace().SetUpsert(true)); err != nil {
 		slog.Error("failed to write audit log index", "key", idxKey, "error", err)
+		return err
 	}
+	return nil
 }
 
 func (s *mongoStorage) AppendAuditLog(level, message string, ctxMap map[string]interface{}) error {
@@ -478,7 +490,7 @@ func (s *mongoStorage) GetIssuePRLinksByIssue(issueID string) ([]*models.IssuePR
 		}
 		links = append(links, &link)
 	}
-	return links, nil
+	return links, cursor.Err()
 }
 
 func (s *mongoStorage) GetIssuePRLinksByPR(prID string) ([]*models.IssuePRLink, error) {
@@ -497,7 +509,7 @@ func (s *mongoStorage) GetIssuePRLinksByPR(prID string) ([]*models.IssuePRLink, 
 		}
 		links = append(links, &link)
 	}
-	return links, nil
+	return links, cursor.Err()
 }
 
 func (s *mongoStorage) PutPRDependency(dep *models.PRDependency) error {
@@ -534,7 +546,7 @@ func (s *mongoStorage) GetPRDependenciesByPR(prID string) ([]*models.PRDependenc
 		}
 		deps = append(deps, &dep)
 	}
-	return deps, nil
+	return deps, cursor.Err()
 }
 
 func (s *mongoStorage) GetPRDependentsByPR(prID string) ([]*models.PRDependency, error) {
@@ -553,7 +565,7 @@ func (s *mongoStorage) GetPRDependentsByPR(prID string) ([]*models.PRDependency,
 		}
 		deps = append(deps, &dep)
 	}
-	return deps, nil
+	return deps, cursor.Err()
 }
 
 func (s *mongoStorage) PutPRTemplate(tpl *models.PRTemplate) error {
@@ -632,7 +644,7 @@ func (s *mongoStorage) ListPRStacks() ([]*models.PRStack, error) {
 		}
 		stacks = append(stacks, &stack)
 	}
-	return stacks, nil
+	return stacks, cursor.Err()
 }
 
 func (s *mongoStorage) DeletePRStack(id string) error {

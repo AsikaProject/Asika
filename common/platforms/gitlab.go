@@ -510,7 +510,10 @@ func (c *GitLabClient) RevertPR(ctx context.Context, owner, repo string, number 
 		return nil, fmt.Errorf("failed to send revert request to gitlab: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read gitlab revert response: %w", err)
+	}
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("gitlab revert failed (status %d): %s", resp.StatusCode, string(body))
 	}

@@ -600,6 +600,9 @@ func (c *BitbucketClient) RevertPR(ctx context.Context, owner, repo string, numb
 		return nil, fmt.Errorf("bitbucket revert failed (status %d): %s", resp.StatusCode, string(errBody))
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read bitbucket revert response: %w", err)
+	}
 	var result struct {
 		Type  string `json:"type"`
 		Links struct {

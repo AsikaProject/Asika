@@ -6,6 +6,7 @@ import (
 	"asika/common/config"
 	"asika/common/models"
 	"asika/common/platforms"
+	"asika/testutil"
 )
 
 func TestNewEvaluator(t *testing.T) {
@@ -126,7 +127,7 @@ func TestMatchesRule(t *testing.T) {
 		}
 	})
 
-	t.Run("CIRequired with conflict", func(t *testing.T) {
+	t.Run("conflict blocks merge regardless of CIRequired", func(t *testing.T) {
 		pr := &models.PRRecord{
 			RepoGroup:   "test-group",
 			Author:      "alice",
@@ -136,14 +137,16 @@ func TestMatchesRule(t *testing.T) {
 		rule := &models.AutoMergeRule{
 			Enabled:    true,
 			Labels:     []string{"auto-merge"},
-			CIRequired: true,
+			CIRequired: false,
 		}
 		if e.matchesRule(pr, rule) {
-			t.Error("PR with conflict should not match when CIRequired")
+			t.Error("PR with merge conflict should never auto-merge")
 		}
 	})
 
-	t.Run("CIRequired without conflict", func(t *testing.T) {
+	t.Run("CIRequired without client returns false", func(t *testing.T) {
+		// With CIRequired=true but no platform client wired in, matchesRule
+		// must conservatively reject so we don't merge with unknown CI state.
 		pr := &models.PRRecord{
 			RepoGroup:   "test-group",
 			Author:      "alice",
@@ -155,12 +158,34 @@ func TestMatchesRule(t *testing.T) {
 			Labels:     []string{"auto-merge"},
 			CIRequired: true,
 		}
-		if !e.matchesRule(pr, rule) {
-			t.Error("PR without conflict should match when CIRequired")
+		if e.matchesRule(pr, rule) {
+			t.Error("CIRequired with no client should not auto-merge")
 		}
 	})
 
-	t.Run("RequiredApprovals with IsApproved false", func(t *testing.T) {
+	t.Run("CIRequired false, no conflict, matches", func(t *testing.T) {
+		pr := &models.PRRecord{
+			RepoGroup:   "test-group",
+			Author:      "alice",
+			Labels:      []string{"auto-merge"},
+			HasConflict: false,
+		}
+		rule := &models.AutoMergeRule{
+			Enabled:    true,
+			Labels:     []string{"auto-merge"},
+			CIRequired: false,
+		}
+		if !e.matchesRule(pr, rule) {
+			t.Error("PR without conflict and no CI requirement should match")
+		}
+	})
+
+	t.Run("RequiredApprovals with no events fails", func(t *testing.T) {
+		// New behavior: matchesRule always counts approval events from
+		// the persisted PR record rather than trusting pr.IsApproved.
+		// With no DB-side record, the unmarshal fails and the rule
+		// rejects, which is the safe default.
+		testutil.NewTestDB(t)
 		pr := &models.PRRecord{
 			RepoGroup:  "test-group",
 			Author:     "alice",
@@ -173,7 +198,7 @@ func TestMatchesRule(t *testing.T) {
 			RequiredApprovals: 1,
 		}
 		if e.matchesRule(pr, rule) {
-			t.Error("PR not approved should not match when RequiredApprovals > 0")
+			t.Error("PR with no approval events should not match when RequiredApprovals > 0")
 		}
 	})
 }

@@ -50,8 +50,8 @@ func (w *Watcher) watch(configPath string) {
 					slog.Info("config file changed, reloading")
 					cfg, err := Load(configPath)
 					if err != nil {
-						slog.Error("failed to reload config", "error", err)
-						return
+						slog.Error("failed to reload config, keeping previous config and continuing to watch", "error", err)
+						continue
 					}
 					Store(cfg)
 					slog.Info("config reloaded successfully")

@@ -19,13 +19,22 @@ import (
 )
 
 var (
-	webhookClients map[platforms.PlatformType]platforms.PlatformClient
-	dedupMu        sync.Mutex
+	webhookClients   map[platforms.PlatformType]platforms.PlatformClient
+	webhookClientsMu sync.RWMutex
+	dedupMu          sync.Mutex
 )
 
 // SetClients sets the platform clients for the webhook package.
 func SetClients(c map[platforms.PlatformType]platforms.PlatformClient) {
+	webhookClientsMu.Lock()
+	defer webhookClientsMu.Unlock()
 	webhookClients = c
+}
+
+func getWebhookClient(pt platforms.PlatformType) platforms.PlatformClient {
+	webhookClientsMu.RLock()
+	defer webhookClientsMu.RUnlock()
+	return webhookClients[pt]
 }
 
 func extractDeliveryID(platform string, c *gin.Context) string {
@@ -102,7 +111,7 @@ func WebhookHandler(c *gin.Context) {
 	}
 
 	pt := platforms.PlatformType(platform)
-	client := webhookClients[pt]
+	client := getWebhookClient(pt)
 	if client == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported platform: " + platform})
 		return

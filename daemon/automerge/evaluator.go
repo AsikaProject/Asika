@@ -119,30 +119,58 @@ func (e *Evaluator) matchesRule(pr *models.PRRecord, rule *models.AutoMergeRule)
 		if group != nil && group.MergeQueue.RequiredApprovals > required {
 			required = group.MergeQueue.RequiredApprovals
 		}
-		if pr.IsApproved && required > 1 {
-			data, err := db.GetPRByIndex(pr.ID, pr.RepoGroup, pr.PRNumber)
-			if err != nil {
-				return false
+		// Always count actual approval events; pr.IsApproved is a stale flag
+		// that may not reflect a withdrawn approval.
+		data, err := db.GetPRByIndex(pr.ID, pr.RepoGroup, pr.PRNumber)
+		if err != nil {
+			return false
+		}
+		var fullPR models.PRRecord
+		if err := json.Unmarshal(data, &fullPR); err != nil {
+			return false
+		}
+		approvals := 0
+		for _, ev := range fullPR.Events {
+			if ev.Action == "approved" {
+				approvals++
 			}
-			var fullPR models.PRRecord
-			if err := json.Unmarshal(data, &fullPR); err != nil {
-				return false
-			}
-			approvals := 0
-			for _, ev := range fullPR.Events {
-				if ev.Action == "approved" {
-					approvals++
-				}
-			}
-			if approvals < required {
-				return false
-			}
-		} else if !pr.IsApproved {
+		}
+		if approvals < required {
 			return false
 		}
 	}
-	if rule.CIRequired && pr.HasConflict {
+	// Merge conflicts always block auto-merge regardless of CIRequired.
+	if pr.HasConflict {
 		return false
+	}
+	if rule.CIRequired {
+		group := config.GetRepoGroupByName(e.cfg, pr.RepoGroup)
+		if group == nil {
+			return false
+		}
+		client, ok := e.clients[platforms.PlatformType(pr.Platform)]
+		if !ok {
+			return false
+		}
+		owner, repo := config.GetOwnerRepoFromGroup(group, pr.Platform)
+		if owner == "" || repo == "" {
+			return false
+		}
+		commitSHA := ""
+		if pr.BranchInfo != nil {
+			commitSHA = pr.BranchInfo.HeadSHA
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		status, err := client.GetCIStatus(ctx, owner, repo, commitSHA)
+		if err != nil {
+			slog.Warn("auto-merge: failed to fetch CI status", "pr", pr.PRNumber, "repo_group", pr.RepoGroup, "error", err)
+			return false
+		}
+		if status != "success" {
+			slog.Info("auto-merge: CI not passed, skipping", "pr", pr.PRNumber, "ci_status", status)
+			return false
+		}
 	}
 	return true
 }

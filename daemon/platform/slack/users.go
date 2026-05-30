@@ -1,7 +1,6 @@
 package slack
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +10,8 @@ import (
 
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/socketmode"
+
+	"asika/common/utils"
 )
 
 func (b *Bot) handleAddUser(ev *slack.MessageEvent, client *socketmode.Client, parts []string) {
@@ -29,7 +30,11 @@ func (b *Bot) handleAddUser(ev *slack.MessageEvent, client *socketmode.Client, p
 		return
 	}
 
-	password := generateSlackRandomPassword(16)
+	password, err := utils.GenerateRandomPassword(16)
+	if err != nil {
+		b.postMessage(client, ev.Channel, "Failed to create user: "+err.Error())
+		return
+	}
 
 	body := map[string]interface{}{
 		"username": username,
@@ -44,16 +49,6 @@ func (b *Bot) handleAddUser(ev *slack.MessageEvent, client *socketmode.Client, p
 		body["allowed_repo_groups"] = groups
 	}
 	b.doUserAPISlack(client, ev.Channel, "POST", "/api/v1/users", body, "✅ User `"+username+"` created", password, ev.User)
-}
-
-func generateSlackRandomPassword(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
-	bb := make([]byte, length)
-	rand.Read(bb)
-	for i := range bb {
-		bb[i] = charset[int(bb[i])%len(charset)]
-	}
-	return string(bb)
 }
 
 func (b *Bot) handleDelUser(ev *slack.MessageEvent, client *socketmode.Client, parts []string) {

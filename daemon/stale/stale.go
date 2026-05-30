@@ -120,7 +120,7 @@ func (m *Manager) analyzePR(client platforms.PlatformClient, group *models.RepoG
 	}
 
 	hasStaleLabel := hasLabel(pr.Labels, labelBase)
-	daysInactive := inactivityDays(pr.UpdatedAt)
+	daysInactive := inactivityDays(lastActivityTime(pr))
 
 	if cfg.SkipDraftPRs && pr.IsDraft {
 		return StaleAction{Type: "skip", PRNumber: pr.PRNumber, PRTitle: pr.Title, Reason: "draft PR"}
@@ -181,7 +181,7 @@ func (m *Manager) processPR(client platforms.PlatformClient, group *models.RepoG
 		return
 	}
 
-	daysInactive := inactivityDays(pr.UpdatedAt)
+	daysInactive := inactivityDays(lastActivityTime(pr))
 	hasStaleLabel := hasLabel(pr.Labels, labelBase)
 
 	if !hasStaleLabel && daysInactive >= cfg.DaysUntilStale {
@@ -258,7 +258,7 @@ func (m *Manager) markStale(client platforms.PlatformClient, group *models.RepoG
 		return
 	}
 
-	daysInactive := inactivityDays(pr.UpdatedAt)
+	daysInactive := inactivityDays(lastActivityTime(pr))
 	closeIn := "never"
 	if cfg.DaysUntilClose > 0 {
 		remaining := cfg.DaysUntilClose - (daysInactive - cfg.DaysUntilStale)
@@ -368,6 +368,16 @@ func hasLabel(labels []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// lastActivityTime returns the timestamp to measure inactivity from. It
+// prefers UpdatedAt, falling back to CreatedAt when the platform did not
+// supply an updated timestamp (some Gitea/Forgejo PRs return nil).
+func lastActivityTime(pr *models.PRRecord) time.Time {
+	if !pr.UpdatedAt.IsZero() {
+		return pr.UpdatedAt
+	}
+	return pr.CreatedAt
 }
 
 func inactivityDays(lastActive time.Time) int {

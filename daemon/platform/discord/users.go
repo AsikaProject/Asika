@@ -1,7 +1,6 @@
 package discord
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +9,8 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+
+	"asika/common/utils"
 )
 
 func (b *Bot) handleAddUser(s *discordgo.Session, m *discordgo.MessageCreate, parts []string) {
@@ -28,7 +29,11 @@ func (b *Bot) handleAddUser(s *discordgo.Session, m *discordgo.MessageCreate, pa
 		return
 	}
 
-	password := generateDiscordRandomPassword(16)
+	password, err := utils.GenerateRandomPassword(16)
+	if err != nil {
+		s.ChannelMessageSend(m.ChannelID, "Failed to create user: "+err.Error())
+		return
+	}
 
 	body := map[string]interface{}{
 		"username": username,
@@ -43,16 +48,6 @@ func (b *Bot) handleAddUser(s *discordgo.Session, m *discordgo.MessageCreate, pa
 		body["allowed_repo_groups"] = groups
 	}
 	b.doUserAPIDiscord(s, m, "POST", "/api/v1/users", body, "✅ User `"+username+"` created", password)
-}
-
-func generateDiscordRandomPassword(length int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
-	bb := make([]byte, length)
-	rand.Read(bb)
-	for i := range bb {
-		bb[i] = charset[int(bb[i])%len(charset)]
-	}
-	return string(bb)
 }
 
 func (b *Bot) handleDelUser(s *discordgo.Session, m *discordgo.MessageCreate, parts []string) {

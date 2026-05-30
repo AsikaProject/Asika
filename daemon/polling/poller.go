@@ -23,6 +23,7 @@ type Poller struct {
 	cfg         *models.Config
 	clients     map[platforms.PlatformType]platforms.PlatformClient
 	stop        chan struct{}
+	stopOnce    sync.Once
 	forcePoll   map[string]bool
 	forcePollMu sync.RWMutex
 }
@@ -123,10 +124,11 @@ func (p *Poller) PollOnce() {
 
 // Stop stops the poller
 func (p *Poller) Stop() {
-	if p.stop != nil {
-		close(p.stop)
-		p.stop = nil
-	}
+	p.stopOnce.Do(func() {
+		if p.stop != nil {
+			close(p.stop)
+		}
+	})
 }
 
 func (p *Poller) pollOnce() {

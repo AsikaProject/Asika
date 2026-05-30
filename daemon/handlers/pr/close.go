@@ -106,8 +106,8 @@ func ClosePR(c *gin.Context) {
 		}
 	}
 
-	if queueMgr != nil {
-		if rmErr := queueMgr.RemoveFromQueue(repoGroup, pr.ID); rmErr != nil {
+	if mgr := getQueueMgr(); mgr != nil {
+		if rmErr := mgr.RemoveFromQueue(repoGroup, pr.ID); rmErr != nil {
 			slog.Warn("failed to remove closed PR from queue", "pr_id", pr.ID, "error", rmErr)
 		}
 	}
@@ -196,8 +196,8 @@ func MarkSpam(c *gin.Context) {
 		return
 	}
 
-	if queueMgr != nil {
-		if rmErr := queueMgr.RemoveFromQueue(repoGroup, pr.ID); rmErr != nil {
+	if mgr := getQueueMgr(); mgr != nil {
+		if rmErr := mgr.RemoveFromQueue(repoGroup, pr.ID); rmErr != nil {
 			slog.Warn("failed to remove spam PR from queue", "pr_id", pr.ID, "error", rmErr)
 		}
 	}

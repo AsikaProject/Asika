@@ -2,7 +2,6 @@ package labeler
 
 import (
 	"context"
-	"regexp"
 	"sort"
 	"sync"
 	"testing"
@@ -59,7 +58,7 @@ func TestGlobPatternMatching(t *testing.T) {
 
 func TestRegexPatternMatching(t *testing.T) {
 	// Clear compiled patterns cache between tests
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	tests := []struct {
 		name    string
@@ -88,7 +87,7 @@ func TestApplyRules(t *testing.T) {
 	l, mock := setupLabelerTest(t)
 	defer func() { db.Close() }()
 
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	cfg := &models.Config{
 		LabelRules: []models.LabelRule{
@@ -139,7 +138,7 @@ func TestApplyRulesNoMatch(t *testing.T) {
 	l, mock := setupLabelerTest(t)
 	defer func() { db.Close() }()
 
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	cfg := &models.Config{
 		LabelRules: []models.LabelRule{
@@ -173,7 +172,7 @@ func TestHandlePROpened(t *testing.T) {
 	l, mock := setupLabelerTest(t)
 	defer func() { db.Close() }()
 
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	cfg := &models.Config{
 		LabelRules: []models.LabelRule{
@@ -208,7 +207,7 @@ func TestHandlePROpenedNoRules(t *testing.T) {
 	l, mock := setupLabelerTest(t)
 	defer func() { db.Close() }()
 
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	cfg := &models.Config{
 		LabelRules: []models.LabelRule{},
@@ -236,7 +235,7 @@ func TestHandlePROpenedNoRules(t *testing.T) {
 }
 
 func TestMatchRule_TitleScope(t *testing.T) {
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	tests := []struct {
 		name    string
@@ -335,7 +334,7 @@ func TestApplyRules_TitleScope(t *testing.T) {
 	l, mock := setupLabelerTest(t)
 	defer func() { db.Close() }()
 
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	cfg := &models.Config{
 		LabelRules: []models.LabelRule{
@@ -380,7 +379,7 @@ func TestApplyRules_TitleNoMatch(t *testing.T) {
 	l, mock := setupLabelerTest(t)
 	defer func() { db.Close() }()
 
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	cfg := &models.Config{
 		LabelRules: []models.LabelRule{
@@ -414,7 +413,7 @@ func TestApplyRules_PerGroupOverride(t *testing.T) {
 	l, mock := setupLabelerTest(t)
 	defer func() { db.Close() }()
 
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	cfg := &models.Config{
 		LabelRules: []models.LabelRule{
@@ -462,7 +461,7 @@ func TestApplyRules_PrioritySorting(t *testing.T) {
 	l, mock := setupLabelerTest(t)
 	defer func() { db.Close() }()
 
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	cfg := &models.Config{
 		LabelRules: []models.LabelRule{
@@ -496,7 +495,7 @@ func TestApplyRules_Exclusive(t *testing.T) {
 	l, mock := setupLabelerTest(t)
 	defer func() { db.Close() }()
 
-	compiledPatterns = make(map[string]*regexp.Regexp)
+	resetCompiledPatternCache()
 
 	cfg := &models.Config{
 		LabelRules: []models.LabelRule{

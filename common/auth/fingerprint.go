@@ -38,7 +38,10 @@ func GenerateFingerprintToken(username string) (string, error) {
 		return "", fmt.Errorf("fingerprint not initialized")
 	}
 
-	id := generateFingerprintID()
+	id, err := generateFingerprintID()
+	if err != nil {
+		return "", err
+	}
 	expiresAt := time.Now().Add(fingerprintExpiry)
 
 	fingerprintsMu.Lock()
@@ -152,10 +155,10 @@ func CountFingerprints() int {
 	return len(fingerprints)
 }
 
-func generateFingerprintID() string {
+func generateFingerprintID() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
-		return hex.EncodeToString([]byte(time.Now().String()))[:32]
+		return "", fmt.Errorf("fingerprint id rand: %w", err)
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(b), nil
 }

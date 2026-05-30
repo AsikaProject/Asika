@@ -66,7 +66,7 @@ func (s *mongoStorage) ListUserSessions(username string) ([]*models.Session, err
 		}
 		sessions = append(sessions, &session)
 	}
-	return sessions, nil
+	return sessions, cursor.Err()
 }
 
 func (s *mongoStorage) ListAllSessions() ([]*models.Session, error) {
@@ -85,7 +85,7 @@ func (s *mongoStorage) ListAllSessions() ([]*models.Session, error) {
 		}
 		sessions = append(sessions, &session)
 	}
-	return sessions, nil
+	return sessions, cursor.Err()
 }
 
 func (s *mongoStorage) DeleteUserSessions(username string) error {
@@ -163,5 +163,5 @@ func (s *mongoStorage) ListOIDCLinks(username string) ([]*models.OIDCLink, error
 		}
 		links = append(links, &link)
 	}
-	return links, nil
+	return links, cursor.Err()
 }
