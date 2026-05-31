@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -95,14 +96,26 @@ var apikeyListCmd = &cobra.Command{
 		}
 		defer resp.Body.Close()
 
-		var keys []map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&keys)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+
 		if resp.StatusCode >= 400 {
 			var result map[string]interface{}
-			json.NewDecoder(resp.Body).Decode(&result)
+			_ = json.Unmarshal(body, &result)
 			if errMsg, ok := result["error"].(string); ok {
 				fmt.Fprintf(os.Stderr, "Error: %s\n", errMsg)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: HTTP %d\n", resp.StatusCode)
 			}
+			os.Exit(1)
+		}
+
+		var keys []map[string]interface{}
+		if err := json.Unmarshal(body, &keys); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to parse response: %v\n", err)
 			os.Exit(1)
 		}
 

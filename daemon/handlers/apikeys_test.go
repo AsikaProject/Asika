@@ -429,7 +429,10 @@ func TestAPIKeyAuth_SkipWhenJWT(t *testing.T) {
 }
 
 func TestGenerateAPIKey(t *testing.T) {
-	key := generateAPIKey()
+	key, err := generateAPIKey()
+	if err != nil {
+		t.Fatalf("generateAPIKey() error: %v", err)
+	}
 	if !strings.HasPrefix(key, "ak_") {
 		t.Errorf("generateAPIKey() = %q, want prefix ak_", key)
 	}
@@ -439,7 +442,10 @@ func TestGenerateAPIKey(t *testing.T) {
 }
 
 func TestGenerateAPIKeyID(t *testing.T) {
-	id := generateAPIKeyID()
+	id, err := generateAPIKeyID()
+	if err != nil {
+		t.Fatalf("generateAPIKeyID() error: %v", err)
+	}
 	if len(id) != 16 { // 8 bytes = 16 hex chars
 		t.Errorf("generateAPIKeyID() length = %d, want 16", len(id))
 	}

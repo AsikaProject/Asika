@@ -89,7 +89,11 @@ func CreateAPIKey(c *gin.Context) {
 		return
 	}
 
-	rawKey := generateAPIKey()
+	rawKey, err := generateAPIKey()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate key"})
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(rawKey), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate key"})
@@ -130,8 +134,13 @@ func CreateAPIKey(c *gin.Context) {
 		}
 	}
 
+	apiKeyID, err := generateAPIKeyID()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate key id"})
+		return
+	}
 	apiKey := &models.APIKey{
-		ID:                generateAPIKeyID(),
+		ID:                apiKeyID,
 		Name:              req.Name,
 		KeyHash:           string(hash),
 		KeyHMAC:           keyHMAC,
@@ -259,16 +268,20 @@ func APIKeyAuth() gin.HandlerFunc {
 	}
 }
 
-func generateAPIKey() string {
+func generateAPIKey() (string, error) {
 	b := make([]byte, 32)
-	rand.Read(b)
-	return "ak_" + hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("apikey rand: %w", err)
+	}
+	return "ak_" + hex.EncodeToString(b), nil
 }
 
-func generateAPIKeyID() string {
+func generateAPIKeyID() (string, error) {
 	b := make([]byte, 8)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("apikey id rand: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func init() {

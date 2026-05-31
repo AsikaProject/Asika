@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -27,10 +28,15 @@ var prListCmd = &cobra.Command{
 
 		page, _ := cmd.Flags().GetInt("page")
 		perPage, _ := cmd.Flags().GetInt("per-page")
-		url := fmt.Sprintf("%s/api/v1/repos/%s/prs?state=%s&platform=%s&page=%d&per_page=%d",
-			GetServer(cmd), repoGroup, state, platform, page, perPage,
+		q := url.Values{}
+		q.Set("state", state)
+		q.Set("platform", platform)
+		q.Set("page", fmt.Sprintf("%d", page))
+		q.Set("per_page", fmt.Sprintf("%d", perPage))
+		endpoint := fmt.Sprintf("%s/api/v1/repos/%s/prs?%s",
+			GetServer(cmd), url.PathEscape(repoGroup), q.Encode(),
 		)
-		resp := doRequest("GET", url, cmd)
+		resp := doRequest("GET", endpoint, cmd)
 		if resp == nil {
 			return
 		}
@@ -76,13 +82,13 @@ var prCloseCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		reason, _ := cmd.Flags().GetString("reason")
-		url := fmt.Sprintf("%s/api/v1/repos/%s/prs/%s/close",
-			GetServer(cmd), args[0], args[1],
+		endpoint := fmt.Sprintf("%s/api/v1/repos/%s/prs/%s/close",
+			GetServer(cmd), url.PathEscape(args[0]), url.PathEscape(args[1]),
 		)
 		if reason != "" {
-			url += "?reason=" + reason
+			endpoint += "?reason=" + url.QueryEscape(reason)
 		}
-		resp := doRequest("POST", url, cmd)
+		resp := doRequest("POST", endpoint, cmd)
 		if resp == nil {
 			return
 		}

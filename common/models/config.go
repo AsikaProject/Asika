@@ -56,6 +56,7 @@ type OIDCProvider struct {
 	AuthURL      string   `toml:"auth_url"`
 	TokenURL     string   `toml:"token_url"`
 	UserInfoURL  string   `toml:"user_info_url"`
+	RedirectURL  string   `toml:"redirect_url"` // explicit OAuth2 redirect URI (recommended; overrides Host-derived URL)
 	AutoCreate   bool     `toml:"auto_create"`
 	DefaultRole  string   `toml:"default_role"`
 }

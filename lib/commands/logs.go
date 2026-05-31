@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -32,35 +32,35 @@ var logsExportCmd = &cobra.Command{
 		output, _ := cmd.Flags().GetString("output")
 
 		// Build query parameters
-		params := make([]string, 0)
+		q := url.Values{}
 		if format != "" {
-			params = append(params, "format="+format)
+			q.Set("format", format)
 		}
 		if level != "" {
-			params = append(params, "level="+level)
+			q.Set("level", level)
 		}
 		if category != "" {
-			params = append(params, "category="+category)
+			q.Set("category", category)
 		}
 		if actor != "" {
-			params = append(params, "actor="+actor)
+			q.Set("actor", actor)
 		}
 		if repoGroup != "" {
-			params = append(params, "repo_group="+repoGroup)
+			q.Set("repo_group", repoGroup)
 		}
 		if action != "" {
-			params = append(params, "action="+action)
+			q.Set("action", action)
 		}
 		if since != "" {
-			params = append(params, "since="+since)
+			q.Set("since", since)
 		}
 
-		url := fmt.Sprintf("%s/api/v1/logs/export", server)
-		if len(params) > 0 {
-			url += "?" + strings.Join(params, "&")
+		endpoint := fmt.Sprintf("%s/api/v1/logs/export", server)
+		if encoded := q.Encode(); encoded != "" {
+			endpoint += "?" + encoded
 		}
 
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := http.NewRequest("GET", endpoint, nil)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			return
@@ -133,35 +133,35 @@ var logsListCmd = &cobra.Command{
 		limit, _ := cmd.Flags().GetInt("limit")
 
 		// Build query parameters
-		params := make([]string, 0)
+		q := url.Values{}
 		if level != "" {
-			params = append(params, "level="+level)
+			q.Set("level", level)
 		}
 		if category != "" {
-			params = append(params, "category="+category)
+			q.Set("category", category)
 		}
 		if actor != "" {
-			params = append(params, "actor="+actor)
+			q.Set("actor", actor)
 		}
 		if repoGroup != "" {
-			params = append(params, "repo_group="+repoGroup)
+			q.Set("repo_group", repoGroup)
 		}
 		if action != "" {
-			params = append(params, "action="+action)
+			q.Set("action", action)
 		}
 		if since != "" {
-			params = append(params, "since="+since)
+			q.Set("since", since)
 		}
 		if limit > 0 {
-			params = append(params, fmt.Sprintf("limit=%d", limit))
+			q.Set("limit", fmt.Sprintf("%d", limit))
 		}
 
-		url := fmt.Sprintf("%s/api/v1/logs", server)
-		if len(params) > 0 {
-			url += "?" + strings.Join(params, "&")
+		endpoint := fmt.Sprintf("%s/api/v1/logs", server)
+		if encoded := q.Encode(); encoded != "" {
+			endpoint += "?" + encoded
 		}
 
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := http.NewRequest("GET", endpoint, nil)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			return

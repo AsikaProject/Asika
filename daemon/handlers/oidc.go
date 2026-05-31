@@ -353,6 +353,18 @@ func generateOIDCState() (string, error) {
 }
 
 func getRedirectURL(c *gin.Context, providerName string) string {
+	// Prefer the explicitly configured redirect URL: tying it to the
+	// Host header lets an attacker who controls the Host (DNS rebinding,
+	// reverse-proxy misconfiguration) trick OIDC into sending the auth
+	// code to a different origin.
+	if cfg := config.Current(); cfg != nil {
+		for i := range cfg.Auth.OIDCProviders {
+			p := &cfg.Auth.OIDCProviders[i]
+			if p.Name == providerName && p.RedirectURL != "" {
+				return p.RedirectURL
+			}
+		}
+	}
 	scheme := "http"
 	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
 		scheme = "https"

@@ -142,7 +142,7 @@ func fingerprintContextMiddleware() gin.HandlerFunc {
 func (s *Server) Start() error {
 	var addr string
 	if s.cfg == nil {
-		addr = ":8080"
+		addr = "127.0.0.1:8080"
 	} else {
 		addr = s.cfg.Server.Listen
 	}
