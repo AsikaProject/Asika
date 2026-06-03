@@ -20,13 +20,14 @@ import (
 const maxRetryCount = 5
 
 const (
-	QueueStatusWaiting    = "waiting"
-	QueueStatusChecking   = "checking"
-	QueueStatusMerging    = "merging"
-	QueueStatusDone       = "done"
-	QueueStatusFailed     = "failed"
-	QueueStatusReady      = "ready"
-	QueueStatusDeadLetter = "dead-letter"
+	QueueStatusWaiting         = "waiting"
+	QueueStatusChecking        = "checking"
+	QueueStatusMerging         = "merging"
+	QueueStatusDone            = "done"
+	QueueStatusFailed          = "failed"
+	QueueStatusReady           = "ready"
+	QueueStatusDeadLetter      = "dead-letter"
+	QueueStatusSecurityBlocked = "security_blocked"
 )
 
 func min(a, b int) int {

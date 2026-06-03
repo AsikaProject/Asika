@@ -615,3 +615,11 @@ func (c *GerritClient) HasWritePermission(ctx context.Context, owner, repo, user
 	}
 	return false, nil
 }
+
+func (c *GerritClient) HasSecurityAlerts(ctx context.Context, owner, repo string, number int) ([]models.SecurityAlert, error) {
+	return nil, nil
+}
+
+func (c *GerritClient) ListPRComments(ctx context.Context, owner, repo string, number int) ([]models.PRComment, error) {
+	return nil, nil
+}

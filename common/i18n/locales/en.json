@@ -377,5 +377,15 @@
 	"common.confirm": "Confirm",
 	"common.select_all": "Select All",
 	"common.delete_selected": "Delete Selected",
-	"settings.add_keyword": "Add Keyword"
+	"settings.add_keyword": "Add Keyword",
+	"settings.ai_summary": "AI Summary",
+	"settings.ai_provider": "LLM Provider",
+	"settings.ai_api_key": "API Key",
+	"settings.ai_base_url": "Base URL",
+	"settings.ai_model": "Model",
+	"settings.auto_generate": "Auto Generate",
+	"settings.ai_max_diff_length": "Max Diff Length (chars)",
+	"settings.ai_bot_users": "Known Bot Users (one per line)",
+	"settings.ai_system_prompt": "System Prompt (leave empty for default)",
+	"settings.ai_user_prompt": "User Prompt Template (use %s placeholders for title/desc/files/commits)"
 }

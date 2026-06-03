@@ -377,5 +377,15 @@
  	"common.confirm": "确认",
  	"common.select_all": "全选",
 	"common.delete_selected": "删除选中",
-  	"settings.add_keyword": "添加关键词"
+  	"settings.add_keyword": "添加关键词",
+	"settings.ai_summary": "AI 摘要",
+	"settings.ai_provider": "LLM 提供商",
+	"settings.ai_api_key": "API 密钥",
+	"settings.ai_base_url": "接口地址",
+	"settings.ai_model": "模型",
+	"settings.auto_generate": "自动生成",
+	"settings.ai_max_diff_length": "最大差异长度（字符）",
+	"settings.ai_bot_users": "已知机器人用户（每行一个）",
+	"settings.ai_system_prompt": "系统提示词（留空使用默认）",
+	"settings.ai_user_prompt": "用户提示词模板（使用 %s 占位标题/描述/文件/提交）"
 }

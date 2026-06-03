@@ -1,5 +1,15 @@
 # ChangeLog for Asika
 
+## v20260603DEV
+
+- **Feature**: Add outbound webhook system (`common/hooks/`). HookDispatcher subscribes to the event bus and fires HMAC-SHA256 signed HTTP POST to configured endpoints with per-hook event/repo_group/platform filtering, retry with exponential backoff, and graceful shutdown.
+- **Feature**: Add security scan integration. Merge queue blocks PRs when platform reports security vulnerabilities (GitHub: Dependabot + SecretScanning + CodeScanning; GitLab: ProjectVulnerabilities). Admin/operator can override per-queue-item via API.
+- **Feature**: Add AI-powered PR summary. Handler detects existing bot summaries in PR comments, optionally generates new summary via OpenAI-compatible LLM API, and posts as comment. Supported across all platforms via `ListPRComments` interface method.
+- **Feature**: Add `HasSecurityAlerts` and `ListPRComments` methods to `PlatformClient` interface. GitHub and GitLab have full implementations; Gitea/Bitbucket/Gerrit have stubs.
+- **Feature**: Add `LLM` client package (`common/llm/`) — pure `net/http` OpenAI-compatible chat client with no external SDK dependency.
+- **Feature**: Add config sections: `[[hooks]]` for outbound webhooks, `[merge_queue.security_scan]` for vulnerability checks, `[ai_summary]` for LLM summary generation.
+- **Feature**: Add new route `GET /:pr_id/summary` for AI-powered PR summarization.
+
 ## v20260527DEV
 
 - **Feature**: Add reviewer load balancing with activity-based filtering. Reviewers inactive for more than `active_days` (default 14) are excluded from assignment. Load-balanced selection assigns reviewers with lowest pending count first.

@@ -621,3 +621,11 @@ func (c *GiteaClient) HasWritePermission(ctx context.Context, owner, repo, usern
 	}
 	return isCollab, nil
 }
+
+func (c *GiteaClient) HasSecurityAlerts(ctx context.Context, owner, repo string, number int) ([]models.SecurityAlert, error) {
+	return nil, nil
+}
+
+func (c *GiteaClient) ListPRComments(ctx context.Context, owner, repo string, number int) ([]models.PRComment, error) {
+	return nil, nil
+}

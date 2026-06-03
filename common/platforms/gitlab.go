@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"gitlab.com/gitlab-org/api/client-go"
 
@@ -563,4 +564,62 @@ func (c *GitLabClient) HasWritePermission(ctx context.Context, owner, repo, user
 		}
 	}
 	return false, nil
+}
+
+func (c *GitLabClient) ListPRComments(ctx context.Context, owner, repo string, number int) ([]models.PRComment, error) {
+	project := owner + "/" + repo
+	notes, _, err := c.client.Notes.ListMergeRequestNotes(project, int64(number), &gitlab.ListMergeRequestNotesOptions{
+		ListOptions: gitlab.ListOptions{PerPage: 100},
+	}, gitlab.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list MR notes: %w", err)
+	}
+	comments := make([]models.PRComment, 0, len(notes))
+	for _, n := range notes {
+		createdAt := time.Now()
+		if n.CreatedAt != nil {
+			createdAt = *n.CreatedAt
+		}
+		isBot := n.System || n.Author.Username == "gitlab-bot" || strings.Contains(n.Author.Username, "bot")
+		comments = append(comments, models.PRComment{
+			ID:        fmt.Sprintf("%d", n.ID),
+			Author:    n.Author.Username,
+			Body:      n.Body,
+			CreatedAt: createdAt,
+			IsBot:     isBot,
+		})
+	}
+	return comments, nil
+}
+
+func (c *GitLabClient) HasSecurityAlerts(ctx context.Context, owner, repo string, number int) ([]models.SecurityAlert, error) {
+	project := owner + "/" + repo
+	vulns, _, err := c.client.ProjectVulnerabilities.ListProjectVulnerabilities(project, &gitlab.ListProjectVulnerabilitiesOptions{
+		ListOptions: gitlab.ListOptions{PerPage: 100},
+	}, gitlab.WithContext(ctx))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list vulnerabilities: %w", err)
+	}
+
+	var alerts []models.SecurityAlert
+	for _, v := range vulns {
+		if v.State == "dismissed" || v.State == "resolved" {
+			continue
+		}
+		severity := v.Severity
+		if severity == "" {
+			severity = "unknown"
+		}
+		reportType := v.ReportType
+		if reportType == "" {
+			reportType = "vulnerability"
+		}
+		alerts = append(alerts, models.SecurityAlert{
+			Type:     reportType,
+			Title:    v.Title,
+			Severity: severity,
+			URL:      "",
+		})
+	}
+	return alerts, nil
 }

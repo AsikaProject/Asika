@@ -42,6 +42,10 @@ func (b *Bot) handleShowConfig(c telebot.Context) error {
 	for _, g := range groups {
 		sb.WriteString(fmt.Sprintf("    - %s (%s)\n", g.Name, g.Mode))
 	}
+	sb.WriteString(fmt.Sprintf("  AI Summary: enabled=%v provider=%s\n", cfg.AISummary.Enabled, cfg.AISummary.Provider))
+	if cfg.AISummary.Enabled && cfg.AISummary.Model != "" {
+		sb.WriteString(fmt.Sprintf("  AI Model: %s\n", cfg.AISummary.Model))
+	}
 	return c.Send(sb.String(), &telebot.SendOptions{ParseMode: telebot.ModeHTML})
 }
 

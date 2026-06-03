@@ -287,6 +287,14 @@ func (c *BitbucketClient) GetBranch(ctx context.Context, owner, repo, branch str
 	return true, nil
 }
 
+func (c *BitbucketClient) HasSecurityAlerts(ctx context.Context, owner, repo string, number int) ([]models.SecurityAlert, error) {
+	return nil, nil
+}
+
+func (c *BitbucketClient) ListPRComments(ctx context.Context, owner, repo string, number int) ([]models.PRComment, error) {
+	return nil, nil
+}
+
 func (c *BitbucketClient) ListBranches(ctx context.Context, owner, repo string) ([]string, error) {
 	opts := &bitbucket.RepositoryBranchOptions{
 		Owner:    owner,

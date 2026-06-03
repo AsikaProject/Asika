@@ -21,6 +21,8 @@ type MockPlatformClient struct {
 	BranchBase          string
 	BranchHead          string
 	BranchHeadSHA       string
+	SecurityAlerts      []models.SecurityAlert
+	PRComments          []models.PRComment
 }
 
 // NewMockPlatformClient creates a new mock client
@@ -181,6 +183,14 @@ func (m *MockPlatformClient) GetFileContent(ctx context.Context, owner, repo, pa
 
 func (m *MockPlatformClient) HasWritePermission(ctx context.Context, owner, repo, username string) (bool, error) {
 	return true, nil
+}
+
+func (m *MockPlatformClient) HasSecurityAlerts(ctx context.Context, owner, repo string, number int) ([]models.SecurityAlert, error) {
+	return m.SecurityAlerts, nil
+}
+
+func (m *MockPlatformClient) ListPRComments(ctx context.Context, owner, repo string, number int) ([]models.PRComment, error) {
+	return m.PRComments, nil
 }
 
 func (m *MockPlatformClient) GetPRBranchInfo(ctx context.Context, owner, repo string, number int) (*models.PRBranchInfo, error) {

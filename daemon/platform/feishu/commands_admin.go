@@ -19,9 +19,10 @@ func (b *Bot) showConfigText() string {
 	}
 	groups := config.GetRepoGroups(cfg)
 	return fmt.Sprintf(
-		"Asika Config:\n  Server: %s (%s)\n  CPU Threads: min=%d max=%d\n  DB: %s\n  Events: %s\n  Spam: %v\n  Repo Groups: %d\n  Notify Channels: %d",
+		"Asika Config:\n  Server: %s (%s)\n  CPU Threads: min=%d max=%d\n  DB: %s\n  Events: %s\n  Spam: %v\n  Repo Groups: %d\n  Notify Channels: %d\n  AI Summary: enabled=%v provider=%s",
 		cfg.Server.Listen, cfg.Server.Mode, cfg.Server.MinProcs, cfg.Server.MaxProcs, cfg.Database.Path,
 		cfg.Events.Mode, cfg.Spam.Enabled, len(groups), len(cfg.Notify),
+		cfg.AISummary.Enabled, cfg.AISummary.Provider,
 	)
 }
 

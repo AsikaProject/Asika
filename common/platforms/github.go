@@ -643,3 +643,127 @@ func (c *GitHubClient) HasWritePermission(ctx context.Context, owner, repo, user
 	p := perm.GetPermission()
 	return p == "admin" || p == "maintain" || p == "push", nil
 }
+
+func (c *GitHubClient) HasSecurityAlerts(ctx context.Context, owner, repo string, number int) ([]models.SecurityAlert, error) {
+	var alerts []models.SecurityAlert
+
+	dependabotOpts := &github.ListAlertsOptions{
+		State:       github.String("open"),
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
+	for {
+		dAlerts, resp, err := c.client.Dependabot.ListRepoAlerts(ctx, owner, repo, dependabotOpts)
+		if err != nil {
+			break
+		}
+		for _, a := range dAlerts {
+			severity := "unknown"
+			if a.SecurityAdvisory != nil && a.SecurityAdvisory.Severity != nil {
+				severity = *a.SecurityAdvisory.Severity
+			}
+			title := ""
+			if a.SecurityAdvisory != nil && a.SecurityAdvisory.Summary != nil {
+				title = *a.SecurityAdvisory.Summary
+			}
+			url := a.GetHTMLURL()
+			alerts = append(alerts, models.SecurityAlert{
+				Type:     "dependabot",
+				Title:    title,
+				Severity: severity,
+				URL:      url,
+			})
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		dependabotOpts.ListOptions.Page = resp.NextPage
+	}
+
+	secretOpts := &github.SecretScanningAlertListOptions{
+		State: "open",
+	}
+	for {
+		sAlerts, resp, err := c.client.SecretScanning.ListAlertsForRepo(ctx, owner, repo, secretOpts)
+		if err != nil {
+			break
+		}
+		for _, a := range sAlerts {
+			severity := "high"
+			title := fmt.Sprintf("Secret: %s", a.GetSecretTypeDisplayName())
+			alerts = append(alerts, models.SecurityAlert{
+				Type:     "secret_scanning",
+				Title:    title,
+				Severity: severity,
+				URL:      a.GetHTMLURL(),
+			})
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		secretOpts.ListCursorOptions.Page = resp.NextPageToken
+	}
+
+	codeOpts := &github.AlertListOptions{
+		State: "open",
+	}
+	for {
+		cAlerts, resp, err := c.client.CodeScanning.ListAlertsForRepo(ctx, owner, repo, codeOpts)
+		if err != nil {
+			break
+		}
+		for _, a := range cAlerts {
+			severity := "unknown"
+			if a.Rule != nil && a.Rule.Severity != nil {
+				severity = *a.Rule.Severity
+			}
+			title := ""
+			if a.Rule != nil && a.Rule.Description != nil {
+				title = *a.Rule.Description
+			}
+			alerts = append(alerts, models.SecurityAlert{
+				Type:     "code_scanning",
+				Title:    title,
+				Severity: severity,
+				URL:      a.GetHTMLURL(),
+			})
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		codeOpts.ListCursorOptions.Page = resp.NextPageToken
+	}
+
+	return alerts, nil
+}
+
+func (c *GitHubClient) ListPRComments(ctx context.Context, owner, repo string, number int) ([]models.PRComment, error) {
+	opts := &github.IssueListCommentsOptions{
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
+	var comments []models.PRComment
+	for {
+		issueComments, resp, err := c.client.Issues.ListComments(ctx, owner, repo, number, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list comments: %w", err)
+		}
+		for _, ic := range issueComments {
+			author := ""
+			if ic.User != nil {
+				author = ic.User.GetLogin()
+			}
+			isBot := ic.GetAuthorAssociation() == "NONE" || (ic.User != nil && (ic.User.GetType() == "Bot" || strings.Contains(ic.User.GetLogin(), "[bot]")))
+			comments = append(comments, models.PRComment{
+				ID:        fmt.Sprintf("%d", ic.GetID()),
+				Author:    author,
+				Body:      ic.GetBody(),
+				CreatedAt: ic.GetCreatedAt().Time,
+				IsBot:     isBot,
+			})
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	return comments, nil
+}

@@ -131,6 +131,16 @@ func (c *Checker) IsReadyToMerge(pr *models.PRRecord) (bool, error) {
 		}
 	}
 
+	// Security check: block enqueue if security alerts exist
+	secure, err := c.checkSecurity(ctx, pr, group)
+	if err != nil {
+		return false, err
+	}
+	if !secure {
+		slog.Info("PR blocked by security alerts, skipping enqueue", "pr_id", pr.ID)
+		return false, nil
+	}
+
 	if mq.Expression != "" {
 		labelSet := make(map[string]bool)
 		for _, l := range pr.Labels {
@@ -239,6 +249,20 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 			return false, nil
 		}
 	}
+
+	// Security check (skip if overridden)
+	if item.SecurityOverride == "" {
+		secure, err := c.checkSecurity(ctx, pr, group)
+		if err != nil {
+			return false, &TransientError{Err: err}
+		}
+		if !secure {
+			item.SecurityBlocked = true
+			item.FailureReason = fmt.Sprintf("Blocked by security alerts (%d)", len(pr.SecurityAlerts))
+			return false, nil
+		}
+	}
+	item.SecurityBlocked = false
 
 	labelSet := make(map[string]bool)
 	for _, l := range pr.Labels {
@@ -734,6 +758,46 @@ func (c *Checker) tryAutoRebase(ctx context.Context, pr *models.PRRecord, group 
 
 	slog.Info("auto-rebase: succeeded", "pr_id", pr.ID, "head_branch", branchInfo.HeadBranch, "base_branch", branchInfo.BaseBranch)
 	return true
+}
+
+// checkSecurity checks if the PR has security alerts and blocks merging if configured.
+func (c *Checker) checkSecurity(ctx context.Context, pr *models.PRRecord, group *models.RepoGroup) (bool, error) {
+	mq := group.MergeQueue
+	if !mq.SecurityScan.Enabled || !mq.SecurityScan.BlockOnAlerts {
+		return true, nil
+	}
+
+	platform := pr.Platform
+	if platform == "" {
+		platform = config.GetPlatformForGroup(group)
+	}
+
+	client := c.clients[platforms.PlatformType(platform)]
+	if client == nil {
+		return true, nil
+	}
+
+	owner, repo := config.GetOwnerRepoFromGroup(group, platform)
+	if owner == "" || repo == "" {
+		return true, nil
+	}
+
+	alerts, err := client.HasSecurityAlerts(ctx, owner, repo, pr.PRNumber)
+	if err != nil {
+		slog.Warn("security check failed", "error", err, "pr_id", pr.ID)
+		return true, nil
+	}
+
+	if len(alerts) > 0 {
+		pr.SecurityBlocked = true
+		pr.SecurityAlerts = alerts
+		slog.Warn("PR blocked by security alerts", "pr_id", pr.ID, "count", len(alerts))
+		return false, nil
+	}
+
+	pr.SecurityBlocked = false
+	pr.SecurityAlerts = nil
+	return true, nil
 }
 
 var checklistPattern = regexp.MustCompile(`(?m)^\s*[-*]\s+\[([ x])\]`)

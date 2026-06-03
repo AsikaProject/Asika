@@ -185,6 +185,9 @@ func UpdateConfig(c *gin.Context) {
 		}
 		existing["hookpath"] = hookpath
 	}
+	if aiSummary, ok := patch["ai_summary"]; ok {
+		existing["ai_summary"] = aiSummary
+	}
 
 	newData, err := toml.Marshal(&existing)
 	if err != nil {

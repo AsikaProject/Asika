@@ -203,7 +203,24 @@ type DiscordConfig struct {
 	ChannelID   string   `toml:"channel_id" json:"channel_id"`
 }
 
-// SlackConfig represents Slack bot configuration
+// HooksConfig represents a single outbound webhook configuration
+type HooksConfig struct {
+	Events []string          `toml:"events" json:"events"`
+	URL    string            `toml:"url" json:"url"`
+	Secret string            `toml:"secret" json:"secret"`
+	Retry  *HookRetryConfig  `toml:"retry" json:"retry,omitempty"`
+	Filter *HookFilterConfig `toml:"filter" json:"filter,omitempty"`
+}
+
+type HookRetryConfig struct {
+	MaxAttempts int    `toml:"max_attempts" json:"max_attempts"`
+	Backoff     string `toml:"backoff" json:"backoff"`
+}
+
+type HookFilterConfig struct {
+	RepoGroups []string `toml:"repo_groups" json:"repo_groups,omitempty"`
+	Platforms  []string `toml:"platforms" json:"platforms,omitempty"`
+}
 type SlackConfig struct {
 	Enabled     bool     `toml:"enabled" json:"enabled"`
 	Token       string   `toml:"token" json:"token"`         // Bot User OAuth Token (xoxb-...)

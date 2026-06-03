@@ -124,6 +124,9 @@ func main() {
 		if ic.Poller != nil {
 			ic.Poller.Stop()
 		}
+		if ic.HooksDispatcher != nil {
+			ic.HooksDispatcher.Stop()
+		}
 
 		if ic.TgBot != nil {
 			ic.TgBot.Stop()

@@ -157,6 +157,7 @@ func (s *Server) setupRoutes() {
 			{
 				prsExtra.GET("/:pr_id/approval-status", handlers.GetApprovalStatus)
 				prsExtra.GET("/:pr_id/template-check", handlers.CheckTemplate)
+				prsExtra.GET("/:pr_id/summary", handlers.SummarizePR)
 			}
 
 			prsReady := prs.Group("")

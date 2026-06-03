@@ -10,6 +10,7 @@ import (
 	"asika/common/config"
 	"asika/common/db"
 	"asika/common/events"
+	"asika/common/hooks"
 	"asika/common/models"
 	"asika/common/platforms"
 	"asika/daemon/consumer"
@@ -27,17 +28,18 @@ import (
 
 // InitConfig holds all initialized subsystems for orderly shutdown.
 type InitConfig struct {
-	Cfg           *models.Config
-	Clients       map[platforms.PlatformType]platforms.PlatformClient
-	Server        *server.Server
-	QueueMgr      *queue.Manager
-	SpamDetector  *syncer.SpamDetector
-	Poller        *polling.Poller
-	EventConsumer *consumer.Consumer
-	TgBot         *telegram.Bot
-	FsBot         *feishu.Bot
-	DiscordBot    *discord.Bot
-	SlackBot      *slack.Bot
+	Cfg             *models.Config
+	Clients         map[platforms.PlatformType]platforms.PlatformClient
+	Server          *server.Server
+	QueueMgr        *queue.Manager
+	SpamDetector    *syncer.SpamDetector
+	Poller          *polling.Poller
+	EventConsumer   *consumer.Consumer
+	TgBot           *telegram.Bot
+	FsBot           *feishu.Bot
+	DiscordBot      *discord.Bot
+	SlackBot        *slack.Bot
+	HooksDispatcher *hooks.Dispatcher
 }
 
 // InitWithRetry initializes the database with retries for lock conflicts.
@@ -131,14 +133,43 @@ func Bootstrap(cfg *models.Config) (*InitConfig, error) {
 
 	events.Init()
 
-	if err := platforms.CheckMergeMethods(cfg, clients); err != nil {
-		slog.Error("merge method check failed, continuing with warnings", "error", err)
-	}
-
 	ic := &InitConfig{
 		Cfg:     cfg,
 		Clients: clients,
 	}
+
+	// Hooks dispatcher
+	if len(cfg.Hooks) > 0 {
+		hookList := make([]hooks.Hook, len(cfg.Hooks))
+		for i, h := range cfg.Hooks {
+			hookList[i] = hooks.Hook{
+				Events: h.Events,
+				URL:    h.URL,
+				Secret: h.Secret,
+			}
+			if h.Filter != nil {
+				hookList[i].Filter = &hooks.FilterConfig{
+					RepoGroups: h.Filter.RepoGroups,
+					Platforms:  h.Filter.Platforms,
+				}
+			}
+			if h.Retry != nil {
+				hookList[i].Retry = &hooks.RetryConfig{
+					MaxAttempts: h.Retry.MaxAttempts,
+					Backoff:     h.Retry.Backoff,
+				}
+			}
+		}
+		ic.HooksDispatcher = hooks.NewDispatcher(hookList)
+		ic.HooksDispatcher.Start()
+		setHooksDispatcher(ic.HooksDispatcher)
+	}
+
+	if err := platforms.CheckMergeMethods(cfg, clients); err != nil {
+		slog.Error("merge method check failed, continuing with warnings", "error", err)
+	}
+
+	// NOTE: ic was declared above after events.Init()
 
 	MigrateRepoGroupNames(cfg)
 	MigratePRStates(cfg)

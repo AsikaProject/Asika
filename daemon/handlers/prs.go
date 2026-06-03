@@ -49,3 +49,4 @@ func BatchLabelPR(c *gin.Context)   { pr.BatchLabelPR(c) }
 func BatchRebasePR(c *gin.Context)  { pr.BatchRebasePR(c) }
 func GetLogs(c *gin.Context)        { pr.GetLogs(c) }
 func ExportLogs(c *gin.Context)     { pr.ExportLogs(c) }
+func SummarizePR(c *gin.Context)    { pr.SummarizePR(c) }

@@ -44,6 +44,12 @@ graph TB
             EB[Event Publisher/Subscriber]
         end
 
+        subgraph Hooks["Outbound Hooks (common/hooks/)"]
+            HOOK_DISP[Hook Dispatcher]
+            HOOK_SIG[HMAC-SHA256 Signing]
+            HOOK_FILT[Event/Platform Filter]
+        end
+
         subgraph Actors["Actor System (goroutine pools)"]
             DP[Event Dispatcher]
             WP[Worker Pool dynamic]
@@ -124,6 +130,10 @@ graph TB
     QC --> BDB
     EC --> BDB
     SD --> BDB
+
+    EB --> HOOK_DISP
+    HOOK_DISP --> HOOK_SIG
+    HOOK_SIG --> HOOK_FILT
 
     EB --> FD
     FD --> FG
@@ -483,6 +493,8 @@ PlatformClient interface methods:
 - Branch operations: `GetBranch`, `ListBranches`, `DeleteBranch`, `GetDefaultBranch`
 - CI/merge: `GetCIStatus`, `GetDefaultMergeMethod`, `HasMultipleMergeMethods`, `GetApprovals`
 - Diff/commits: `GetPRCommits`, `GetDiffFiles`, `GetPRDiff`, `CommentPRLine`
+- Security: `HasSecurityAlerts` — returns repo-level security alerts (GitHub: Dependabot + SecretScanning + CodeScanning; GitLab: ProjectVulnerabilities; other platforms: nil stub)
+- Comments: `ListPRComments` — returns PR comments with bot/user distinction (GitHub/GitLab: real; Gitea/Bitbucket/Gerrit: nil stub)
 - Other: `GetPRBranchInfo`, `RequestReview`, `RevertPR`, `GetPRBody`, `GetFileContent`, `VerifyWebhookSignature`
 
 ### Webhook Package
@@ -493,6 +505,46 @@ PlatformClient interface methods:
 - `comment.go` — `extractCommentPayload`
 - `health.go` — `GET /api/v1/webhooks/health` returns per-platform health status
 - `retry.go` — `StartWebhookRetryWorker`, exponential backoff, permanent failure notification
+
+### Outbound Hooks
+
+`common/hooks/` is a package for sending outbound webhook notifications when events occur:
+
+- `hooks.go` — `HookDispatcher` subscribes to the event bus, filters by event type/repo group/platform, and fires HTTP POST requests to configured endpoints
+- Signing: HMAC-SHA256 hex digest sent via `X-Signature-256` header
+- Filtering: per-hook `HookFilterConfig` supports `repo_groups` and `platforms` allowlists
+- Retry: per-hook `HookRetryConfig` with `max_attempts` and `backoff` duration string
+- Config: hooks are defined in the top-level `[[hooks]]` array in the config TOML
+- Bootstrap: `BootstrapHooks()` initializes the dispatcher during server startup; `InitHooksConfig()` is called on config load and hot-reload
+- Shutdown: `HookDispatcher.Stop()` cancels the worker goroutine
+
+### Security Scan
+
+Merge queue security alert integration:
+
+- **Config**: `[merge_queue.security_scan]` with `enabled`, `block_on_alerts`, `override_roles`, `override_permissions`, `cache_ttl_seconds`
+- **Platform API**: `HasSecurityAlerts(ctx, owner, repo, number int)` returns `[]SecurityAlert`
+  - GitHub: aggregates Dependabot, SecretScanning, and CodeScanning alerts (cursor-based pagination)
+  - GitLab: uses `ProjectVulnerabilitiesService.ListProjectVulnerabilities`
+  - Gitea/Bitbucket/Gerrit: return nil (stubs)
+- **Merge gate**: `checkSecurity()` in the queue checker runs before `IsReadyToMerge()` and `ShouldMerge()`; sets `SecurityBlocked` status on the queue item
+- **Override**: Admin/operator can set `security_override` on a queue item via the API to bypass the security block
+
+### AI Summary
+
+LLM-powered PR summary generation:
+
+- **Config**: `[ai_summary]` with `enabled`, `provider` (openai/ollama/deepseek/custom), `api_key`, `base_url`, `model`, `bot_users`, `auto_generate`, `max_diff_length`, `system_prompt`, `user_prompt`
+  - When `provider` is set (ollama/deepseek), `base_url` and `model` default to well-known values (e.g. ollama → `http://localhost:11434/v1` + `llama3`)
+  - `system_prompt` overrides the default system prompt; `user_prompt` overrides the user prompt template (`%s` placeholders for title/description/files/commits)
+- **Handler**: `GET /:pr_id/summary` in `daemon/handlers/pr/summarize.go`
+  - Step 1: Fetches all PR comments via `ListPRComments`
+  - Step 2: Detects existing bot summaries by prefix (`## AI Summary`, etc.), known bot usernames, or `IsBot` flag
+  - Step 3: If no summary exists and `auto_generate` is enabled, generates one via the configured LLM (OpenAI-compatible API) and posts it as a comment
+- **LLM Client**: `common/llm/client.go` — pure `net/http` OpenAI-compatible chat client, no external SDK dependency
+- **Models**: `AISummaryConfig` (config), `PRComment` (comment with bot detection fields)
+- **WebUI**: Settings page has AI Summary section with provider dropdown, API key, model, bot users, system prompt, user prompt
+- **Hot-reload**: `ai_summary` config is hot-reloadable via `PUT /api/v1/config`
 
 ### Events Handler
 
@@ -512,6 +564,7 @@ PlatformClient interface methods:
 - `label.go` — `BatchLabelPR`
 - `logs.go` — `GetLogs`, `ExportLogs`; uses `audit_log_index` bucket for indexed lookups by actor/repo_group/action/category; falls back to full scan when no filter specified
 - `batch_rebase.go` — `BatchRebasePR` for batch rebase operations
+- `summarize.go` — `SummarizePR` (GET `/:pr_id/summary`): detects existing bot summaries in PR comments, optionally generates AI summary via configured LLM (OpenAI-compatible API)
 
 Additional PR handlers in `daemon/handlers/`:
 - `pr_extra.go` — `GetApprovalStatus` (GET `/:pr_id/approval-status`), `CheckTemplate` (GET `/:pr_id/template-check`), `MarkReady` (POST `/:pr_id/ready`)
@@ -606,6 +659,8 @@ graph TB
         VER[version/ → Version]
         I18N[i18n/ → i18n]
         PUTIL[platformutil/ → Shared helpers]
+        HOOKS[hooks/ → Outbound webhook dispatcher]
+        LLM[llm/ → LLM client]
     end
 
     subgraph daemon["daemon/"]

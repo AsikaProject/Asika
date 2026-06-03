@@ -105,6 +105,15 @@ fast_forward_only  = false  # if true, auto-rebase PR before merge to ensure lin
 # Example: "core_approved >= 1 OR author IN core_contributors"
 # allow_expression_override_ci = false  # if true, expression can override CI/conflict hard gates
 
+# Security scan integration (optional)
+# Blocks merge if the platform reports security vulnerabilities for the repo.
+# [merge_queue.security_scan]
+# enabled             = true
+# block_on_alerts     = true
+# override_roles      = ["admin", "operator"]
+# override_permissions = ["manage_queue"]
+# cache_ttl_seconds   = 300
+
 # Reviewer load balancing (optional)
 # When enabled, assigns reviewers based on workload and activity.
 # [reviewer_load]
@@ -545,3 +554,33 @@ viewer_ids   = ["U0555566666"]
 # webhook_url   = "https://hooks.slack.com/services/xxx"
 # auto_track    = true
 # notify_on_fail = true
+
+# Outbound webhook hooks (optional)
+# Fires HTTP POST to configured URLs when matching events occur.
+# Signing: HMAC-SHA256 hex via X-Signature-256 header
+# Filter: per-hook allowlists for repo_groups and platforms
+# Events: queue_item_added, queue_item_removed, queue_item_merged, pr_opened, pr_closed, pr_merged, pr_approved, pr_reopened, etc.
+# [[hooks]]
+# url    = "https://example.com/webhook"
+# secret = "your-hmac-secret"
+# events = ["pr_opened", "pr_merged", "queue_item_merged"]
+# [hooks.retry]
+# max_attempts = 3
+# backoff      = "30s"
+# [hooks.filter]
+# repo_groups = ["my-org"]
+# platforms   = ["github"]
+
+# AI-powered PR summary (optional)
+# Generates PR summaries using an OpenAI-compatible LLM API.
+# [ai_summary]
+# enabled        = false
+# provider       = "openai"       # openai, ollama, deepseek, or custom
+# api_key        = "sk-..."
+# base_url       = "https://api.openai.com/v1"  # only needed when provider=custom
+# model          = "gpt-4o-mini"
+# bot_users      = ["asika", "asika-bot"]
+# auto_generate  = true
+# max_diff_length = 8000
+# system_prompt  = """You are a code review assistant. Given a PR's diff, commit messages, and description, generate a concise PR summary..."""
+# user_prompt    = """## PR Title\n%s\n\n## Description\n%s\n\n## Files Changed\n%s\n\n%s"""

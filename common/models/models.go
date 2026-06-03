@@ -15,15 +15,52 @@ func ParseTime(s string) time.Time {
 }
 
 type UserPermissions struct {
-	CanApprove     bool `json:"can_approve" toml:"can_approve"`
-	CanMerge       bool `json:"can_merge" toml:"can_merge"`
-	CanClose       bool `json:"can_close" toml:"can_close"`
-	CanReopen      bool `json:"can_reopen" toml:"can_reopen"`
-	CanSpam        bool `json:"can_spam" toml:"can_spam"`
-	CanManageQueue bool `json:"can_manage_queue" toml:"can_manage_queue"`
-	CanRevert      bool `json:"can_revert" toml:"can_revert"`
-	CanComment     bool `json:"can_comment" toml:"can_comment"`
-	CanLabel       bool `json:"can_label" toml:"can_label"`
+	CanApprove          bool `json:"can_approve" toml:"can_approve"`
+	CanMerge            bool `json:"can_merge" toml:"can_merge"`
+	CanClose            bool `json:"can_close" toml:"can_close"`
+	CanReopen           bool `json:"can_reopen" toml:"can_reopen"`
+	CanSpam             bool `json:"can_spam" toml:"can_spam"`
+	CanManageQueue      bool `json:"can_manage_queue" toml:"can_manage_queue"`
+	CanRevert           bool `json:"can_revert" toml:"can_revert"`
+	CanComment          bool `json:"can_comment" toml:"can_comment"`
+	CanLabel            bool `json:"can_label" toml:"can_label"`
+	CanOverrideSecurity bool `json:"can_override_security" toml:"can_override_security"`
+}
+
+type SecurityAlert struct {
+	Type     string `json:"type"`
+	Title    string `json:"title"`
+	Severity string `json:"severity"`
+	URL      string `json:"url"`
+}
+
+type PRComment struct {
+	ID        string    `json:"id"`
+	Author    string    `json:"author"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+	IsBot     bool      `json:"is_bot"`
+}
+
+type SecurityScanConfig struct {
+	Enabled         bool     `toml:"enabled" json:"enabled"`
+	BlockOnAlerts   bool     `toml:"block_on_alerts" json:"block_on_alerts"`
+	OverrideRoles   []string `toml:"override_roles" json:"override_roles"`
+	OverridePerms   []string `toml:"override_permissions" json:"override_permissions"`
+	CacheTTLSeconds int      `toml:"cache_ttl_seconds" json:"cache_ttl_seconds"`
+}
+
+type AISummaryConfig struct {
+	Enabled       bool     `toml:"enabled" json:"enabled"`
+	Provider      string   `toml:"provider" json:"provider"`
+	APIKey        string   `toml:"api_key" json:"api_key"`
+	BaseURL       string   `toml:"base_url" json:"base_url"`
+	Model         string   `toml:"model" json:"model"`
+	BotUsers      []string `toml:"bot_users" json:"bot_users"`
+	AutoGenerate  bool     `toml:"auto_generate" json:"auto_generate"`
+	MaxDiffLength int      `toml:"max_diff_length" json:"max_diff_length"`
+	SystemPrompt  string   `toml:"system_prompt" json:"system_prompt,omitempty"`
+	UserPrompt    string   `toml:"user_prompt" json:"user_prompt,omitempty"`
 }
 
 type APIKey struct {
@@ -108,30 +145,32 @@ type PRBranchInfo struct {
 }
 
 type PRRecord struct {
-	ID             string        `json:"id"`
-	RepoGroup      string        `json:"repo_group"`
-	Platform       string        `json:"platform"`
-	PRNumber       int           `json:"pr_number"`
-	Title          string        `json:"title"`
-	Author         string        `json:"author"`
-	State          string        `json:"state"`
-	Labels         []string      `json:"labels"`
-	MergeCommitSHA string        `json:"merge_commit_sha"`
-	SpamFlag       bool          `json:"spam_flag"`
-	CreatedAt      time.Time     `json:"created_at"`
-	UpdatedAt      time.Time     `json:"updated_at"`
-	DiffFiles      []string      `json:"diff_files"`
-	Events         []PREvent     `json:"events"`
-	IsDraft        bool          `json:"is_draft"`
-	HasConflict    bool          `json:"has_conflict"`
-	IsApproved     bool          `json:"is_approved"`
-	HTMLURL        string        `json:"html_url"`
-	MergedAt       time.Time     `json:"merged_at"`
-	BranchInfo     *PRBranchInfo `json:"branch_info,omitempty"`
-	CloseReason    string        `json:"close_reason,omitempty"`
-	Body           string        `json:"body,omitempty"`
-	LinesAdded     int           `json:"lines_added"`
-	LinesDeleted   int           `json:"lines_deleted"`
+	ID              string          `json:"id"`
+	RepoGroup       string          `json:"repo_group"`
+	Platform        string          `json:"platform"`
+	PRNumber        int             `json:"pr_number"`
+	Title           string          `json:"title"`
+	Author          string          `json:"author"`
+	State           string          `json:"state"`
+	Labels          []string        `json:"labels"`
+	MergeCommitSHA  string          `json:"merge_commit_sha"`
+	SpamFlag        bool            `json:"spam_flag"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+	DiffFiles       []string        `json:"diff_files"`
+	Events          []PREvent       `json:"events"`
+	IsDraft         bool            `json:"is_draft"`
+	HasConflict     bool            `json:"has_conflict"`
+	IsApproved      bool            `json:"is_approved"`
+	HTMLURL         string          `json:"html_url"`
+	MergedAt        time.Time       `json:"merged_at"`
+	BranchInfo      *PRBranchInfo   `json:"branch_info,omitempty"`
+	CloseReason     string          `json:"close_reason,omitempty"`
+	Body            string          `json:"body,omitempty"`
+	LinesAdded      int             `json:"lines_added"`
+	LinesDeleted    int             `json:"lines_deleted"`
+	SecurityBlocked bool            `json:"security_blocked,omitempty"`
+	SecurityAlerts  []SecurityAlert `json:"security_alerts,omitempty"`
 }
 
 type PREvent struct {
@@ -200,6 +239,8 @@ type QueueItem struct {
 	Space             string        `json:"space,omitempty"`
 	Priority          int           `json:"priority,omitempty"`
 	NotifyOnComplete  bool          `json:"notify_on_complete,omitempty"`
+	SecurityBlocked   bool          `json:"security_blocked,omitempty"`
+	SecurityOverride  string        `json:"security_override,omitempty"`
 }
 
 type MergeCriteria struct {
@@ -237,13 +278,14 @@ type SyncRecord struct {
 }
 
 type MergeQueueConfig struct {
-	RequiredApprovals         int      `json:"required_approvals" toml:"required_approvals"`
-	CICheckRequired           bool     `json:"ci_check_required" toml:"ci_check_required"`
-	CoreContributors          []string `json:"core_contributors" toml:"core_contributors"`
-	CIProvider                string   `json:"ci_provider" toml:"ci_provider"`
-	FastForwardOnly           bool     `json:"fast_forward_only" toml:"fast_forward_only"`
-	Expression                string   `json:"expression" toml:"expression"`
-	AllowExpressionOverrideCI bool     `json:"allow_expression_override_ci" toml:"allow_expression_override_ci"`
+	RequiredApprovals         int                `json:"required_approvals" toml:"required_approvals"`
+	CICheckRequired           bool               `json:"ci_check_required" toml:"ci_check_required"`
+	CoreContributors          []string           `json:"core_contributors" toml:"core_contributors"`
+	CIProvider                string             `json:"ci_provider" toml:"ci_provider"`
+	FastForwardOnly           bool               `json:"fast_forward_only" toml:"fast_forward_only"`
+	Expression                string             `json:"expression" toml:"expression"`
+	AllowExpressionOverrideCI bool               `json:"allow_expression_override_ci" toml:"allow_expression_override_ci"`
+	SecurityScan              SecurityScanConfig `json:"security_scan" toml:"security_scan"`
 }
 
 type WebhookRetry struct {
@@ -414,6 +456,8 @@ type Config struct {
 	MultiTenant        MultiTenantConfig  `toml:"multi_tenant" json:"multi_tenant"`
 	Deployment         DeploymentConfig   `toml:"deployment" json:"deployment"`
 	ReviewerLoad       ReviewerLoadConfig `toml:"reviewer_load" json:"reviewer_load"`
+	Hooks              []HooksConfig      `toml:"hooks" json:"hooks,omitempty"`
+	AISummary          AISummaryConfig    `toml:"ai_summary" json:"ai_summary,omitempty"`
 }
 
 type ScheduleConfig struct {

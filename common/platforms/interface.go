@@ -78,4 +78,10 @@ type PlatformClient interface {
 
 	// GetFileContent returns the content of a file in a repository
 	GetFileContent(ctx context.Context, owner, repo, path string) (string, error)
+
+	// Security alerts
+	HasSecurityAlerts(ctx context.Context, owner, repo string, number int) ([]models.SecurityAlert, error)
+
+	// PR comments
+	ListPRComments(ctx context.Context, owner, repo string, number int) ([]models.PRComment, error)
 }

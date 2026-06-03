@@ -4,12 +4,58 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"asika/common/config"
+	"asika/common/hooks"
 	"asika/common/models"
 	"asika/common/platforms"
 )
+
+var (
+	hooksDispatcherMu sync.RWMutex
+	hooksDispatcher   *hooks.Dispatcher
+)
+
+func setHooksDispatcher(d *hooks.Dispatcher) {
+	hooksDispatcherMu.Lock()
+	defer hooksDispatcherMu.Unlock()
+	hooksDispatcher = d
+}
+
+func reloadHooks(cfg *models.Config) {
+	hooksDispatcherMu.Lock()
+	defer hooksDispatcherMu.Unlock()
+	if hooksDispatcher != nil {
+		hooksDispatcher.Stop()
+		hooksDispatcher = nil
+	}
+	if len(cfg.Hooks) > 0 {
+		hookList := make([]hooks.Hook, len(cfg.Hooks))
+		for i, h := range cfg.Hooks {
+			hookList[i] = hooks.Hook{
+				Events: h.Events,
+				URL:    h.URL,
+				Secret: h.Secret,
+			}
+			if h.Filter != nil {
+				hookList[i].Filter = &hooks.FilterConfig{
+					RepoGroups: h.Filter.RepoGroups,
+					Platforms:  h.Filter.Platforms,
+				}
+			}
+			if h.Retry != nil {
+				hookList[i].Retry = &hooks.RetryConfig{
+					MaxAttempts: h.Retry.MaxAttempts,
+					Backoff:     h.Retry.Backoff,
+				}
+			}
+		}
+		hooksDispatcher = hooks.NewDispatcher(hookList)
+		hooksDispatcher.Start()
+	}
+}
 
 // SetupConfigReload sets up SIGHUP signal handler for hot config reload.
 func SetupConfigReload() {
@@ -25,6 +71,7 @@ func SetupConfigReload() {
 				continue
 			}
 			config.Store(cfg)
+			reloadHooks(cfg)
 			slog.Info("config reloaded successfully")
 		}
 	}()
@@ -40,5 +87,6 @@ func ReloadConfigAfterUpdate(cfg *models.Config, clients map[platforms.PlatformT
 	}
 	config.Store(loadedCfg)
 	InitNotifiers(loadedCfg, clients)
+	reloadHooks(loadedCfg)
 	slog.Info("config reloaded after update")
 }
