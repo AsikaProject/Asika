@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,8 @@ import (
 	"asika/common/llm"
 	"asika/common/models"
 )
+
+var formatSpecRE = regexp.MustCompile(`%[+#\- 0]?(?:\*|\d+)?(?:\.(?:\*|\d+))?[bcdeEfFgGhHosuxX%]`)
 
 var knownSummaryPrefixes = []string{
 	"## AI Summary",
@@ -223,11 +226,11 @@ func generateSummary(cfg *models.AISummaryConfig, pr *models.PRRecord, diffFiles
 	for _, df := range diffFiles {
 		part := fmt.Sprintf("File: %s (%s, +%d/-%d)\n", df.Filename, df.Status, df.Additions, df.Deletions)
 		if df.Patch != "" {
-			patchLen := len(df.Patch)
-			if patchLen > 500 {
-				patchLen = 500
+			runes := []rune(df.Patch)
+			if len(runes) > 500 {
+				runes = runes[:500]
 			}
-			part += fmt.Sprintf("```diff\n%s\n```\n", df.Patch[:patchLen])
+			part += fmt.Sprintf("```diff\n%s\n```\n", string(runes))
 		}
 		if totalLen+len(part) > maxLen {
 			break
@@ -250,8 +253,9 @@ func generateSummary(cfg *models.AISummaryConfig, pr *models.PRRecord, diffFiles
 
 	promptBody := ""
 	if body != "" {
-		if len(body) > 500 {
-			promptBody = body[:500] + "..."
+		runes := []rune(body)
+		if len(runes) > 500 {
+			promptBody = string(runes[:500]) + "..."
 		} else {
 			promptBody = body
 		}
@@ -271,7 +275,11 @@ Keep the summary under 300 words. Use markdown formatting.`
 	if cfg.UserPrompt != "" {
 		userTemplate = cfg.UserPrompt
 	}
-	userPrompt := fmt.Sprintf(userTemplate, pr.Title, promptBody, strings.Join(diffParts, ""), commitSummary)
+	args := []any{pr.Title, promptBody, strings.Join(diffParts, ""), commitSummary}
+	if err := validateTemplate(userTemplate, len(args)); err != nil {
+		return "", fmt.Errorf("invalid user prompt template: %w", err)
+	}
+	userPrompt := fmt.Sprintf(userTemplate, args...)
 
 	result, err := llmClient.Chat(systemPrompt, userPrompt)
 	if err != nil {
@@ -279,6 +287,21 @@ Keep the summary under 300 words. Use markdown formatting.`
 	}
 
 	return result, nil
+}
+
+func validateTemplate(template string, expectedArgs int) error {
+	specs := formatSpecRE.FindAllString(template, -1)
+	count := 0
+	for _, s := range specs {
+		if s == "%%" {
+			continue
+		}
+		count++
+	}
+	if count != expectedArgs {
+		return fmt.Errorf("template has %d format verbs but %d args provided", count, expectedArgs)
+	}
+	return nil
 }
 
 func dbGetPR(repoGroup, prID string) (*models.PRRecord, error) {

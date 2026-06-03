@@ -75,6 +75,9 @@ func TestHookMatches(t *testing.T) {
 }
 
 func TestHookFire(t *testing.T) {
+	blockInternalURLs = false
+	defer func() { blockInternalURLs = true }()
+
 	var receivedBody []byte
 	var receivedSig string
 
@@ -159,6 +162,9 @@ func TestDispatcherStartStop(t *testing.T) {
 }
 
 func TestHookFireNoSecret(t *testing.T) {
+	blockInternalURLs = false
+	defer func() { blockInternalURLs = true }()
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

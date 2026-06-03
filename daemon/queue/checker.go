@@ -784,8 +784,8 @@ func (c *Checker) checkSecurity(ctx context.Context, pr *models.PRRecord, group 
 
 	alerts, err := client.HasSecurityAlerts(ctx, owner, repo, pr.PRNumber)
 	if err != nil {
-		slog.Warn("security check failed", "error", err, "pr_id", pr.ID)
-		return true, nil
+		slog.Error("security check failed, blocking PR", "error", err, "pr_id", pr.ID)
+		return false, &TransientError{Err: err}
 	}
 
 	if len(alerts) > 0 {
@@ -837,9 +837,13 @@ func matchSinglePattern(pattern, file string) bool {
 		}
 		singlePatternCache.Lock()
 		if len(compiledSinglePatterns) > 1000 {
+			keys := make([]string, 0, len(compiledSinglePatterns))
 			for k := range compiledSinglePatterns {
+				keys = append(keys, k)
+			}
+			half := len(keys) / 2
+			for _, k := range keys[:half] {
 				delete(compiledSinglePatterns, k)
-				break
 			}
 		}
 		compiledSinglePatterns[pattern] = re

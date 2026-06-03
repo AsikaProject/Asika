@@ -2,13 +2,17 @@ package hooks
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
+	"sync"
 	"time"
 
 	"asika/common/events"
@@ -19,6 +23,53 @@ const (
 	hookRequestTimeout  = 10 * time.Second
 	hookSignatureHeader = "X-Asika-Hook-Signature"
 )
+
+var (
+	blockInternalURLs = true
+	blockedNetworks   = []*net.IPNet{
+		mustParseCIDR("127.0.0.0/8"),
+		mustParseCIDR("10.0.0.0/8"),
+		mustParseCIDR("172.16.0.0/12"),
+		mustParseCIDR("192.168.0.0/16"),
+		mustParseCIDR("169.254.0.0/16"),
+		mustParseCIDR("::1/128"),
+		mustParseCIDR("fc00::/7"),
+	}
+)
+
+func mustParseCIDR(s string) *net.IPNet {
+	_, n, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
+func isBlockedURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return true
+	}
+	host := u.Hostname()
+	if host == "" {
+		return true
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	resolver := &net.Resolver{}
+	addrs, err := resolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return true
+	}
+	for _, addr := range addrs {
+		for _, n := range blockedNetworks {
+			if n.Contains(addr.IP) {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 type Hook struct {
 	Events []string      `toml:"events" json:"events"`
@@ -31,6 +82,19 @@ type Hook struct {
 type RetryConfig struct {
 	MaxAttempts int    `toml:"max_attempts" json:"max_attempts"`
 	Backoff     string `toml:"backoff" json:"backoff"`
+}
+
+func (r *RetryConfig) backoffDuration(attempt int) time.Duration {
+	if attempt > 30 {
+		attempt = 30
+	}
+	base := time.Second
+	if r != nil && r.Backoff != "" {
+		if d, err := time.ParseDuration(r.Backoff); err == nil {
+			base = d
+		}
+	}
+	return base << uint(attempt)
 }
 
 type FilterConfig struct {
@@ -118,6 +182,11 @@ func (h *Hook) matches(event events.Event) bool {
 }
 
 func (h *Hook) fire(client *http.Client, event events.Event) {
+	if blockInternalURLs && isBlockedURL(h.URL) {
+		slog.Warn("hooks: blocked internal URL", "url", h.URL)
+		return
+	}
+
 	payload := HookPayload{
 		Event:     event.Type,
 		RepoGroup: event.RepoGroup,
@@ -133,39 +202,58 @@ func (h *Hook) fire(client *http.Client, event events.Event) {
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodPost, h.URL, bytes.NewReader(data))
-	if err != nil {
-		slog.Error("hooks: failed to create request", "url", h.URL, "error", err)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	if h.Secret != "" {
-		sign := hmac.New(sha256.New, []byte(h.Secret))
-		sign.Write(data)
-		req.Header.Set(hookSignatureHeader, "sha256="+hex.EncodeToString(sign.Sum(nil)))
+	maxAttempts := 1
+	if h.Retry != nil && h.Retry.MaxAttempts > 0 {
+		maxAttempts = h.Retry.MaxAttempts
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		slog.Error("hooks: request failed", "url", h.URL, "error", err)
-		return
-	}
-	resp.Body.Close()
+	var resp *http.Response
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			dur := h.Retry.backoffDuration(attempt - 1)
+			slog.Info("hooks: retrying", "url", h.URL, "attempt", attempt+1, "backoff", dur)
+			time.Sleep(dur)
+		}
 
-	if resp.StatusCode >= 400 {
-		slog.Warn("hooks: non-2xx response", "url", h.URL, "status", resp.StatusCode)
-		return
+		req, err := http.NewRequest(http.MethodPost, h.URL, bytes.NewReader(data))
+		if err != nil {
+			slog.Error("hooks: failed to create request", "url", h.URL, "error", err)
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		if h.Secret != "" {
+			sign := hmac.New(sha256.New, []byte(h.Secret))
+			sign.Write(data)
+			req.Header.Set(hookSignatureHeader, "sha256="+hex.EncodeToString(sign.Sum(nil)))
+		}
+
+		resp, err = client.Do(req)
+		if err != nil {
+			slog.Warn("hooks: request failed", "url", h.URL, "error", err, "attempt", attempt+1)
+			continue
+		}
+
+		if resp.StatusCode < 400 {
+			resp.Body.Close()
+			slog.Debug("hooks: dispatched", "url", h.URL, "event", event.Type)
+			return
+		}
+
+		slog.Warn("hooks: non-2xx response", "url", h.URL, "status", resp.StatusCode, "attempt", attempt+1)
+		resp.Body.Close()
 	}
 
-	slog.Debug("hooks: dispatched", "url", h.URL, "event", event.Type)
+	slog.Error("hooks: all attempts failed", "url", h.URL, "max_attempts", maxAttempts)
 }
 
 type Dispatcher struct {
-	hooks  []Hook
-	ch     <-chan events.Event
-	client *http.Client
-	stopCh chan struct{}
+	hooks   []Hook
+	ch      <-chan events.Event
+	client  *http.Client
+	stopCh  chan struct{}
+	mu      sync.Mutex
+	started bool
 }
 
 func NewDispatcher(hooks []Hook) *Dispatcher {
@@ -179,29 +267,26 @@ func NewDispatcher(hooks []Hook) *Dispatcher {
 }
 
 func (d *Dispatcher) Start() {
+	d.mu.Lock()
+	if d.started {
+		d.mu.Unlock()
+		return
+	}
+	d.started = true
+	d.mu.Unlock()
+
 	d.ch = events.Subscribe()
-	go func() {
-		for {
-			select {
-			case event, ok := <-d.ch:
-				if !ok {
-					return
-				}
-				for i := range d.hooks {
-					hook := &d.hooks[i]
-					if hook.matches(event) {
-						go hook.fire(d.client, event)
-					}
-				}
-			case <-d.stopCh:
-				return
-			}
-		}
-	}()
+	go d.runLoop()
 	slog.Info("hooks dispatcher started", "count", len(d.hooks))
 }
 
 func (d *Dispatcher) Stop() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.started {
+		return
+	}
+	d.started = false
 	close(d.stopCh)
 	if d.ch != nil {
 		events.Unsubscribe(d.ch)
@@ -209,16 +294,59 @@ func (d *Dispatcher) Stop() {
 }
 
 func (d *Dispatcher) Reload(hooks []Hook) {
-	d.Stop()
+	d.mu.Lock()
 	d.hooks = hooks
-	d.stopCh = make(chan struct{})
-	d.Start()
+	if d.started {
+		close(d.stopCh)
+		if d.ch != nil {
+			events.Unsubscribe(d.ch)
+		}
+		d.stopCh = make(chan struct{})
+		d.ch = events.Subscribe()
+		d.mu.Unlock()
+		go d.runLoop()
+	} else {
+		d.stopCh = make(chan struct{})
+		d.started = true
+		d.mu.Unlock()
+		d.ch = events.Subscribe()
+		go d.runLoop()
+	}
+}
+
+func (d *Dispatcher) runLoop() {
+	for {
+		select {
+		case event, ok := <-d.ch:
+			if !ok {
+				return
+			}
+			d.mu.Lock()
+			hooks := d.hooks
+			d.mu.Unlock()
+			for i := range hooks {
+				hook := &hooks[i]
+				if hook.matches(event) {
+					go hook.fire(d.client, event)
+				}
+			}
+		case <-d.stopCh:
+			return
+		}
+	}
 }
 
 func (d *Dispatcher) FireForTest(event events.Event) error {
-	for i := range d.hooks {
-		hook := &d.hooks[i]
+	d.mu.Lock()
+	hooks := d.hooks
+	d.mu.Unlock()
+
+	for i := range hooks {
+		hook := &hooks[i]
 		if hook.matches(event) {
+			if blockInternalURLs && isBlockedURL(hook.URL) {
+				return fmt.Errorf("blocked internal URL: %s", hook.URL)
+			}
 			payload := HookPayload{
 				Event:     event.Type,
 				RepoGroup: event.RepoGroup,

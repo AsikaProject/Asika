@@ -11,6 +11,7 @@ import (
 
 const (
 	defaultRequestTimeout = 60 * time.Second
+	maxResponseSize       = 1 << 20
 )
 
 type Config struct {
@@ -92,7 +93,7 @@ func (c *Client) Chat(system, user string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize))
 	if err != nil {
 		return "", fmt.Errorf("llm read: %w", err)
 	}

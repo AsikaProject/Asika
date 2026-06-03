@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -647,64 +648,18 @@ func (c *GitHubClient) HasWritePermission(ctx context.Context, owner, repo, user
 func (c *GitHubClient) HasSecurityAlerts(ctx context.Context, owner, repo string, number int) ([]models.SecurityAlert, error) {
 	var alerts []models.SecurityAlert
 
-	dependabotOpts := &github.ListAlertsOptions{
-		State:       github.String("open"),
-		ListOptions: github.ListOptions{PerPage: 100},
+	pr, _, err := c.client.PullRequests.Get(ctx, owner, repo, number)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR for security check: %w", err)
 	}
-	for {
-		dAlerts, resp, err := c.client.Dependabot.ListRepoAlerts(ctx, owner, repo, dependabotOpts)
-		if err != nil {
-			break
-		}
-		for _, a := range dAlerts {
-			severity := "unknown"
-			if a.SecurityAdvisory != nil && a.SecurityAdvisory.Severity != nil {
-				severity = *a.SecurityAdvisory.Severity
-			}
-			title := ""
-			if a.SecurityAdvisory != nil && a.SecurityAdvisory.Summary != nil {
-				title = *a.SecurityAdvisory.Summary
-			}
-			url := a.GetHTMLURL()
-			alerts = append(alerts, models.SecurityAlert{
-				Type:     "dependabot",
-				Title:    title,
-				Severity: severity,
-				URL:      url,
-			})
-		}
-		if resp.NextPage == 0 {
-			break
-		}
-		dependabotOpts.ListOptions.Page = resp.NextPage
-	}
-
-	secretOpts := &github.SecretScanningAlertListOptions{
-		State: "open",
-	}
-	for {
-		sAlerts, resp, err := c.client.SecretScanning.ListAlertsForRepo(ctx, owner, repo, secretOpts)
-		if err != nil {
-			break
-		}
-		for _, a := range sAlerts {
-			severity := "high"
-			title := fmt.Sprintf("Secret: %s", a.GetSecretTypeDisplayName())
-			alerts = append(alerts, models.SecurityAlert{
-				Type:     "secret_scanning",
-				Title:    title,
-				Severity: severity,
-				URL:      a.GetHTMLURL(),
-			})
-		}
-		if resp.NextPageToken == "" {
-			break
-		}
-		secretOpts.ListCursorOptions.Page = resp.NextPageToken
+	headRef := ""
+	if pr.GetHead() != nil {
+		headRef = pr.GetHead().GetRef()
 	}
 
 	codeOpts := &github.AlertListOptions{
 		State: "open",
+		Ref:   "refs/heads/" + headRef,
 	}
 	for {
 		cAlerts, resp, err := c.client.CodeScanning.ListAlertsForRepo(ctx, owner, repo, codeOpts)
@@ -733,6 +688,65 @@ func (c *GitHubClient) HasSecurityAlerts(ctx context.Context, owner, repo string
 		codeOpts.ListCursorOptions.Page = resp.NextPageToken
 	}
 
+	dependabotOpts := &github.ListAlertsOptions{
+		State:       github.String("open"),
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
+	var prFiles []*github.CommitFile
+	fileOpts := &github.ListOptions{PerPage: 100}
+	for {
+		page, resp, err := c.client.PullRequests.ListFiles(ctx, owner, repo, number, fileOpts)
+		if err != nil {
+			slog.Warn("failed to list PR files for dependabot filter, including all alerts", "error", err, "pr_id", number)
+			break
+		}
+		prFiles = append(prFiles, page...)
+		if resp.NextPage == 0 {
+			break
+		}
+		fileOpts.Page = resp.NextPage
+	}
+	changedFiles := make(map[string]bool)
+	for _, f := range prFiles {
+		changedFiles[f.GetFilename()] = true
+	}
+	if len(changedFiles) == 0 {
+		changedFiles = nil
+	}
+	for {
+		dAlerts, resp, err := c.client.Dependabot.ListRepoAlerts(ctx, owner, repo, dependabotOpts)
+		if err != nil {
+			break
+		}
+		for _, a := range dAlerts {
+			manifest := ""
+			if a.Dependency != nil {
+				manifest = a.Dependency.GetManifestPath()
+			}
+			if changedFiles != nil && manifest != "" && !changedFiles[manifest] {
+				continue
+			}
+			severity := "unknown"
+			if a.SecurityAdvisory != nil && a.SecurityAdvisory.Severity != nil {
+				severity = *a.SecurityAdvisory.Severity
+			}
+			title := ""
+			if a.SecurityAdvisory != nil && a.SecurityAdvisory.Summary != nil {
+				title = *a.SecurityAdvisory.Summary
+			}
+			alerts = append(alerts, models.SecurityAlert{
+				Type:     "dependabot",
+				Title:    title,
+				Severity: severity,
+				URL:      a.GetHTMLURL(),
+			})
+		}
+		if resp.NextPage == 0 {
+			break
+		}
+		dependabotOpts.ListOptions.Page = resp.NextPage
+	}
+
 	return alerts, nil
 }
 
@@ -751,7 +765,7 @@ func (c *GitHubClient) ListPRComments(ctx context.Context, owner, repo string, n
 			if ic.User != nil {
 				author = ic.User.GetLogin()
 			}
-			isBot := ic.GetAuthorAssociation() == "NONE" || (ic.User != nil && (ic.User.GetType() == "Bot" || strings.Contains(ic.User.GetLogin(), "[bot]")))
+			isBot := ic.User != nil && (ic.User.GetType() == "Bot" || strings.Contains(ic.User.GetLogin(), "[bot]"))
 			comments = append(comments, models.PRComment{
 				ID:        fmt.Sprintf("%d", ic.GetID()),
 				Author:    author,
