@@ -1,6 +1,6 @@
 # ChangeLog for Asika
 
-## v20260611DEV
+## v20260517DEV > v20260617DEV
 
 - **Feature**: Add merge queue priority scheduling. Queue items now support priority field (0-100) and are sorted by priority (high→low) then by time. Add `PUT /api/v1/queue/:repo_group/:pr_id/priority` endpoint and `asika queue priority` CLI command.
 - **Feature**: Add batch operations for PRs. Implement batch merge via `POST /api/v1/repos/:repo_group/prs/batch-merge` and batch cherry-pick stub via `POST /api/v1/repos/:repo_group/prs/batch-cherrypick`. Add CLI commands: `asika pr batch-merge` and `asika pr batch-cherrypick`.
@@ -17,9 +17,6 @@
 - **Enhancement**: Add `Priority` field to `QueueItem` model for priority-based queue management.
 - **Enhancement**: Add `GerritChangeID` field to `PRRecord` model for Gerrit integration.
 - **Enhancement**: Implement `selectMergeMethod` function in queue manager with rule matching logic (labels first, then patterns, then default).
-
-## v20260603DEV
-
 - **Feature**: Add outbound webhook system (`common/hooks/`). HookDispatcher subscribes to the event bus and fires HMAC-SHA256 signed HTTP POST to configured endpoints with per-hook event/repo_group/platform filtering, retry with exponential backoff, and graceful shutdown.
 - **Feature**: Add security scan integration. Merge queue blocks PRs when platform reports security vulnerabilities (GitHub: Dependabot + SecretScanning + CodeScanning; GitLab: ProjectVulnerabilities). Admin/operator can override per-queue-item via API.
 - **Feature**: Add AI-powered PR summary. Handler detects existing bot summaries in PR comments, optionally generates new summary via OpenAI-compatible LLM API, and posts as comment. Supported across all platforms via `ListPRComments` interface method.
@@ -27,9 +24,6 @@
 - **Feature**: Add `LLM` client package (`common/llm/`) — pure `net/http` OpenAI-compatible chat client with no external SDK dependency.
 - **Feature**: Add config sections: `[[hooks]]` for outbound webhooks, `[merge_queue.security_scan]` for vulnerability checks, `[ai_summary]` for LLM summary generation.
 - **Feature**: Add new route `GET /:pr_id/summary` for AI-powered PR summarization.
-
-## v20260527DEV
-
 - **Feature**: Add reviewer load balancing with activity-based filtering. Reviewers inactive for more than `active_days` (default 14) are excluded from assignment. Load-balanced selection assigns reviewers with lowest pending count first.
 - **Feature**: Add WebAuthn/Passkey login support. Users can register passkeys via `POST /api/v1/auth/passkey/register/begin` and `POST /api/v1/auth/passkey/register/finish`, and login via `POST /api/v1/auth/passkey/login/begin` and `POST /api/v1/auth/passkey/login/finish`.
 - **Feature**: Enhance PR detail page with color-coded activity events. Events now show icons and colors: approved (green), changes_requested (red), closed (gray), merged (purple), queued (blue), dequeued (yellow).
@@ -41,17 +35,11 @@
 - **Feature**: Add passkey configuration: `[auth]` section with `passkey_enabled`, `passkey_rp_id`, `passkey_rp_name`, `passkey_rp_origin` options.
 - **Fix**: Fix `pathEscapeSegments` function name case in platforms test.
 - **Refactor**: Unify variable naming inconsistencies across codebase. Standardize `AppendAuditLogEx` API, `respBody` for HTTP responses, `args` for command parameters, `userID` for user identifiers, `commonutil` import alias, `hookpath` in error messages, `stopOnce` for safe shutdown, and Feishu `NewBot` constructor signature.
-
-## v20260526DEV
-
 - **Feature**: Add email-based password reset flow. Users can request a reset link via `POST /api/v1/auth/forgot-password`, receive a time-limited single-use token via email (using existing SMTP notifier), and set a new password via `POST /api/v1/auth/reset-password`.
 - **Feature**: Add `Email` field to User model. Configurable during wizard initialization, via admin user management API, or self-service in account settings page.
 - **Feature**: Add `password_reset_tokens` database bucket for secure token storage (SHA256-hashed keys, 15-min TTL, single-use).
 - **Feature**: Add `GET /reset-password` page for setting new password after token verification.
-- **Fix**: Fix merged PRs showing "Reopen" instead of "Revert" in closed PR list. When filtering by "closed" state, merged PRs (stored with `State == "closed"` but non-zero `MergedAt`) now correctly display "Revert" button. Added `MergedAt` safety checks to all reopen handlers (WebUI + all IM bots) to prevent reopening merged PRs.
-
-## v20260525DEV
-
+- **Fix**: Fix merged PRs showing "Reopen" instead of "Revert" in closed PR list. When filtering by "closed" state, merged PRs (stored with `State == "closed"` but non-zero `MergedAt`) now correctly display "Revert" button. Added `MergedAt` safety checks to all reopen handlers (WebUI + all IM bots) to prevent reopening merged PRs
 - **Feature**: Add file-path-based approval rules (`approval_rules`). When PR changes files matching a pattern, specified approvers must approve before merge.
 - **Feature**: Add PR size warnings and merge blocking (`pr_size_limits`). Configurable thresholds for lines changed and file count, with auto-labeling and optional merge blocking.
 - **Feature**: Add PR description template enforcement (`pr_template`). Require non-empty PR body and completed checklist before allowing merge.
@@ -65,9 +53,6 @@
 - **Feature**: Add `POST /api/v1/repos/:repo_group/prs/:pr_id/ready` endpoint to mark draft PRs as ready for review.
 - **Feature**: Add `LinesAdded` and `LinesDeleted` fields to PRRecord for size tracking.
 - **Refactor**: Enable webhook event filtering in example config (was previously commented out).
-
-## v20260524DEV
-
 - **Security**: `GenerateFingerprintID()` used predictable `time.Now()` timestamps. Now uses `crypto/rand` for cryptographically secure IDs.
 - **Security**: CSRF tokens accepted via URL query parameter, exposing them in server logs and browser history. Now only accepts via `X-CSRF-Token` header or POST form body.
 - **Security**: OIDC `ClientSecret` returned plaintext in `GET /api/v1/config` response. Now masked like other secrets.
@@ -77,8 +62,6 @@
 - **Bugfix**: Consumer event loop goroutine exited before completing, causing race conditions on restart. Now waits for goroutine to finish via `WaitGroup`.
 - **Bugfix**: Session activity updates happened on every request instead of being throttled to once per minute. Now uses module-level cache with periodic cleanup.
 - **Bugfix**: Missing `defer recover()` in `handleSpamDetected`, `handlePRReopened`, and `handleBranchDeleted` goroutines could crash the process on panic. Now all goroutines have panic recovery.
-
-## v20260523DEV
 
 ### Security Fixes
 
@@ -182,12 +165,7 @@
 - **Feature**: Queue priority sorting. `QueueItem.Priority` field (already in model) is now used — items are sorted by priority (higher first) before processing in `CheckQueue`.
 - **Feature**: Stale exclude authors. New `exclude_authors` field in `[stale]` config prevents specific authors (e.g. bots) from being marked stale.
 - **Feature**: Bitbucket full webhook support. Bitbucket webhooks now parse PR created/merged/closed/declined events in addition to comment events.
-
-## v20260617DEV > v20260621DEV
-
-### Security Fixes
-
-- **Security**: Telegram/Slack/Discord bots returned `admin=true` for any user when allowlists were empty. Now defaults to reject-all with warning log, consistent with Feishu.
+- **Security**: Telegram/Slack/Discord bots returned `admin=true` for any user when allowlists were empty. Now defaults to reject-all with warning log, consistent with Feish
 - **Security**: Feishu event handler skipped token verification on malformed JSON. Now returns 400 on parse failure.
 - **Security**: API key HMAC used hardcoded secret `"asika-apikey-hmac-v1"`. Now uses JWT secret from config.
 - **Security**: Config hot-reload wrote unencrypted tokens to disk. Now uses `SaveToFile` with encryption.
@@ -259,8 +237,6 @@
 - **Refactor**: Updated `pr_index_by_id` bucket key format from `{prID}` to `{repoGroup}:{prID}`.
 - **Refactor**: Config snapshots now store `{config, created_at}` wrapper for accurate timestamps.
 - **Refactor**: Bot `isAdmin()` in Telegram/Slack/Discord now defaults to reject-all (was allow-all).
-
-## v20260517DEV > v20260617DEV
 
 ### UX Improvements
 
