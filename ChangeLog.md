@@ -7,8 +7,15 @@
 - **Feature**: Add checklist progress API. New `GET /api/v1/repos/:repo_group/prs/:pr_id/checklist` endpoint returns detailed item list with checked/unchecked status and progress statistics.
 - **Feature**: Add MarkDraft handler. New `POST /api/v1/repos/:repo_group/prs/:pr_id/draft` endpoint marks PRs as work-in-progress. Complements existing MarkReady endpoint for draft workflow.
 - **Feature**: Add custom merge strategy rules. Configure label-based or pattern-based rules to automatically select merge method (merge/squash/rebase). Rules support priority ordering and fallback to default method.
+- **Feature**: Add Gerrit Change-ID bidirectional mapping. New `GET /api/v1/gerrit/change/:change_id` endpoint finds PRs by Gerrit Change-ID with case-insensitive search.
+- **Feature**: Add PR dependency graph visualization. New `GET /api/v1/repos/:repo_group/prs/:pr_id/dependency-graph` endpoint generates Mermaid syntax for dependency visualization.
+- **Feature**: Add webhook event filtering framework. Implement `ShouldProcessEvent` function with support for event type, branch pattern (regex), and bot PR filtering.
+- **Feature**: Add auto-labeling system. New `POST /api/v1/repos/:repo_group/prs/:pr_id/auto-label` endpoint automatically adds size (XS/S/M/L/XL), language (lang/*), type (docs/config), and risk (risk/high) labels based on PR content.
+- **Feature**: Add CI/CD integration framework. New `POST /api/v1/repos/:repo_group/prs/:pr_id/trigger-ci` endpoint provides platform-agnostic CI trigger interface.
+- **Feature**: Add multi-language support for WebUI. Add Japanese (ja.json) and Korean (ko.json) translation files with 40+ UI terms. Existing English and Chinese translations already present.
 - **Enhancement**: Add `MergeStrategyRule` model with pattern/labels/priority fields to `MergeQueueConfig`. Add `DefaultMergeMethod` config option for fallback merge method.
 - **Enhancement**: Add `Priority` field to `QueueItem` model for priority-based queue management.
+- **Enhancement**: Add `GerritChangeID` field to `PRRecord` model for Gerrit integration.
 - **Enhancement**: Implement `selectMergeMethod` function in queue manager with rule matching logic (labels first, then patterns, then default).
 
 ## v20260603DEV
