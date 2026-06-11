@@ -221,6 +221,60 @@ func doRequest(method, url string, cmd *cobra.Command) *http.Response {
 	return resp
 }
 
+var prBatchMergeCmd = &cobra.Command{
+	Use:   "batch-merge <repo_group> <pr_id1,pr_id2,...>",
+	Short: "Batch merge multiple PRs",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		method, _ := cmd.Flags().GetString("method")
+		prIDs := strings.Split(args[1], ",")
+		body := map[string]interface{}{
+			"pr_ids": prIDs,
+			"method": method,
+		}
+		bodyBytes, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST",
+			fmt.Sprintf("%s/api/v1/repos/%s/prs/batch-merge", GetServer(cmd), args[0]),
+			bytes.NewBuffer(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+		token := GetToken(cmd)
+		if token != "" {
+			setAuthHeader(req, token)
+		}
+		resp, _ := http.DefaultClient.Do(req)
+		handleWriteResponse(resp, "Batch merge completed")
+	},
+}
+
+var prBatchCherryPickCmd = &cobra.Command{
+	Use:   "batch-cherrypick <repo_group> <pr_id1,pr_id2,...> --branch <target>",
+	Short: "Batch cherry-pick multiple PRs to a target branch",
+	Args:  cobra.ExactArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		branch, _ := cmd.Flags().GetString("branch")
+		if branch == "" {
+			fmt.Fprintln(os.Stderr, "Error: --branch is required")
+			return
+		}
+		prIDs := strings.Split(args[1], ",")
+		body := map[string]interface{}{
+			"pr_ids":        prIDs,
+			"target_branch": branch,
+		}
+		bodyBytes, _ := json.Marshal(body)
+		req, _ := http.NewRequest("POST",
+			fmt.Sprintf("%s/api/v1/repos/%s/prs/batch-cherrypick", GetServer(cmd), args[0]),
+			bytes.NewBuffer(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+		token := GetToken(cmd)
+		if token != "" {
+			setAuthHeader(req, token)
+		}
+		resp, _ := http.DefaultClient.Do(req)
+		handleWriteResponse(resp, "Batch cherry-pick completed")
+	},
+}
+
 func init() {
 	prCmd.AddCommand(prListCmd)
 	prCmd.AddCommand(prShowCmd)
@@ -233,6 +287,8 @@ func init() {
 	prCmd.AddCommand(prBatchCloseCmd)
 	prCmd.AddCommand(prBatchLabelCmd)
 	prCmd.AddCommand(prRevertCmd)
+	prCmd.AddCommand(prBatchMergeCmd)
+	prCmd.AddCommand(prBatchCherryPickCmd)
 
 	prListCmd.Flags().String("state", "", "Filter by state")
 	prListCmd.Flags().String("platform", "", "Filter by platform")
@@ -242,6 +298,8 @@ func init() {
 	prSpamCmd.Flags().Bool("undo", false, "Remove spam mark")
 	prBatchLabelCmd.Flags().String("label", "", "Label to add (required)")
 	prBatchLabelCmd.Flags().String("color", "", "Label color (optional)")
+	prBatchMergeCmd.Flags().String("method", "merge", "Merge method (merge, squash, rebase)")
+	prBatchCherryPickCmd.Flags().String("branch", "", "Target branch for cherry-pick (required)")
 
 	RootCmd.AddCommand(prCmd)
 }

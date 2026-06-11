@@ -131,6 +131,8 @@ func (s *Server) setupRoutes() {
 				prsMerge.POST("/:pr_id/cherry-pick", handlers.CherryPickSinglePR)
 				prsMerge.POST("/:pr_id/schedule-merge", handlers.ScheduleMerge)
 				prsMerge.POST("/batch/rebase", handlers.BatchRebasePR)
+				prsMerge.POST("/batch-merge", handlers.BatchMergePR)
+				prsMerge.POST("/batch-cherrypick", handlers.BatchCherryPickPR)
 			}
 
 			prsRevert := prs.Group("")
@@ -164,6 +166,7 @@ func (s *Server) setupRoutes() {
 			prsReady.Use(RequirePermission("approve"))
 			{
 				prsReady.POST("/:pr_id/ready", handlers.MarkReady)
+				prsReady.POST("/:pr_id/draft", handlers.MarkDraft)
 			}
 		}
 
@@ -181,6 +184,7 @@ func (s *Server) setupRoutes() {
 				queueWrite.POST("/rebase", handlers.RebaseQueue)
 				queueWrite.DELETE("", handlers.ClearQueue)
 				queueWrite.DELETE("/:pr_id", handlers.RemoveFromQueue)
+				queueWrite.PUT("/:pr_id/priority", handlers.SetQueuePriority)
 			}
 		}
 
@@ -303,6 +307,7 @@ func (s *Server) setupRoutes() {
 			prTemplates.GET("/template", handlers.GetPRTemplate)
 			prTemplates.POST("/template/fetch", handlers.FetchTemplate)
 			prTemplates.POST("/prs/:pr_id/checklist", handlers.CheckChecklist)
+			prTemplates.GET("/prs/:pr_id/checklist", handlers.GetChecklistProgress)
 		}
 
 		// PR dependencies

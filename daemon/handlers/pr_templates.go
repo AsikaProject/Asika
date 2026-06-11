@@ -134,8 +134,54 @@ func CheckChecklist(c *gin.Context) {
 		"complete":  complete,
 		"total":     total,
 		"unchecked": unchecked,
+		"checked":   total - unchecked,
 	})
 }
+
+// GetChecklistProgress handles GET /api/v1/repos/:repo_group/prs/:pr_id/checklist
+func GetChecklistProgress(c *gin.Context) {
+	repoGroup := c.Param("repo_group")
+	prID := c.Param("pr_id")
+
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
+	if err != nil || data == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
+		return
+	}
+
+	var pr models.PRRecord
+	if err := json.Unmarshal(data, &pr); err != nil || pr.RepoGroup != repoGroup {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
+		return
+	}
+
+	complete, total, unchecked := ValidateChecklist(pr.Body)
+
+	// Extract checklist items
+	matches := checklistPattern.FindAllStringSubmatch(pr.Body, -1)
+	items := make([]gin.H, 0, len(matches))
+	lines := strings.Split(pr.Body, "\n")
+	for _, line := range lines {
+		match := checklistPattern.FindStringSubmatch(line)
+		if match != nil {
+			checked := match[1] == "x" || match[1] == "X"
+			text := strings.TrimSpace(checklistPattern.ReplaceAllString(line, ""))
+			items = append(items, gin.H{
+				"checked": checked,
+				"text":    text,
+			})
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"complete":  complete,
+		"total":     total,
+		"checked":   total - unchecked,
+		"unchecked": unchecked,
+		"items":     items,
+	})
+}
+
 
 // ParseDependencies extracts Depends-on references from a PR body.
 func ParseDependencies(pr *models.PRRecord) []models.PRDependency {

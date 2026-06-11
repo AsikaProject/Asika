@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -348,12 +349,8 @@ func (m *Manager) merge(item *models.QueueItem) error {
 		return fmt.Errorf("cannot resolve repo for platform %s", pr.Platform)
 	}
 
-	// Determine merge method
-	method, err := client.GetDefaultMergeMethod(ctx, owner, repo)
-	if err != nil {
-		slog.Warn("failed to get default merge method, using default", "error", err)
-		method = "merge"
-	}
+	// Determine merge method using custom strategy rules
+	method := selectMergeMethod(pr, group, client, ctx, owner, repo)
 
 	// Fast-forward only: auto-rebase before merge to ensure linear history
 	if group.MergeQueue.FastForwardOnly {
@@ -445,6 +442,15 @@ func (m *Manager) GetQueueItems(repoGroup string) ([]models.QueueItem, error) {
 		items = append(items, item)
 		return nil
 	})
+
+	// Sort by priority (higher first), then by added time (earlier first)
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Priority != items[j].Priority {
+			return items[i].Priority > items[j].Priority
+		}
+		return items[i].AddedAt.Before(items[j].AddedAt)
+	})
+
 	return items, err
 }
 
@@ -548,4 +554,67 @@ func (m *Manager) tryRebaseBeforeMerge(ctx context.Context, pr *models.PRRecord,
 
 	slog.Info("fast-forward auto-rebase succeeded", "pr_id", pr.ID, "head_branch", branchInfo.HeadBranch, "base_branch", branchInfo.BaseBranch)
 	return nil
+}
+
+// selectMergeMethod selects the appropriate merge method based on configured rules
+func selectMergeMethod(pr *models.PRRecord, group *models.RepoGroup, client platforms.PlatformClient, ctx context.Context, owner, repo string) string {
+	// Check if there are custom merge strategy rules
+	if len(group.MergeQueue.MergeStrategyRules) > 0 {
+		// Sort rules by priority (higher priority first)
+		rules := make([]models.MergeStrategyRule, len(group.MergeQueue.MergeStrategyRules))
+		copy(rules, group.MergeQueue.MergeStrategyRules)
+		sort.Slice(rules, func(i, j int) bool {
+			return rules[i].Priority > rules[j].Priority
+		})
+
+		// Check each rule
+		for _, rule := range rules {
+			matched := false
+
+			// Match by labels
+			if len(rule.Labels) > 0 {
+				labelMatch := false
+				for _, ruleLabel := range rule.Labels {
+					for _, prLabel := range pr.Labels {
+						if prLabel == ruleLabel {
+							labelMatch = true
+							break
+						}
+					}
+					if labelMatch {
+						break
+					}
+				}
+				if labelMatch {
+					matched = true
+				}
+			}
+
+			// Match by branch pattern
+			if rule.Pattern != "" && !matched {
+				// Simple pattern matching against PR title or labels
+				if strings.Contains(pr.Title, rule.Pattern) {
+					matched = true
+				}
+			}
+
+			if matched {
+				slog.Info("merge strategy rule matched", "pr_id", pr.ID, "rule", rule.Name, "method", rule.MergeMethod)
+				return rule.MergeMethod
+			}
+		}
+	}
+
+	// Use configured default method
+	if group.MergeQueue.DefaultMergeMethod != "" {
+		return group.MergeQueue.DefaultMergeMethod
+	}
+
+	// Fall back to platform default
+	method, err := client.GetDefaultMergeMethod(ctx, owner, repo)
+	if err != nil {
+		slog.Warn("failed to get default merge method, using merge", "error", err)
+		return "merge"
+	}
+	return method
 }

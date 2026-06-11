@@ -278,14 +278,24 @@ type SyncRecord struct {
 }
 
 type MergeQueueConfig struct {
-	RequiredApprovals         int                `json:"required_approvals" toml:"required_approvals"`
-	CICheckRequired           bool               `json:"ci_check_required" toml:"ci_check_required"`
-	CoreContributors          []string           `json:"core_contributors" toml:"core_contributors"`
-	CIProvider                string             `json:"ci_provider" toml:"ci_provider"`
-	FastForwardOnly           bool               `json:"fast_forward_only" toml:"fast_forward_only"`
-	Expression                string             `json:"expression" toml:"expression"`
-	AllowExpressionOverrideCI bool               `json:"allow_expression_override_ci" toml:"allow_expression_override_ci"`
-	SecurityScan              SecurityScanConfig `json:"security_scan" toml:"security_scan"`
+	RequiredApprovals         int                  `json:"required_approvals" toml:"required_approvals"`
+	CICheckRequired           bool                 `json:"ci_check_required" toml:"ci_check_required"`
+	CoreContributors          []string             `json:"core_contributors" toml:"core_contributors"`
+	CIProvider                string               `json:"ci_provider" toml:"ci_provider"`
+	FastForwardOnly           bool                 `json:"fast_forward_only" toml:"fast_forward_only"`
+	Expression                string               `json:"expression" toml:"expression"`
+	AllowExpressionOverrideCI bool                 `json:"allow_expression_override_ci" toml:"allow_expression_override_ci"`
+	SecurityScan              SecurityScanConfig   `json:"security_scan" toml:"security_scan"`
+	MergeStrategyRules        []MergeStrategyRule  `json:"merge_strategy_rules,omitempty" toml:"merge_strategy_rules,omitempty"`
+	DefaultMergeMethod        string               `json:"default_merge_method,omitempty" toml:"default_merge_method,omitempty"`
+}
+
+type MergeStrategyRule struct {
+	Name        string   `json:"name" toml:"name"`
+	Pattern     string   `json:"pattern,omitempty" toml:"pattern,omitempty"`
+	Labels      []string `json:"labels,omitempty" toml:"labels,omitempty"`
+	MergeMethod string   `json:"merge_method" toml:"merge_method"`
+	Priority    int      `json:"priority,omitempty" toml:"priority,omitempty"`
 }
 
 type WebhookRetry struct {

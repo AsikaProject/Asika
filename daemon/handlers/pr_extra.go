@@ -211,6 +211,7 @@ func CheckTemplate(c *gin.Context) {
 }
 
 // MarkReady handles POST /api/v1/repos/:repo_group/prs/:pr_id/ready
+// MarkReady handles POST /api/v1/repos/:repo_group/prs/:pr_id/ready
 // Marks a draft PR as ready for review and optionally enqueues it.
 func MarkReady(c *gin.Context) {
 	username := c.GetString("username")
@@ -300,6 +301,68 @@ func MarkReady(c *gin.Context) {
 	_ = owner
 	_ = repo
 }
+
+// MarkDraft handles POST /api/v1/repos/:repo_group/prs/:pr_id/draft
+// Marks a PR as draft (work in progress).
+func MarkDraft(c *gin.Context) {
+	username := c.GetString("username")
+	repoGroup := c.Param("repo_group")
+	prID := c.Param("pr_id")
+
+	cfg := config.Current()
+	group := config.GetRepoGroupByName(cfg, repoGroup)
+	if group == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "repo group not found"})
+		return
+	}
+
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
+	if err != nil || data == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
+		return
+	}
+	var prRecord models.PRRecord
+	if json.Unmarshal(data, &prRecord) != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
+		return
+	}
+
+	if prRecord.IsDraft {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "PR is already a draft"})
+		return
+	}
+
+	prRecord.IsDraft = true
+	updated, marshalErr := json.Marshal(prRecord)
+	if marshalErr != nil {
+		slog.Error("failed to marshal PR record", "error", marshalErr, "pr_id", prID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to marshal PR record"})
+		return
+	}
+	dbKey := fmt.Sprintf("%s#%s#%d", repoGroup, prRecord.Platform, prRecord.PRNumber)
+	if putErr := db.PutPRWithIndex(dbKey, updated, prRecord.ID, prRecord.RepoGroup, prRecord.PRNumber); putErr != nil {
+		slog.Error("failed to update PR in database", "error", putErr, "pr_id", prID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update PR in database"})
+		return
+	}
+
+	db.AppendAuditLogEx(models.AuditLog{
+		Level:     "info",
+		Message:   "PR marked as draft",
+		Actor:     username,
+		RepoGroup: repoGroup,
+		PRNumber:  prRecord.PRNumber,
+		Platform:  prRecord.Platform,
+		Action:    "mark_draft",
+	})
+
+	slog.Info("PR marked as draft", "pr_id", prID, "repo_group", repoGroup, "by", username)
+	c.JSON(http.StatusOK, gin.H{
+		"message": "PR marked as draft",
+		"pr_id":   prID,
+	})
+}
+
 
 func matchFilePattern(pattern, file string) bool {
 	if matched, err := globMatch(pattern, file); err == nil && matched {
