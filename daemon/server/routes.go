@@ -145,6 +145,7 @@ func (s *Server) setupRoutes() {
 			prsLabel.Use(RequirePermission("label"))
 			{
 				prsLabel.POST("/batch/label", handlers.BatchLabelPR)
+				prsLabel.POST("/:pr_id/auto-label", handlers.AutoLabelPR)
 			}
 
 			prsAssign := prs.Group("")
@@ -160,6 +161,7 @@ func (s *Server) setupRoutes() {
 				prsExtra.GET("/:pr_id/approval-status", handlers.GetApprovalStatus)
 				prsExtra.GET("/:pr_id/template-check", handlers.CheckTemplate)
 				prsExtra.GET("/:pr_id/summary", handlers.SummarizePR)
+				prsExtra.POST("/:pr_id/trigger-ci", handlers.TriggerCI)
 			}
 
 			prsReady := prs.Group("")
@@ -318,6 +320,7 @@ func (s *Server) setupRoutes() {
 			prDeps.GET("/prs/:pr_id/dependencies", handlers.GetPRDependencies)
 			prDeps.GET("/prs/:pr_id/dependents", handlers.GetPRDependents)
 			prDeps.POST("/prs/:pr_id/sync-deps", handlers.SyncDependencies)
+			prDeps.GET("/prs/:pr_id/dependency-graph", handlers.GetDependencyGraph)
 		}
 
 		// Cross-space dependencies
@@ -438,6 +441,9 @@ func (s *Server) setupRoutes() {
 			reviewerLoad.GET("/load", handlers.GetReviewerLoads)
 			reviewerLoad.GET("/load/:username", handlers.GetReviewerLoad)
 		}
+
+		// Gerrit Change-ID lookup
+		protected.GET("/gerrit/change/:change_id", handlers.FindPRByChangeID)
 	}
 
 	s.engine.GET("/", func(c *gin.Context) {

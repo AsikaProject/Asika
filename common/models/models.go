@@ -171,6 +171,7 @@ type PRRecord struct {
 	LinesDeleted    int             `json:"lines_deleted"`
 	SecurityBlocked bool            `json:"security_blocked,omitempty"`
 	SecurityAlerts  []SecurityAlert `json:"security_alerts,omitempty"`
+	GerritChangeID  string          `json:"gerrit_change_id,omitempty"`
 }
 
 type PREvent struct {

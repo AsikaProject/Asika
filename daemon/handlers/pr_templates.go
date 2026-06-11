@@ -285,6 +285,49 @@ func GetPRDependents(c *gin.Context) {
 	c.JSON(http.StatusOK, deps)
 }
 
+// GetDependencyGraph handles GET /api/v1/repos/:repo_group/prs/:pr_id/dependency-graph
+func GetDependencyGraph(c *gin.Context) {
+	repoGroup := c.Param("repo_group")
+	prID := c.Param("pr_id")
+
+	data, err := db.GetPRByIndex(prID, repoGroup, 0)
+	if err != nil || data == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
+		return
+	}
+	var pr models.PRRecord
+	if err := json.Unmarshal(data, &pr); err != nil || pr.RepoGroup != repoGroup {
+		c.JSON(http.StatusNotFound, gin.H{"error": "PR not found"})
+		return
+	}
+
+	// Build Mermaid graph syntax
+	deps, _ := db.GetPRDependenciesByPR(prID)
+	dependents, _ := db.GetPRDependentsByPR(prID)
+
+	graph := "graph TD\n"
+	graph += fmt.Sprintf("    PR%s[\"%s\"]\n", prID, pr.Title)
+
+	for _, dep := range deps {
+		if dep.DependsOnPRID != "" {
+			graph += fmt.Sprintf("    PR%s --> PR%s\n", prID, dep.DependsOnPRID)
+		}
+	}
+
+	for _, dep := range dependents {
+		if dep.PRID != "" {
+			graph += fmt.Sprintf("    PR%s --> PR%s\n", dep.PRID, prID)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"mermaid": graph,
+		"dependencies": deps,
+		"dependents": dependents,
+	})
+}
+
+
 func detectPlatformFromURLHost(host string) string {
 	switch {
 	case strings.Contains(host, "github.com"):
