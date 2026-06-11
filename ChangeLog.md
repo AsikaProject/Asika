@@ -1,5 +1,16 @@
 # ChangeLog for Asika
 
+## v20260611DEV
+
+- **Feature**: Add merge queue priority scheduling. Queue items now support priority field (0-100) and are sorted by priority (high→low) then by time. Add `PUT /api/v1/queue/:repo_group/:pr_id/priority` endpoint and `asika queue priority` CLI command.
+- **Feature**: Add batch operations for PRs. Implement batch merge via `POST /api/v1/repos/:repo_group/prs/batch-merge` and batch cherry-pick stub via `POST /api/v1/repos/:repo_group/prs/batch-cherrypick`. Add CLI commands: `asika pr batch-merge` and `asika pr batch-cherrypick`.
+- **Feature**: Add checklist progress API. New `GET /api/v1/repos/:repo_group/prs/:pr_id/checklist` endpoint returns detailed item list with checked/unchecked status and progress statistics.
+- **Feature**: Add MarkDraft handler. New `POST /api/v1/repos/:repo_group/prs/:pr_id/draft` endpoint marks PRs as work-in-progress. Complements existing MarkReady endpoint for draft workflow.
+- **Feature**: Add custom merge strategy rules. Configure label-based or pattern-based rules to automatically select merge method (merge/squash/rebase). Rules support priority ordering and fallback to default method.
+- **Enhancement**: Add `MergeStrategyRule` model with pattern/labels/priority fields to `MergeQueueConfig`. Add `DefaultMergeMethod` config option for fallback merge method.
+- **Enhancement**: Add `Priority` field to `QueueItem` model for priority-based queue management.
+- **Enhancement**: Implement `selectMergeMethod` function in queue manager with rule matching logic (labels first, then patterns, then default).
+
 ## v20260603DEV
 
 - **Feature**: Add outbound webhook system (`common/hooks/`). HookDispatcher subscribes to the event bus and fires HMAC-SHA256 signed HTTP POST to configured endpoints with per-hook event/repo_group/platform filtering, retry with exponential backoff, and graceful shutdown.
