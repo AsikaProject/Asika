@@ -16,13 +16,13 @@ jobs:
           - os: ubuntu-latest
             goos: linux
             goarch: amd64
-          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm
             goos: linux
             goarch: arm64
           - os: macos-latest
             goos: darwin
             goarch: amd64
-          - os: macos-latest
+          - os: macos-26-intel
             goos: darwin
             goarch: arm64
           - os: windows-latest
@@ -68,7 +68,6 @@ jobs:
             go build -ldflags="${LDFLAGS}" -o "bin/asika-${{ matrix.goos }}-${{ matrix.goarch }}${EXT}" ./cmd/asika/main.go
 
       - name: Package tarballs and generate checksums
-        if: matrix.goos != 'windows'
         shell: bash
         run: |
           TAG="${{ steps.version.outputs.version }}"

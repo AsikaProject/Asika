@@ -1,6 +1,6 @@
 # ChangeLog for Asika
 
-## v20260517DEV > v20260617DEV
+## v20260517DEV > v20260612DEV
 
 - **Feature**: Add merge queue priority scheduling. Queue items now support priority field (0-100) and are sorted by priority (high→low) then by time. Add `PUT /api/v1/queue/:repo_group/:pr_id/priority` endpoint and `asika queue priority` CLI command.
 - **Feature**: Add batch operations for PRs. Implement batch merge via `POST /api/v1/repos/:repo_group/prs/batch-merge` and batch cherry-pick stub via `POST /api/v1/repos/:repo_group/prs/batch-cherrypick`. Add CLI commands: `asika pr batch-merge` and `asika pr batch-cherrypick`.
