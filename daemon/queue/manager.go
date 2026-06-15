@@ -253,7 +253,10 @@ func (m *Manager) CheckQueue() {
 	}
 
 	sort.Slice(items, func(i, j int) bool {
-		return items[i].Priority > items[j].Priority
+		if items[i].Priority != items[j].Priority {
+			return items[i].Priority > items[j].Priority
+		}
+		return items[i].AddedAt.Before(items[j].AddedAt)
 	})
 
 	now := time.Now()
@@ -554,6 +557,13 @@ func (m *Manager) tryRebaseBeforeMerge(ctx context.Context, pr *models.PRRecord,
 
 	slog.Info("fast-forward auto-rebase succeeded", "pr_id", pr.ID, "head_branch", branchInfo.HeadBranch, "base_branch", branchInfo.BaseBranch)
 	return nil
+}
+
+// SelectMergeMethod selects the appropriate merge method based on configured rules.
+// Exported so that out-of-band merge paths (e.g. batch merge) honour the same
+// MergeStrategyRules / DefaultMergeMethod config as the queue.
+func SelectMergeMethod(pr *models.PRRecord, group *models.RepoGroup, client platforms.PlatformClient, ctx context.Context, owner, repo string) string {
+	return selectMergeMethod(pr, group, client, ctx, owner, repo)
 }
 
 // selectMergeMethod selects the appropriate merge method based on configured rules

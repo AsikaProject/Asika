@@ -196,6 +196,14 @@ func (c *Checker) ShouldMerge(item *models.QueueItem) (bool, error) {
 		return false, err
 	}
 
+	// Draft PRs must never be merged, even if already in the queue.
+	// (MarkDraft removes the item, but this is the defensive gate against
+	// races, legacy queue items, or external state changes.)
+	if pr.IsDraft {
+		slog.Info("PR is draft, skipping merge", "pr_id", pr.ID, "title", pr.Title)
+		return false, nil
+	}
+
 	group := config.GetRepoGroupByName(c.cfg, pr.RepoGroup)
 	if group == nil {
 		return false, fmt.Errorf("repo group not found: %s", pr.RepoGroup)

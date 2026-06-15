@@ -182,7 +182,6 @@ func GetChecklistProgress(c *gin.Context) {
 	})
 }
 
-
 // ParseDependencies extracts Depends-on references from a PR body.
 func ParseDependencies(pr *models.PRRecord) []models.PRDependency {
 	if pr.Body == "" {
@@ -305,28 +304,62 @@ func GetDependencyGraph(c *gin.Context) {
 	deps, _ := db.GetPRDependenciesByPR(prID)
 	dependents, _ := db.GetPRDependentsByPR(prID)
 
+	// Sanitize all interpolated values to prevent Mermaid source injection
+	// (PR titles may contain quotes, backslashes, newlines, or Mermaid
+	// markup that would break graph parsing or escape the node label).
+	safeTitle := escapeMermaidLabel(pr.Title)
+	safePrID := sanitizeMermaidID(prID)
+
 	graph := "graph TD\n"
-	graph += fmt.Sprintf("    PR%s[\"%s\"]\n", prID, pr.Title)
+	graph += fmt.Sprintf("    PR%s[\"%s\"]\n", safePrID, safeTitle)
 
 	for _, dep := range deps {
 		if dep.DependsOnPRID != "" {
-			graph += fmt.Sprintf("    PR%s --> PR%s\n", prID, dep.DependsOnPRID)
+			graph += fmt.Sprintf("    PR%s --> PR%s\n", safePrID, sanitizeMermaidID(dep.DependsOnPRID))
 		}
 	}
 
 	for _, dep := range dependents {
 		if dep.PRID != "" {
-			graph += fmt.Sprintf("    PR%s --> PR%s\n", dep.PRID, prID)
+			graph += fmt.Sprintf("    PR%s --> PR%s\n", sanitizeMermaidID(dep.PRID), safePrID)
 		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"mermaid": graph,
+		"mermaid":      graph,
 		"dependencies": deps,
-		"dependents": dependents,
+		"dependents":   dependents,
 	})
 }
 
+// escapeMermaidLabel escapes characters that would break a double-quoted
+// Mermaid node label: backslash, double-quote, and any vertical whitespace
+// (which would otherwise terminate the label and inject new graph lines).
+func escapeMermaidLabel(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\r", "")
+	return s
+}
+
+// sanitizeMermaidID restricts an ID to alphanumerics, dash and underscore
+// so it cannot contain Mermaid syntax characters or whitespace.
+func sanitizeMermaidID(id string) string {
+	var b strings.Builder
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	if b.Len() == 0 {
+		return "unknown"
+	}
+	return b.String()
+}
 
 func detectPlatformFromURLHost(host string) string {
 	switch {

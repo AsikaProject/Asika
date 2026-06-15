@@ -70,11 +70,17 @@ func matchBranchPattern(pattern, branch string) bool {
 		return true
 	}
 	if strings.Contains(pattern, "*") {
-		pattern = strings.ReplaceAll(pattern, "*", ".*")
-		re, err := regexp.Compile("^" + pattern + "$")
+		// Escape every regexp metacharacter first, then turn the escaped "*"
+		// back into ".*" so the user-provided glob behaves as a literal glob
+		// (e.g. "feature/.*" still matches literally on the dot; parentheses
+		// and other regex metachars in branch names are matched verbatim).
+		escaped := regexp.QuoteMeta(pattern)
+		escaped = strings.ReplaceAll(escaped, "\\*", ".*")
+		re, err := regexp.Compile("^" + escaped + "$")
 		if err == nil && re.MatchString(branch) {
 			return true
 		}
+		// Fall through to exact match on malformed patterns.
 	}
 	return pattern == branch
 }

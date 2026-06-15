@@ -279,16 +279,16 @@ type SyncRecord struct {
 }
 
 type MergeQueueConfig struct {
-	RequiredApprovals         int                  `json:"required_approvals" toml:"required_approvals"`
-	CICheckRequired           bool                 `json:"ci_check_required" toml:"ci_check_required"`
-	CoreContributors          []string             `json:"core_contributors" toml:"core_contributors"`
-	CIProvider                string               `json:"ci_provider" toml:"ci_provider"`
-	FastForwardOnly           bool                 `json:"fast_forward_only" toml:"fast_forward_only"`
-	Expression                string               `json:"expression" toml:"expression"`
-	AllowExpressionOverrideCI bool                 `json:"allow_expression_override_ci" toml:"allow_expression_override_ci"`
-	SecurityScan              SecurityScanConfig   `json:"security_scan" toml:"security_scan"`
-	MergeStrategyRules        []MergeStrategyRule  `json:"merge_strategy_rules,omitempty" toml:"merge_strategy_rules,omitempty"`
-	DefaultMergeMethod        string               `json:"default_merge_method,omitempty" toml:"default_merge_method,omitempty"`
+	RequiredApprovals         int                 `json:"required_approvals" toml:"required_approvals"`
+	CICheckRequired           bool                `json:"ci_check_required" toml:"ci_check_required"`
+	CoreContributors          []string            `json:"core_contributors" toml:"core_contributors"`
+	CIProvider                string              `json:"ci_provider" toml:"ci_provider"`
+	FastForwardOnly           bool                `json:"fast_forward_only" toml:"fast_forward_only"`
+	Expression                string              `json:"expression" toml:"expression"`
+	AllowExpressionOverrideCI bool                `json:"allow_expression_override_ci" toml:"allow_expression_override_ci"`
+	SecurityScan              SecurityScanConfig  `json:"security_scan" toml:"security_scan"`
+	MergeStrategyRules        []MergeStrategyRule `json:"merge_strategy_rules,omitempty" toml:"merge_strategy_rules,omitempty"`
+	DefaultMergeMethod        string              `json:"default_merge_method,omitempty" toml:"default_merge_method,omitempty"`
 }
 
 type MergeStrategyRule struct {

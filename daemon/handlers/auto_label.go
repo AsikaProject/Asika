@@ -46,16 +46,34 @@ func AutoLabelPR(c *gin.Context) {
 
 	// Add labels via platform API
 	client := pr.GetClientForGroup(group, prRecord.Platform)
-	if client != nil {
-		owner, repo := config.GetOwnerRepoFromGroup(group, prRecord.Platform)
-		for _, label := range labels {
-			if err := client.AddLabel(c.Request.Context(), owner, repo, prRecord.PRNumber, label, ""); err != nil {
-				slog.Warn("failed to add auto label", "label", label, "error", err)
-			}
+	if client == nil {
+		slog.Error("platform client not available for auto-label", "platform", prRecord.Platform, "repo_group", repoGroup, "pr_id", prID)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "platform client not available",
+			"labels":  labels,
+			"applied": false,
+		})
+		return
+	}
+
+	owner, repo := config.GetOwnerRepoFromGroup(group, prRecord.Platform)
+	applied := 0
+	failed := make([]string, 0)
+	for _, label := range labels {
+		if err := client.AddLabel(c.Request.Context(), owner, repo, prRecord.PRNumber, label, ""); err != nil {
+			slog.Warn("failed to add auto label", "label", label, "error", err)
+			failed = append(failed, label)
+		} else {
+			applied++
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "labels applied", "labels": labels})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "labels applied",
+		"labels":  labels,
+		"applied": applied,
+		"failed":  failed,
+	})
 }
 
 func generateAutoLabels(pr *models.PRRecord) []string {

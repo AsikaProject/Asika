@@ -2,9 +2,11 @@ package commands
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 )
@@ -83,11 +85,24 @@ var queuePriorityCmd = &cobra.Command{
 	Short: "Set priority for a queue item (0-100)",
 	Args:  cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
+		priority, err := strconv.Atoi(args[2])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: priority must be an integer (got %q)\n", args[2])
+			return
+		}
+		if priority < 0 || priority > 100 {
+			fmt.Fprintf(os.Stderr, "Error: priority must be between 0 and 100 (got %d)\n", priority)
+			return
+		}
 		url := fmt.Sprintf("%s/api/v1/queue/%s/%s/priority",
 			GetServer(cmd), args[0], args[1],
 		)
-		body := fmt.Sprintf(`{"priority":%s}`, args[2])
-		resp := doRequestWithBody("PUT", url, body, cmd)
+		bodyBytes, err := json.Marshal(map[string]int{"priority": priority})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: failed to encode request body: %v\n", err)
+			return
+		}
+		resp := doRequestWithBodyRaw("PUT", url, bodyBytes, cmd)
 		if resp == nil {
 			return
 		}
@@ -96,7 +111,11 @@ var queuePriorityCmd = &cobra.Command{
 }
 
 func doRequestWithBody(method, url, body string, cmd *cobra.Command) *http.Response {
-	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
+	return doRequestWithBodyRaw(method, url, []byte(body), cmd)
+}
+
+func doRequestWithBodyRaw(method, url string, body []byte, cmd *cobra.Command) *http.Response {
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return nil

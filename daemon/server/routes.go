@@ -133,6 +133,7 @@ func (s *Server) setupRoutes() {
 				prsMerge.POST("/batch/rebase", handlers.BatchRebasePR)
 				prsMerge.POST("/batch-merge", handlers.BatchMergePR)
 				prsMerge.POST("/batch-cherrypick", handlers.BatchCherryPickPR)
+				prsMerge.POST("/:pr_id/trigger-ci", handlers.TriggerCI)
 			}
 
 			prsRevert := prs.Group("")
@@ -161,7 +162,6 @@ func (s *Server) setupRoutes() {
 				prsExtra.GET("/:pr_id/approval-status", handlers.GetApprovalStatus)
 				prsExtra.GET("/:pr_id/template-check", handlers.CheckTemplate)
 				prsExtra.GET("/:pr_id/summary", handlers.SummarizePR)
-				prsExtra.POST("/:pr_id/trigger-ci", handlers.TriggerCI)
 			}
 
 			prsReady := prs.Group("")
@@ -442,8 +442,15 @@ func (s *Server) setupRoutes() {
 			reviewerLoad.GET("/load/:username", handlers.GetReviewerLoad)
 		}
 
-		// Gerrit Change-ID lookup
-		protected.GET("/gerrit/change/:change_id", handlers.FindPRByChangeID)
+		// Gerrit Change-ID lookup (scoped to repo_group via RequireRepoGroupAccess)
+		gerritLookup := protected.Group("/repos/:repo_group/gerrit")
+		gerritLookup.Use(RequireAnyRole("viewer", "operator", "admin"))
+		gerritLookup.Use(RequireRepoGroupAccess())
+		gerritLookup.Use(RequireRepoAccess())
+		gerritLookup.Use(RequireSpaceAccess())
+		{
+			gerritLookup.GET("/change/:change_id", handlers.FindPRByChangeID)
+		}
 	}
 
 	s.engine.GET("/", func(c *gin.Context) {

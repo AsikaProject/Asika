@@ -49,10 +49,10 @@ func TriggerCI(c *gin.Context) {
 
 	// For now, return success - actual implementation would call platform CI API
 	c.JSON(http.StatusOK, gin.H{
-		"message": "CI trigger request sent",
-		"pr_id": prID,
+		"message":   "CI trigger request sent",
+		"pr_id":     prID,
 		"pr_number": prRecord.PRNumber,
-		"platform": prRecord.Platform,
+		"platform":  prRecord.Platform,
 	})
 
 	_ = owner

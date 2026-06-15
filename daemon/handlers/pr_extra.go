@@ -356,13 +356,23 @@ func MarkDraft(c *gin.Context) {
 		Action:    "mark_draft",
 	})
 
-	slog.Info("PR marked as draft", "pr_id", prID, "repo_group", repoGroup, "by", username)
+	removedFromQueue := false
+	queueMgr := pr.GetQueueMgr()
+	if queueMgr != nil {
+		if err := queueMgr.RemoveFromQueue(repoGroup, prID); err != nil {
+			slog.Warn("failed to remove PR from queue after mark draft", "error", err, "pr_id", prID)
+		} else {
+			removedFromQueue = true
+		}
+	}
+
+	slog.Info("PR marked as draft", "pr_id", prID, "repo_group", repoGroup, "by", username, "removed_from_queue", removedFromQueue)
 	c.JSON(http.StatusOK, gin.H{
-		"message": "PR marked as draft",
-		"pr_id":   prID,
+		"message":            "PR marked as draft",
+		"pr_id":              prID,
+		"removed_from_queue": removedFromQueue,
 	})
 }
-
 
 func matchFilePattern(pattern, file string) bool {
 	if matched, err := globMatch(pattern, file); err == nil && matched {
