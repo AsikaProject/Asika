@@ -304,20 +304,8 @@ func validate(cfg *models.Config) error {
 	}
 
 	for _, rg := range cfg.RepoGroups {
-		if rg.Mode != "single" && rg.Mode != "multi" && rg.Mode != "" {
-			return fmt.Errorf("invalid mode for repo group %s: %s (must be 'single' or 'multi')", rg.Name, rg.Mode)
-		}
-		mode := rg.Mode
-		if mode == "" {
-			mode = "multi"
-		}
-		if mode == "single" {
-			if rg.GitHub == "" && rg.GitLab == "" && rg.Gitea == "" && rg.Forgejo == "" && rg.Codeberg == "" && rg.Bitbucket == "" {
-				return fmt.Errorf("single mode repo group %s requires at least one platform repo to be set", rg.Name)
-			}
-			if rg.MirrorPlatform == "" {
-				return fmt.Errorf("single mode repo group %s requires mirror_platform to be set", rg.Name)
-			}
+		if err := validateRepoGroup(rg); err != nil {
+			return err
 		}
 	}
 
@@ -452,6 +440,48 @@ func validate(cfg *models.Config) error {
 		}
 	}
 
+	return nil
+}
+
+// Validate exposes the package-level config validation for external callers
+// (e.g., the setup wizard). It returns an error describing the first invalid
+// field, or nil if the config is acceptable.
+func Validate(cfg *models.Config) error {
+	return validate(cfg)
+}
+
+// ValidateRepoGroup checks a single repo group configuration. Used by the
+// wizard to fail early before writing the config file.
+func ValidateRepoGroup(rg models.RepoGroupConfig) error {
+	return validateRepoGroup(rg)
+}
+
+// ValidateRepoGroups checks all repo groups. Used by the wizard.
+func ValidateRepoGroups(groups []models.RepoGroupConfig) error {
+	for _, rg := range groups {
+		if err := validateRepoGroup(rg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateRepoGroup(rg models.RepoGroupConfig) error {
+	if rg.Mode != "single" && rg.Mode != "multi" && rg.Mode != "" {
+		return fmt.Errorf("invalid mode for repo group %s: %s (must be 'single' or 'multi')", rg.Name, rg.Mode)
+	}
+	mode := rg.Mode
+	if mode == "" {
+		mode = "multi"
+	}
+	if mode == "single" {
+		if rg.GitHub == "" && rg.GitLab == "" && rg.Gitea == "" && rg.Forgejo == "" && rg.Codeberg == "" && rg.Bitbucket == "" && rg.Gerrit == "" {
+			return fmt.Errorf("single mode repo group %s requires at least one platform repo to be set", rg.Name)
+		}
+		if rg.MirrorPlatform == "" {
+			return fmt.Errorf("single mode repo group %s requires mirror_platform to be set", rg.Name)
+		}
+	}
 	return nil
 }
 

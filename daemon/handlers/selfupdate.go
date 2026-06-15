@@ -37,10 +37,32 @@ type UpdateProgress struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// isDevVersion returns true if the version is a development build (contains a hyphen suffix like "20260511DEV-b92c70f").
-// Release versions are pure date strings like "20260511" or "20260511HF".
+// isDevVersion returns true if the version is a development or non-release build.
+// Release versions are pure 8-digit date strings (e.g. "20260612").
+// Any suffix (DEV, HF, CVE, DEP, REL) or commit hash suffix indicates a non-release build.
 func isDevVersion(v string) bool {
+	if v == "" || v == "dev" {
+		return true
+	}
+	if len(v) == 8 && isAllDigits(v) {
+		return false
+	}
+	knownSuffixes := []string{"DEV", "HF", "CVE", "DEP", "REL"}
+	for _, s := range knownSuffixes {
+		if strings.Contains(v, s) {
+			return true
+		}
+	}
 	return strings.Contains(v, "-")
+}
+
+func isAllDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // CheckForUpdate checks GitHub for a newer version.

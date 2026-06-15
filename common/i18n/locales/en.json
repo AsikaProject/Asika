@@ -247,6 +247,7 @@
 	"config.system": "System",
 	"config.current_version": "Current Version: ",
 	"config.check_updates": "Check Updates",
+	"config.dev_build_no_update": "Local development build, automatic update unavailable",
 	"config.update_now": "Update Now",
 	"config.stale_pr_mgmt": "Stale PR Management",
 	"config.run_stale_check": "Run Stale Check Now",
@@ -262,6 +263,8 @@
 
 	"wizard.title": "Setup Wizard",
 	"wizard.subtitle": "Configure Asika for first use",
+	"wizard.error.single_requires_repo": "Single mode requires at least one platform repository (GitHub, GitLab, Gitea, Forgejo, Codeberg, Bitbucket, or Gerrit).",
+	"wizard.error.single_requires_mirror": "Single mode requires a mirror platform to be selected.",
 	"wizard.next": "Next",
 	"wizard.complete": "Complete Setup",
 	"wizard.setup_complete": "Setup Complete!",

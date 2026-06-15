@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{template "pwa"}}
     {{template "styles"}}
-    <title><span data-i18n="config.title">{{t "config.title"}}</span> - Asika</title>
+    <title>{{t "config.title"}} - Asika</title>
 </head>
 <body>
 {{template "header" .}}
@@ -25,6 +25,7 @@
     </div>
     <button class="btn btn-primary" onclick="checkUpdate()" id="checkUpdateBtn"><span data-i18n="config.check_updates">{{t "config.check_updates"}}</span></button>
     <button class="btn btn-success" onclick="performUpdate()" id="performUpdateBtn" style="display:none; margin-left:10px;"><span data-i18n="config.update_now">{{t "config.update_now"}}</span></button>
+    <span id="devBuildNotice" style="display:none; margin-left:10px; font-size:13px; color:var(--text-secondary);">(<span data-i18n="config.dev_build_no_update">{{t "config.dev_build_no_update"}}</span>)</span>
     <div id="updateProgress" style="margin-top:10px; display:none;">
         <div style="background:#e9ecef; border-radius:4px; height:20px; overflow:hidden;">
             <div id="updateProgressBar" style="background:#28a745; height:100%; width:0%; transition:width 0.3s;"></div>
@@ -95,6 +96,10 @@
             const resp = await apiRequest('/api/v1/self-update/check');
             const d = await resp.json();
             document.getElementById('currentVersion').textContent = d.current || '-';
+            if (d.dev) {
+                document.getElementById('checkUpdateBtn').style.display = 'none';
+                document.getElementById('devBuildNotice').style.display = 'inline';
+            }
             if (d.upgradable) {
                 document.getElementById('latestVersionInfo').style.display = 'inline';
                 document.getElementById('latestVersion').textContent = d.latest;
@@ -105,6 +110,10 @@
     async function checkUpdate() {
         showSuccess('Checking for updates...');
         await loadVersion();
+        if (document.getElementById('devBuildNotice').style.display === 'inline') {
+            showSuccess('{{t "config.dev_build_no_update"}}');
+            return;
+        }
         const cur = document.getElementById('currentVersion').textContent;
         const latest = document.getElementById('latestVersion').textContent;
         if (cur === latest || latest === '-') {

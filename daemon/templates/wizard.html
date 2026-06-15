@@ -579,6 +579,20 @@
             const mode = document.getElementById('mode').value;
             const jwtSecret = document.getElementById('jwt_secret').value || genSecretValue();
 
+            if (mode === 'single') {
+                const platformRepos = ['github_repo', 'gitlab_repo', 'gitea_repo', 'forgejo_repo', 'codeberg_repo', 'bitbucket_repo', 'gerrit_repo'];
+                const hasRepo = platformRepos.some(id => document.getElementById(id).value.trim() !== '');
+                if (!hasRepo) {
+                    showError('{{t "wizard.error.single_requires_repo"}}');
+                    return;
+                }
+                const mirror = document.getElementById('mirror_platform').value;
+                if (!mirror) {
+                    showError('{{t "wizard.error.single_requires_mirror"}}');
+                    return;
+                }
+            }
+
             const tgAdminIdsRaw = document.getElementById('tg_admin_ids').value;
             const tgAdminIds = tgAdminIdsRaw ? tgAdminIdsRaw.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n)) : [];
 

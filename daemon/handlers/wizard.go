@@ -128,6 +128,11 @@ func CompleteWizard(c *gin.Context) {
 		}
 	}
 
+	if err := config.ValidateRepoGroups(cfg.RepoGroups); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	// Write config to file
 	if err := config.SaveToFile(cfg); err != nil {
 		slog.Error("wizard: failed to write config", "error", err)

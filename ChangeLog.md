@@ -1,5 +1,12 @@
 # ChangeLog for Asika
 
+## Unreleased
+
+- **Fix**: Remove `<span data-i18n>` wrapper inside `<title>` tags across 8 templates (login/users/usage/settings/reset_password/config/queue/apikeys). Browsers render `<title>` as plain text, so the wrapper was displayed literally as a malformed string in the tab title.
+- **Fix**: Wizard no longer writes invalid configs. `CompleteWizard` now calls `config.ValidateRepoGroups` before `SaveToFile`; previously single-mode repo groups without any platform repo could be persisted, then failed `validate()` on next startup and forced the server back into initialization mode in a loop. Adds frontend pre-check and exported `ValidateRepoGroup(s)`/`Validate` helpers in the config package.
+- **Fix**: Hide the "Check Updates" button for dev builds. `isDevVersion` now recognises `DEV/HF/CVE/DEP/REL` suffixes instead of only hyphens, so versions like `20260612DEV` are correctly detected as non-release and the WebUI shows a notice instead of a button that silently skips the network check.
+- **Fix**: Improve `account.html` mobile responsiveness — long session metadata strings now wrap, and session/oidc/totp items stack vertically on narrow screens.
+
 ## v20260615DEV
 
 - **Fix**: Block draft PRs from being merged by the queue. `MarkDraft` now removes the PR from the merge queue, and `ShouldMerge` short-circuits on `IsDraft` as a defensive gate. Previously, marking an already-queued PR as draft still let the queue merge it once approvals/CI passed — violating the draft PR contract.
