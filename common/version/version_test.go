@@ -14,3 +14,9 @@ func TestVersionDefault(t *testing.T) {
 		t.Errorf("Default Version = %q, want dev", Version)
 	}
 }
+
+func TestChannelDefault(t *testing.T) {
+	if Channel != "manual" {
+		t.Errorf("Default Channel = %q, want manual", Channel)
+	}
+}

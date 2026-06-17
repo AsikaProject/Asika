@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"os"
 	"testing"
+
+	"asika/common/archive"
 )
 
 func TestParseSha256sumFile(t *testing.T) {
@@ -63,15 +65,10 @@ func TestParseSha256sumFile(t *testing.T) {
 
 func TestVerifyWebChecksum(t *testing.T) {
 	t.Run("valid checksum", func(t *testing.T) {
-		// Create a binary file
 		binaryFile := writeTempFile(t, "hello world")
-
-		// Compute its SHA256
 		data, _ := os.ReadFile(binaryFile)
 		hash := sha256.Sum256(data)
 		expectedHash := hex.EncodeToString(hash[:])
-
-		// Create checksum file
 		checksumContent := expectedHash + "  asikad\n"
 		checksumFile := writeTempFile(t, checksumContent)
 
@@ -106,12 +103,44 @@ func TestIsValidGitHubDownloadURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {
-			got := isValidGitHubDownloadURL(tt.url)
+			got := archive.IsValidGitHubDownloadURL(tt.url)
 			if got != tt.want {
-				t.Errorf("isValidGitHubDownloadURL(%q) = %v, want %v", tt.url, got, tt.want)
+				t.Errorf("IsValidGitHubDownloadURL(%q) = %v, want %v", tt.url, got, tt.want)
 			}
 		})
 	}
+}
+
+func TestWebUpdateGuard(t *testing.T) {
+	// Verify initial state is "not in progress".
+	webUpdateMu.Lock()
+	inProgress := webUpdateInProgress
+	webUpdateMu.Unlock()
+	if inProgress {
+		t.Fatal("webUpdateInProgress should be false at start")
+	}
+
+	// Simulate claiming the update lock.
+	webUpdateMu.Lock()
+	if webUpdateInProgress {
+		webUpdateMu.Unlock()
+		t.Fatal("webUpdateInProgress should be false")
+	}
+	webUpdateInProgress = true
+	webUpdateMu.Unlock()
+
+	// A second claim should observe in-progress == true.
+	webUpdateMu.Lock()
+	second := webUpdateInProgress
+	webUpdateMu.Unlock()
+	if !second {
+		t.Error("expected webUpdateInProgress to be true while held")
+	}
+
+	// Release.
+	webUpdateMu.Lock()
+	webUpdateInProgress = false
+	webUpdateMu.Unlock()
 }
 
 func writeTempFile(t *testing.T, content string) string {

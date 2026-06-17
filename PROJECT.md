@@ -730,15 +730,21 @@ go test -race ./...
 ### Build Commands
 
 ```bash
-# Build both binaries
+# Build both binaries (release channel — self-update enabled)
 bash build.sh build
+
+# Build with self-update disabled (package channel — for deb/pkg/inno/docker)
+bash build.sh build-package
+
+# Debug build (release channel, debug symbols preserved)
+bash build.sh build-debug
 
 # Or manually
 go build -o asika ./cmd/asika
 go build -o asikad ./cmd/asikad
 
-# With version info
-go build -ldflags="-X 'asika/common/version.Version=v1.0.0'" -o asikad ./cmd/asikad
+# With version info (release channel)
+go build -ldflags="-X 'asika/common/version.Version=v1.0.0' -X 'asika/common/version.Enabled=true' -X 'asika/common/version.Channel=release'" -o asikad ./cmd/asikad
 
 # Download dependencies
 bash build.sh dep
@@ -749,6 +755,21 @@ bash build.sh clean
 # Deep clean (includes Go cache)
 bash build.sh distclean
 ```
+
+### Build Channels and Self-Update
+
+`version.Channel` (set via ldflags) controls whether `asika self-update` is
+available and how the web UI reports upgrade paths:
+
+| Channel   | Producer                                    | Self-update | Upgrade path                                   |
+|-----------|---------------------------------------------|-------------|------------------------------------------------|
+| `release` | `build.sh build` / release workflow `build` | Allowed     | `asika self-update` or re-download tarball      |
+| `package` | `build.sh build-package` / deb/pkg/inno/docker jobs | Blocked | apt / brew / choco / `docker pull`             |
+| `manual`  | plain `go build` (no ldflags)               | Blocked     | Reinstall via `bash build.sh build` or release |
+
+Package-channel installs refuse self-update at the binary level so users do
+not overwrite files managed by dpkg/brew/choco or break Docker layer
+immutability.
 
 ### Code Conventions
 

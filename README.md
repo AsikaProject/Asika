@@ -284,11 +284,13 @@ asika stats                    # Show DORA metrics and overview
 asika logs list                # List audit logs (--level, --category, --actor, --repo-group, --action, --since, --limit)
 asika logs export              # Export audit logs (--format json|csv, -o <file>)
 
-# Self-update
+# Self-update (release tarball installs only)
 asika self-update              # Update to latest version
 asika self-update --check      # Check for updates
 asika self-update --rollback   # Rollback to previous version
 asika self-update --dry-run    # Preview without making changes
+# Package installs (apt/brew/choco/docker) are blocked from self-update;
+# upgrade through your package manager or `docker pull` instead.
 
 # Config
 asika config show              # Show current config (secrets masked)

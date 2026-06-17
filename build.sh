@@ -75,7 +75,7 @@ build() {
 	local suffix="${1:-DEV}"
 	local version
 	version=$(gen_version "$suffix")
-	local ldflags="-s -w -X 'asika/common/version.Version=${version}' -X 'asika/common/version.Enabled=true'"
+	local ldflags="-s -w -X 'asika/common/version.Version=${version}' -X 'asika/common/version.Enabled=true' -X 'asika/common/version.Channel=release'"
 
 	check_go
 
@@ -98,7 +98,7 @@ build() {
 build_debug() {
 	local version
 	version=$(gen_version "DEV")
-	local ldflags="-X 'asika/common/version.Version=${version}' -X 'asika/common/version.Enabled=true'"
+	local ldflags="-X 'asika/common/version.Version=${version}' -X 'asika/common/version.Enabled=true' -X 'asika/common/version.Channel=release'"
 
 	check_go
 
@@ -113,6 +113,32 @@ build_debug() {
 	info "  asika  ✓ ($(( SECONDS - start ))s)"
 
 	success "Debug build complete: asika, asikad (symbols preserved)"
+}
+
+# Build binaries for packaging (deb/pkg/inno/docker). Self-update is disabled
+# via Channel=package so users upgrade through their package manager instead
+# of overwriting files managed by dpkg/brew/choco.
+build_package() {
+	local suffix="${1:-DEV}"
+	local version
+	version=$(gen_version "$suffix")
+	local ldflags="-s -w -X 'asika/common/version.Version=${version}' -X 'asika/common/version.Enabled=false' -X 'asika/common/version.Channel=package'"
+
+	check_go
+
+	info "Building ${BOLD}package${NC} binaries with version: ${version} (self-update disabled)"
+
+	local start=$SECONDS
+	env go build -ldflags="${ldflags}" -o asikad ./cmd/asikad/main.go
+	info "  asikad ✓ ($(( SECONDS - start ))s)"
+
+	start=$SECONDS
+	env go build -ldflags="${ldflags}" -o asika ./cmd/asika/main.go
+	info "  asika  ✓ ($(( SECONDS - start ))s)"
+
+	strip asika asikad 2>/dev/null || warn "strip not available — binaries not stripped"
+
+	success "Package build complete: asika, asikad (self-update disabled)"
 }
 
 # ─── Dependencies ─────────────────────────────────────────────────────────────
@@ -212,7 +238,7 @@ cross_build() {
 
 	local version
 	version=$(gen_version "REL")
-	local ldflags="-s -w -X 'asika/common/version.Version=${version}' -X 'asika/common/version.Enabled=true'"
+	local ldflags="-s -w -X 'asika/common/version.Version=${version}' -X 'asika/common/version.Enabled=true' -X 'asika/common/version.Channel=release'"
 
 	local outdir="dist"
 	mkdir -p "$outdir"
@@ -289,6 +315,7 @@ ${BOLD}USAGE${NC}
 ${BOLD}COMMANDS${NC}
     ${CYAN}build${NC}              Build stripped binaries (default)
     ${CYAN}build-debug${NC}        Build with debug symbols preserved
+    ${CYAN}build-package${NC}      Build with self-update disabled (for deb/pkg/inno/docker)
     ${CYAN}dep${NC}                Download and tidy dependencies
     ${CYAN}lint${NC}               Run go fmt and go vet
     ${CYAN}test${NC}               Run all tests (with optional flags)
@@ -303,6 +330,7 @@ ${BOLD}EXAMPLES${NC}
     bash build.sh                        # Build stripped binaries
     bash build.sh build                  # Same as above
     bash build.sh build-debug             # Debug build (no strip)
+    bash build.sh build-package           # Package build (self-update disabled)
     bash build.sh test -race             # Run tests with race detector
     bash build.sh test -short            # Run tests, skip long ones
     bash build.sh test -run TestFoo      # Run specific test
@@ -328,6 +356,9 @@ case "$cmd" in
 		;;
 	build-debug|debug)
 		build_debug
+		;;
+	build-package)
+		build_package "${SUFFIX:-DEV}"
 		;;
 	dep)
 		dep

@@ -13,12 +13,14 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-github/v69/github"
 	"golang.org/x/oauth2"
 
+	"asika/common/archive"
 	"asika/common/config"
 	"asika/common/version"
 )
@@ -28,10 +30,16 @@ var httpUpdateClient = &http.Client{Timeout: 60 * time.Second}
 const githubOwner = "AsikaProject"
 const githubRepo = "asika"
 
-var updateProgressMap = make(map[string]chan UpdateProgress)
+// webUpdateInProgress and its mutex guard ensure that only one web-triggered
+// self-update runs at a time. Concurrent updates would race on the binary
+// backup/rename path and corrupt the install.
+var (
+	webUpdateMu         sync.Mutex
+	webUpdateInProgress bool
+)
 
 type UpdateProgress struct {
-	Status   string `json:"status"`   // "downloading", "verifying", "installing", "done", "error"
+	Status   string `json:"status"`   // "downloading", "extracting", "verifying", "installing", "done", "error"
 	Progress int    `json:"progress"` // 0-100
 	Message  string `json:"message"`
 	Error    string `json:"error,omitempty"`
@@ -68,6 +76,17 @@ func isAllDigits(s string) bool {
 // CheckForUpdate checks GitHub for a newer version.
 // Dev builds (version contains "-") skip the check and report as up-to-date.
 func CheckForUpdate(c *gin.Context) {
+	if version.Channel != "release" {
+		c.JSON(http.StatusOK, gin.H{
+			"current":    version.Version,
+			"latest":     version.Version,
+			"upgradable": false,
+			"channel":    version.Channel,
+			"reason":     "self-update disabled for this installation method",
+		})
+		return
+	}
+
 	if isDevVersion(version.Version) {
 		c.JSON(http.StatusOK, gin.H{
 			"current":    version.Version,
@@ -108,9 +127,30 @@ func CheckForUpdate(c *gin.Context) {
 
 // PerformWebUpdate performs the update via SSE progress stream.
 func PerformWebUpdate(c *gin.Context) {
+	webUpdateMu.Lock()
+	if webUpdateInProgress {
+		webUpdateMu.Unlock()
+		c.JSON(http.StatusConflict, gin.H{"error": "another update is in progress"})
+		return
+	}
+	webUpdateInProgress = true
+	webUpdateMu.Unlock()
+	defer func() {
+		webUpdateMu.Lock()
+		webUpdateInProgress = false
+		webUpdateMu.Unlock()
+	}()
+
 	cfg := config.Current()
 	if cfg == nil || !cfg.Server.EnableWebUpdate {
 		c.JSON(http.StatusForbidden, gin.H{"error": "web update is disabled"})
+		return
+	}
+	if version.Channel != "release" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "self-update disabled for this installation method",
+			"channel": version.Channel,
+		})
 		return
 	}
 	if version.Enabled != "true" {
@@ -161,24 +201,29 @@ func PerformWebUpdate(c *gin.Context) {
 	}
 
 	binaryName := "asikad"
-	assetName := fmt.Sprintf("%s-%s-%s", binaryName, runtime.GOOS, runtime.GOARCH)
+	tarballName := fmt.Sprintf("asika-%s-%s.tar.gz", runtime.GOOS, runtime.GOARCH)
+	checksumName := fmt.Sprintf("%s-%s-%s.sha256sum", binaryName, runtime.GOOS, runtime.GOARCH)
 
 	downloadURL := ""
 	checksumURL := ""
 	for _, asset := range release.Assets {
-		if asset.GetName() == assetName {
+		switch asset.GetName() {
+		case tarballName:
 			downloadURL = asset.GetBrowserDownloadURL()
-		}
-		if asset.GetName() == assetName+".sha256sum" {
+		case checksumName:
 			checksumURL = asset.GetBrowserDownloadURL()
 		}
 	}
 	if downloadURL == "" {
-		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("no asset found for %s", assetName)})
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("no tarball asset found for %s", tarballName)})
 		return
 	}
-	if !isValidGitHubDownloadURL(downloadURL) {
+	if !archive.IsValidGitHubDownloadURL(downloadURL) {
 		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("invalid download URL: %s", downloadURL)})
+		return
+	}
+	if checksumURL == "" {
+		sendJSONEvent("error", gin.H{"error": "checksum file not available, refusing to install unverified binary"})
 		return
 	}
 
@@ -191,20 +236,15 @@ func PerformWebUpdate(c *gin.Context) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	binaryPath := filepath.Join(tmpDir, assetName)
-	if err := downloadWithProgress(downloadURL, binaryPath, sendEvent); err != nil {
+	tarballPath := filepath.Join(tmpDir, tarballName)
+	if err := downloadWithProgress(downloadURL, tarballPath, sendEvent); err != nil {
 		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("download failed: %s", err.Error())})
 		return
 	}
 
-	if checksumURL == "" {
-		sendJSONEvent("error", gin.H{"error": "checksum file not available, refusing to install unverified binary"})
-		return
-	}
+	sendJSONEvent("progress", gin.H{"status": "extracting", "progress": 100, "message": "Extracting binary from tarball..."})
 
-	sendJSONEvent("progress", gin.H{"status": "verifying", "progress": 100, "message": "Verifying checksum..."})
-
-	checksumPath := filepath.Join(tmpDir, assetName+".sha256sum")
+	checksumPath := filepath.Join(tmpDir, checksumName)
 	resp, err := httpUpdateClient.Get(checksumURL)
 	if err != nil {
 		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to download checksum: %s", err.Error())})
@@ -227,7 +267,25 @@ func PerformWebUpdate(c *gin.Context) {
 		return
 	}
 
-	if err := verifyWebChecksum(binaryPath, checksumPath); err != nil {
+	extractName := binaryName
+	if runtime.GOOS == "windows" {
+		extractName += ".exe"
+	}
+	extractedPath := filepath.Join(tmpDir, extractName)
+	tgzFile, err := os.Open(tarballPath)
+	if err != nil {
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to open tarball: %s", err.Error())})
+		return
+	}
+	if _, err := archive.ExtractFileByBaseName(tgzFile, extractName, extractedPath); err != nil {
+		tgzFile.Close()
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to extract binary: %s", err.Error())})
+		return
+	}
+	tgzFile.Close()
+
+	sendJSONEvent("progress", gin.H{"status": "verifying", "progress": 100, "message": "Verifying checksum..."})
+	if err := verifyWebChecksum(extractedPath, checksumPath); err != nil {
 		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("checksum verification failed: %s", err.Error())})
 		return
 	}
@@ -251,13 +309,13 @@ func PerformWebUpdate(c *gin.Context) {
 		return
 	}
 
-	in, err := os.Open(binaryPath)
+	tmpTarget := currentPath + ".new"
+	in, err := os.Open(extractedPath)
 	if err != nil {
 		os.Rename(backupPath, currentPath)
-		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to open downloaded binary: %s", err.Error())})
+		sendJSONEvent("error", gin.H{"error": fmt.Sprintf("failed to open extracted binary: %s", err.Error())})
 		return
 	}
-	tmpTarget := currentPath + ".new"
 	out, err := os.OpenFile(tmpTarget, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 	if err != nil {
 		in.Close()
@@ -392,8 +450,4 @@ func parseSha256sumFile(path string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no valid checksum entry found")
-}
-
-func isValidGitHubDownloadURL(url string) bool {
-	return strings.HasPrefix(url, "https://github.com/") || strings.HasPrefix(url, "https://objects.githubusercontent.com/")
 }

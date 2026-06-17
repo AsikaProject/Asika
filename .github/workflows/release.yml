@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -57,7 +58,7 @@ jobs:
           TAG="${{ steps.version.outputs.version }}"
           EXT=""
           [ "${{ matrix.goos }}" = "windows" ] && EXT=".exe"
-          LDFLAGS="-s -w -X 'asika/common/version.Version=${TAG}' -X 'asika/common/version.Enabled=true'"
+          LDFLAGS="-s -w -X 'asika/common/version.Version=${TAG}' -X 'asika/common/version.Enabled=true' -X 'asika/common/version.Channel=release'"
 
           mkdir -p bin
 
@@ -91,6 +92,7 @@ jobs:
           cp pack/doc/asikad.html "dist/${PKG}/"
           tar -czf "dist/${PKG}.tar.gz" -C dist "${PKG}"
           sha256sum "bin/asikad-${{ matrix.goos }}-${{ matrix.goarch }}$EXT" > "dist/asikad-${{ matrix.goos }}-${{ matrix.goarch }}.sha256sum"
+          sha256sum "bin/asika-${{ matrix.goos }}-${{ matrix.goarch }}$EXT"  > "dist/asika-${{ matrix.goos }}-${{ matrix.goarch }}.sha256sum"
 
       - uses: actions/upload-artifact@v6
         with:
@@ -103,6 +105,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: amd64
@@ -111,12 +114,14 @@ jobs:
             goarch: arm64
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v7
         with:
-          pattern: binaries-linux-${{ matrix.goarch }}
-          path: bin/
-          merge-multiple: true
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Checkout pack
         uses: actions/checkout@v6
@@ -125,28 +130,43 @@ jobs:
           path: pack
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract tarball
+      - name: Build package-disabled binaries
+        shell: bash
         run: |
-          cd bin
-          tar -xzf asika-linux-${{ matrix.goarch }}.tar.gz
-          cp asika-linux-${{ matrix.goarch }}/asika .. || true
-          cp asika-linux-${{ matrix.goarch }}/asikad .. || true
-          cd ..
+          TAG="${{ github.ref_name }}"
+          # Strip the leading 'v' so Version matches the release tarball format.
+          TAG="${TAG#v}"
+          LDFLAGS="-s -w -X 'asika/common/version.Version=${TAG}' -X 'asika/common/version.Enabled=false' -X 'asika/common/version.Channel=package'"
+          mkdir -p bin
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} \
+            go build -ldflags="${LDFLAGS}" -o bin/asikad ./cmd/asikad/main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.goarch }} \
+            go build -ldflags="${LDFLAGS}" -o bin/asika ./cmd/asika/main.go
 
       - name: Package DEB
         run: bash pack/scripts/package-deb.sh
         env:
           TAG_NAME: ${{ github.ref_name }}
 
+      - name: Verify package output
+        shell: bash
+        run: |
+          if ! ls dist/*.deb 2>/dev/null >/dev/null; then
+            echo "::error::No .deb package produced for ${{ matrix.goarch }}"
+            exit 1
+          fi
+          ls -lh dist/*.deb
+
       - uses: actions/upload-artifact@v6
         with:
-          name: deb-packages
+          name: deb-packages-${{ matrix.goarch }}
           path: dist/*.deb
 
   package-pkg:
     needs: build
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: amd64
@@ -155,12 +175,14 @@ jobs:
             goarch: arm64
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v7
         with:
-          pattern: binaries-darwin-${{ matrix.goarch }}
-          path: bin/
-          merge-multiple: true
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Checkout pack
         uses: actions/checkout@v6
@@ -169,21 +191,35 @@ jobs:
           path: pack
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract tarball
+      - name: Build package-disabled binaries
+        shell: bash
         run: |
-          cd bin
-          tar -xzf asika-darwin-${{ matrix.goarch }}.tar.gz
-          cp asika-darwin-${{ matrix.goarch }}/asikad asikad-darwin-${{ matrix.goarch }}
-          cd ..
+          TAG="${{ github.ref_name }}"
+          TAG="${TAG#v}"
+          LDFLAGS="-s -w -X 'asika/common/version.Version=${TAG}' -X 'asika/common/version.Enabled=false' -X 'asika/common/version.Channel=package'"
+          mkdir -p bin
+          CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} \
+            go build -ldflags="${LDFLAGS}" -o bin/asikad ./cmd/asikad/main.go
+          # PKG installer historically only ships asikad; keep parity with prior releases.
+          cp bin/asikad bin/asikad-darwin-${{ matrix.goarch }}
 
       - name: Package PKG
         run: bash pack/scripts/package-pkg.sh
         env:
           TAG_NAME: ${{ github.ref_name }}
 
+      - name: Verify package output
+        shell: bash
+        run: |
+          if ! ls dist/*.pkg 2>/dev/null >/dev/null; then
+            echo "::error::No .pkg package produced for ${{ matrix.goarch }}"
+            exit 1
+          fi
+          ls -lh dist/*.pkg
+
       - uses: actions/upload-artifact@v6
         with:
-          name: pkg-packages
+          name: pkg-packages-${{ matrix.goarch }}
           path: dist/*.pkg
 
   package-inno:
@@ -191,12 +227,14 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v7
         with:
-          pattern: binaries-windows-amd64
-          path: bin/
-          merge-multiple: true
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Checkout pack
         uses: actions/checkout@v6
@@ -205,14 +243,17 @@ jobs:
           path: pack
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract tarball
+      - name: Build package-disabled binaries
         shell: bash
         run: |
-          cd bin
-          tar -xzf asika-windows-amd64.tar.gz
-          cp asika-windows-amd64/asika.exe .. || true
-          cp asika-windows-amd64/asikad.exe .. || true
-          cd ..
+          TAG="${{ github.ref_name }}"
+          TAG="${TAG#v}"
+          LDFLAGS="-s -w -X 'asika/common/version.Version=${TAG}' -X 'asika/common/version.Enabled=false' -X 'asika/common/version.Channel=package'"
+          mkdir -p bin
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -ldflags="${LDFLAGS}" -o bin/asika.exe ./cmd/asika/main.go
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+            go build -ldflags="${LDFLAGS}" -o bin/asikad.exe ./cmd/asikad/main.go
 
       - name: Install Inno Setup
         shell: pwsh
@@ -229,10 +270,19 @@ jobs:
       - name: Move Inno output to dist/
         shell: bash
         run: |
+          set -e
           mkdir -p dist
-          mv inno-build/Output/*-setup.exe dist/ 2>/dev/null || \
-          mv inno-build/Output/*.exe dist/asika-${{ github.ref_name }}-setup.exe 2>/dev/null || true
-          ls -la dist/ 2>/dev/null || true
+          mv inno-build/Output/*-setup.exe dist/ || \
+            mv inno-build/Output/*.exe "dist/asika-${{ github.ref_name }}-setup.exe"
+          ls -lh dist/
+
+      - name: Verify package output
+        shell: bash
+        run: |
+          if ! ls dist/*-setup.exe 2>/dev/null >/dev/null; then
+            echo "::error::No setup.exe produced"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v6
         with:
@@ -244,12 +294,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v7
         with:
-          pattern: binaries-linux-amd64
-          path: bin/
-          merge-multiple: true
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Checkout pack
         uses: actions/checkout@v6
@@ -258,13 +310,17 @@ jobs:
           path: pack
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract tarball
+      - name: Build package-disabled binaries
+        shell: bash
         run: |
-          cd bin
-          tar -xzf asika-linux-amd64.tar.gz
-          cp asika-linux-amd64/asika .. || true
-          cp asika-linux-amd64/asikad .. || true
-          cd ..
+          TAG="${{ github.ref_name }}"
+          TAG="${TAG#v}"
+          LDFLAGS="-s -w -X 'asika/common/version.Version=${TAG}' -X 'asika/common/version.Enabled=false' -X 'asika/common/version.Channel=package'"
+          mkdir -p bin
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags="${LDFLAGS}" -o bin/asikad ./cmd/asikad/main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags="${LDFLAGS}" -o bin/asika ./cmd/asika/main.go
 
       - name: Package Docker
         run: bash pack/scripts/package-docker.sh
@@ -289,16 +345,58 @@ jobs:
           path: packages/
           merge-multiple: true
 
+      - name: List downloaded artifacts
+        run: |
+          echo "=== binaries/ ==="
+          ls -la binaries/ || true
+          echo "=== packages/ ==="
+          ls -laR packages/ || true
+
       - name: Prepare release assets
         run: |
+          set -e
           mkdir -p release-assets
           cp binaries/*.tar.gz release-assets/
           cp binaries/*.sha256sum release-assets/
-          cp packages/deb-packages/* release-assets/ 2>/dev/null || true
-          cp packages/pkg-packages/* release-assets/ 2>/dev/null || true
-          cp packages/inno-packages/* release-assets/ 2>/dev/null || true
+          cp packages/deb-packages-*/* release-assets/
+          cp packages/pkg-packages-*/* release-assets/
+          cp packages/inno-packages/* release-assets/
           ls -lh release-assets/
-          wget https://github.com/AsikaProject/asika/raw/main/ChangeLog.md -O release-assets/ChangeLog.md
+          wget -q https://github.com/AsikaProject/asika/raw/main/ChangeLog.md -O release-assets/ChangeLog.md
+
+      - name: Verify all expected assets present
+        run: |
+          set -e
+          expected_assets=(
+            "asika-linux-amd64.tar.gz" "asika-linux-arm64.tar.gz"
+            "asika-darwin-amd64.tar.gz" "asika-darwin-arm64.tar.gz"
+            "asika-windows-amd64.tar.gz"
+            "asikad-linux-amd64.sha256sum" "asikad-linux-arm64.sha256sum"
+            "asikad-darwin-amd64.sha256sum" "asikad-darwin-arm64.sha256sum"
+            "asikad-windows-amd64.sha256sum"
+            "asika-linux-amd64.sha256sum" "asika-linux-arm64.sha256sum"
+            "asika-darwin-amd64.sha256sum" "asika-darwin-arm64.sha256sum"
+            "asika-windows-amd64.sha256sum"
+          )
+          missing=0
+          for f in "${expected_assets[@]}"; do
+            if [ ! -f "release-assets/$f" ]; then
+              echo "::error file=$f::Missing required asset: $f"
+              missing=$((missing+1))
+            fi
+          done
+          # Packaged installers: each must be present.
+          for pattern in 'asika*_amd64.deb' 'asika*_arm64.deb' 'asika-*.pkg' 'asika-*-setup.exe'; do
+            if ! ls release-assets/$pattern >/dev/null 2>&1; then
+              echo "::error::Missing package asset matching: $pattern"
+              missing=$((missing+1))
+            fi
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo "::error::$missing required asset(s) missing; refusing to publish"
+            exit 1
+          fi
+          echo "All expected assets present."
 
       - uses: softprops/action-gh-release@v2
         with:

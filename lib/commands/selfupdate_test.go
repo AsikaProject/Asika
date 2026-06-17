@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/google/go-github/v69/github"
 )
 
 func TestIsNewer(t *testing.T) {
@@ -15,6 +17,57 @@ func TestIsNewer(t *testing.T) {
 	if isNewer("1.0.0", "1.0.0") {
 		t.Error("1.0.0 should not be newer than 1.0.0")
 	}
+}
+
+func TestFindAssets(t *testing.T) {
+	release := &github.RepositoryRelease{
+		Assets: []*github.ReleaseAsset{
+			{Name: github.String("asika-linux-arm64.tar.gz"), BrowserDownloadURL: github.String("https://github.com/AsikaProject/asika/releases/download/v1/asika-linux-arm64.tar.gz")},
+			{Name: github.String("asika-darwin-amd64.tar.gz"), BrowserDownloadURL: github.String("https://github.com/AsikaProject/asika/releases/download/v1/asika-darwin-amd64.tar.gz")},
+			{Name: github.String("asikad-linux-arm64.sha256sum"), BrowserDownloadURL: github.String("https://github.com/AsikaProject/asika/releases/download/v1/asikad-linux-arm64.sha256sum")},
+			{Name: github.String("asika-linux-arm64.sha256sum"), BrowserDownloadURL: github.String("https://github.com/AsikaProject/asika/releases/download/v1/asika-linux-arm64.sha256sum")},
+			{Name: github.String("ChangeLog.md"), BrowserDownloadURL: github.String("https://github.com/AsikaProject/asika/releases/download/v1/ChangeLog.md")},
+		},
+	}
+
+	t.Run("asikad upgrade", func(t *testing.T) {
+		tarball, checksum := findAssets(release, "asika-linux-arm64.tar.gz", "asikad-linux-arm64.sha256sum")
+		if tarball == "" {
+			t.Error("expected tarball URL")
+		}
+		if checksum == "" {
+			t.Error("expected checksum URL")
+		}
+	})
+
+	t.Run("asika upgrade", func(t *testing.T) {
+		tarball, checksum := findAssets(release, "asika-linux-arm64.tar.gz", "asika-linux-arm64.sha256sum")
+		if tarball == "" {
+			t.Error("expected tarball URL")
+		}
+		if checksum == "" {
+			t.Error("expected checksum URL")
+		}
+	})
+
+	t.Run("missing tarball", func(t *testing.T) {
+		tarball, _ := findAssets(release, "asika-solaris-sparc.tar.gz", "asikad-solaris-sparc.sha256sum")
+		if tarball != "" {
+			t.Errorf("expected empty tarball URL, got %q", tarball)
+		}
+	})
+
+	t.Run("rejects non github url", func(t *testing.T) {
+		evil := &github.RepositoryRelease{
+			Assets: []*github.ReleaseAsset{
+				{Name: github.String("asika-linux-arm64.tar.gz"), BrowserDownloadURL: github.String("https://evil.example.com/asika.tar.gz")},
+			},
+		}
+		tarball, _ := findAssets(evil, "asika-linux-arm64.tar.gz", "asikad-linux-arm64.sha256sum")
+		if tarball != "" {
+			t.Errorf("expected empty tarball URL for non-github host, got %q", tarball)
+		}
+	})
 }
 
 func TestVerifyChecksum(t *testing.T) {
@@ -74,17 +127,17 @@ func TestDoRollbackNoBackup(t *testing.T) {
 	}
 }
 
-func TestCopyFile(t *testing.T) {
+func TestAtomicInstall(t *testing.T) {
 	dir := t.TempDir()
 
 	srcPath := filepath.Join(dir, "src")
-	srcData := []byte("test copy data")
+	srcData := []byte("test atomic install data")
 	if err := os.WriteFile(srcPath, srcData, 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	dstPath := filepath.Join(dir, "dst")
-	if err := copyFile(srcPath, dstPath); err != nil {
+	if err := atomicInstall(srcPath, dstPath); err != nil {
 		t.Fatal(err)
 	}
 
@@ -93,7 +146,20 @@ func TestCopyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(dstData) != string(srcData) {
-		t.Error("copied data does not match source")
+		t.Error("installed data does not match source")
+	}
+
+	// The intermediate .new file must have been cleaned up by the rename.
+	if _, err := os.Stat(dstPath + ".new"); !os.IsNotExist(err) {
+		t.Errorf("intermediate .new file should not exist: %v", err)
+	}
+}
+
+func TestAtomicInstall_SourceMissing(t *testing.T) {
+	dir := t.TempDir()
+	dst := filepath.Join(dir, "dst")
+	if err := atomicInstall(filepath.Join(dir, "nope"), dst); err == nil {
+		t.Error("expected error when source is missing")
 	}
 }
 

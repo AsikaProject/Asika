@@ -7,7 +7,7 @@ listen    = ":8080"
 mode      = "release"   # "debug" | "release"
 min_procs = 0           # min OS threads; 0 = Go default (1), otherwise floor
 max_procs = 0           # max OS threads; 0 = use all CPUs (default)
-enable_web_update = false   # allow admin to update from WebUI
+enable_web_update = false   # allow admin to update from WebUI (release channel only)
 
 # Mode: "multi" for cross-platform sync, "single" for single repo
 mode = "multi"
@@ -423,6 +423,9 @@ stats_interval = "30s"
 # public_feed = false
 #
 # Self-update configuration
+# NOTE: self-update is only available for release tarball installs. Package
+# installs (deb/pkg/setup/docker) and manual `go build` outputs are blocked
+# at the binary level via the version.Channel ldflags value.
 [updates]
 check         = false    # periodically check for new versions
 interval      = "24h"    # check interval
