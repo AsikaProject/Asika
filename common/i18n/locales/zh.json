@@ -247,7 +247,6 @@
 	"config.system": "系统",
 	"config.current_version": "当前版本：",
 	"config.check_updates": "检查更新",
-	"config.dev_build_no_update": "本地开发版本，不支持自动更新",
 	"config.update_now": "立即更新",
 	"config.stale_pr_mgmt": "过期 PR 管理",
 	"config.run_stale_check": "立即运行过期检查",
@@ -263,8 +262,6 @@
 
 	"wizard.title": "设置向导",
 	"wizard.subtitle": "配置 Asika 首次使用",
-	"wizard.error.single_requires_repo": "单仓库模式需要至少填写一个平台仓库（GitHub、GitLab、Gitea、Forgejo、Codeberg、Bitbucket 或 Gerrit）。",
-	"wizard.error.single_requires_mirror": "单仓库模式需要选择镜像平台。",
 	"wizard.next": "下一步",
 	"wizard.complete": "完成设置",
 	"wizard.setup_complete": "设置完成！",

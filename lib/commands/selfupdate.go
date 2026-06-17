@@ -89,7 +89,7 @@ func runSelfUpdate(cmd *cobra.Command, args []string) {
 	fmt.Printf("Current version: %s\n", currentVersion)
 	fmt.Printf("Latest version:   %s\n", latestVersion)
 
-	if currentVersion != "dev" && !isNewer(latestVersion, currentVersion) {
+	if !version.IsUpgradeable(currentVersion, latestVersion) {
 		fmt.Println("Already up to date.")
 		if checkOnly {
 			return
@@ -97,7 +97,11 @@ func runSelfUpdate(cmd *cobra.Command, args []string) {
 		os.Exit(0)
 	}
 
-	if currentVersion == "dev" {
+	if version.IsDevBuild(currentVersion) {
+		// Dev builds are always upgradeable to a release; the check above
+		// already ensured latest is not a dev build. No special prompt is
+		// needed — the project rule allows dev → release to proceed
+		// silently through the normal confirmation flow.
 		fmt.Println("(running development build, proceeding with update)")
 	}
 
@@ -433,8 +437,4 @@ func doRollback() {
 	}
 
 	fmt.Println("Rollback complete. Please restart the service manually.")
-}
-
-func isNewer(latest, current string) bool {
-	return latest != current
 }

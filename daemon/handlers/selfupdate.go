@@ -45,36 +45,9 @@ type UpdateProgress struct {
 	Error    string `json:"error,omitempty"`
 }
 
-// isDevVersion returns true if the version is a development or non-release build.
-// Release versions are pure 8-digit date strings (e.g. "20260612").
-// Any suffix (DEV, HF, CVE, DEP, REL) or commit hash suffix indicates a non-release build.
-func isDevVersion(v string) bool {
-	if v == "" || v == "dev" {
-		return true
-	}
-	if len(v) == 8 && isAllDigits(v) {
-		return false
-	}
-	knownSuffixes := []string{"DEV", "HF", "CVE", "DEP", "REL"}
-	for _, s := range knownSuffixes {
-		if strings.Contains(v, s) {
-			return true
-		}
-	}
-	return strings.Contains(v, "-")
-}
-
-func isAllDigits(s string) bool {
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
-}
-
 // CheckForUpdate checks GitHub for a newer version.
-// Dev builds (version contains "-") skip the check and report as up-to-date.
+// Dev builds skip the check and report as up-to-date; the upgrade path
+// for dev builds is handled by PerformWebUpdate via version.IsUpgradeable.
 func CheckForUpdate(c *gin.Context) {
 	if version.Channel != "release" {
 		c.JSON(http.StatusOK, gin.H{
@@ -87,7 +60,7 @@ func CheckForUpdate(c *gin.Context) {
 		return
 	}
 
-	if isDevVersion(version.Version) {
+	if version.IsDevBuild(version.Version) {
 		c.JSON(http.StatusOK, gin.H{
 			"current":    version.Version,
 			"latest":     version.Version,
@@ -114,7 +87,7 @@ func CheckForUpdate(c *gin.Context) {
 	}
 
 	latestVersion := strings.TrimPrefix(release.GetTagName(), "v")
-	upgradable := latestVersion != "" && latestVersion != version.Version
+	upgradable := version.IsUpgradeable(version.Version, latestVersion)
 
 	c.JSON(http.StatusOK, gin.H{
 		"current":      version.Version,

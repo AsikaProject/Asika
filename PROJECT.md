@@ -771,6 +771,25 @@ Package-channel installs refuse self-update at the binary level so users do
 not overwrite files managed by dpkg/brew/choco or break Docker layer
 immutability.
 
+### Version Comparison
+
+`common/version` provides the single source of truth for ordering Asika
+versions. All three upgrade entry points (CLI `self-update`, Web
+`CheckForUpdate`, background `checkAndNotify`) MUST route through these
+helpers — local comparisons diverge and cause inconsistent UX.
+
+- `Compare(a, b)` parses `YYYYMMDD[SUFFIX]` and orders same-day releases by
+  suffix priority `HF > CVE > "" > DEP > DEV`. Malformed input falls back to
+  lexical ordering so the function is total.
+- `IsDevBuild(v)` reports the dev-build contract (`v == "dev"` or contains
+  `-`). Used to gate the background checker and Web UI checks.
+- `IsUpgradeable(current, latest)` is the canonical "offer upgrade?" check.
+  Enforces downgrade protection plus the project dev-policy rule:
+  dev → release is always allowed (silent), release → dev is never allowed.
+
+The version grammar is documented in `common/version/version.go` and the
+suffix priority table lives in `common/version/compare.go`.
+
 ### Code Conventions
 
 - **Error handling**: All errors must be handled. Use `fmt.Errorf("context: %w", err)` for wrapping.

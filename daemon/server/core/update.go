@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"asika/common/utils"
 	"asika/common/version"
 )
+
+const githubLatestReleaseAPI = "https://api.github.com/repos/AsikaProject/asika/releases/latest"
 
 var updateHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
@@ -30,16 +33,38 @@ func startUpdateCheck(cfg *models.Config) {
 }
 
 func checkAndNotify(cfg *models.Config) {
+	// Dev builds have no stable ordering and would otherwise spam upgrade
+	// notifications on every poll. Match the Web UI behaviour and skip.
+	if version.IsDevBuild(version.Version) {
+		return
+	}
+
 	type releaseResponse struct {
 		TagName string `json:"tag_name"`
 	}
 
-	resp, err := updateHTTPClient.Get("https://api.github.com/repos/AsikaProject/asika/releases/latest")
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, githubLatestReleaseAPI, nil)
+	if err != nil {
+		slog.Warn("update check: build request", "error", err)
+		return
+	}
+	// Authenticate when a token is configured — anonymous calls are heavily
+	// rate-limited and frequently fail with 403/429.
+	if cfg.Tokens.GitHub != "" {
+		req.Header.Set("Authorization", "Bearer "+cfg.Tokens.GitHub)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := updateHTTPClient.Do(req)
 	if err != nil {
 		slog.Warn("update check failed", "error", err)
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("update check: non-200 response", "status", resp.StatusCode)
+		return
+	}
 
 	var release releaseResponse
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
@@ -50,7 +75,7 @@ func checkAndNotify(cfg *models.Config) {
 	latestVersion := strings.TrimPrefix(release.TagName, "v")
 	currentVersion := version.Version
 
-	if latestVersion == "" || latestVersion == currentVersion {
+	if !version.IsUpgradeable(currentVersion, latestVersion) {
 		return
 	}
 

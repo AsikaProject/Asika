@@ -10,15 +10,6 @@ import (
 	"github.com/google/go-github/v69/github"
 )
 
-func TestIsNewer(t *testing.T) {
-	if !isNewer("2.0.0", "1.0.0") {
-		t.Error("2.0.0 should be newer than 1.0.0")
-	}
-	if isNewer("1.0.0", "1.0.0") {
-		t.Error("1.0.0 should not be newer than 1.0.0")
-	}
-}
-
 func TestFindAssets(t *testing.T) {
 	release := &github.RepositoryRelease{
 		Assets: []*github.ReleaseAsset{
