@@ -1,0 +1,31 @@
+name: Asika Workflow Automation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted]
+  check_suite:
+    types: [completed]
+
+jobs:
+  asika:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Asika
+        run: |
+          curl -L https://github.com/minibp/asika/releases/latest/download/asika-linux-amd64 -o asikad
+          chmod +x asikad
+
+      - name: Run Asika workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./asikad --workflow
