@@ -1,0 +1,62 @@
+# Asika Workflow Configuration Example
+# Place this file as `asika_workflow_config.toml` in your repository root
+
+[workflow]
+enabled = true
+
+# Label Rules
+# Apply labels automatically based on PR state
+[[workflow.labels]]
+condition = "ci_passed"
+action = "add"
+label = "ready-to-merge"
+
+[[workflow.labels]]
+condition = "ci_failed"
+action = "add"
+label = "ci-failed"
+
+[[workflow.labels]]
+condition = "has_conflicts"
+action = "add"
+label = "conflicts"
+
+[[workflow.labels]]
+condition = "draft"
+action = "remove"
+label = "ready-to-merge"
+
+# Merge Rule
+# Automatically merge PRs when conditions are met
+[workflow.merge]
+enabled = true
+condition = "ci_passed && approved && !has_conflicts && !draft"
+auto_merge = true
+merge_method = "squash"  # Options: merge, squash, rebase
+delete_branch = true
+
+# Close Rule
+# Automatically close PRs when conditions are met
+[workflow.close]
+enabled = false
+condition = "ci_failed"
+comment = "Automatically closing due to CI failure"
+add_label = "auto-closed"
+
+# Available Conditions:
+# - ci_passed: CI checks passed
+# - ci_failed: CI checks failed
+# - has_conflicts: PR has merge conflicts
+# - approved: PR has at least one approval
+# - draft: PR is in draft state
+# - has_label("label-name"): PR has specific label
+#
+# Operators:
+# - && (AND)
+# - || (OR)
+# - ! (NOT)
+#
+# Examples:
+# - "ci_passed && approved"
+# - "!draft && !has_conflicts"
+# - "has_label(\"urgent\") || has_label(\"hotfix\")"

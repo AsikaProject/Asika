@@ -127,6 +127,76 @@ See `asika.toml.example` for the full reference — it covers notifications, spa
 # http://localhost:8080
 ```
 
+## Workflow Mode (CI/CD Integration)
+
+Run Asika in **workflow mode** to automate PR operations directly from CI/CD pipelines — no daemon, no webhooks, just run and exit.
+
+### How it works
+
+1. Add `asika_workflow_config.toml` to your repository root
+2. Run `asikad --workflow` in your CI job
+3. Asika detects the platform (GitHub Actions, GitLab CI, etc.), reads the config, and executes label/merge/close operations based on PR state
+
+### Example workflow config
+
+```toml
+[workflow]
+enabled = true
+
+[[workflow.labels]]
+condition = "ci_passed"
+action = "add"
+label = "ready-to-merge"
+
+[workflow.merge]
+enabled = true
+condition = "ci_passed && approved && !has_conflicts"
+auto_merge = true
+merge_method = "squash"
+delete_branch = true
+```
+
+See `asika_workflow_config.toml.example` for full reference.
+
+### Supported platforms
+
+- GitHub Actions
+- GitLab CI
+- Gitea Actions
+- Forgejo Actions
+- Bitbucket Pipelines
+- Gerrit CI
+
+### GitHub Actions example
+
+```yaml
+name: Asika Workflow
+on: pull_request
+
+jobs:
+  asika:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Asika
+        run: |
+          curl -L https://github.com/minibp/asika/releases/latest/download/asika-linux-amd64 -o asikad
+          chmod +x asikad
+      - name: Run workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./asikad --workflow
+```
+
+### Condition syntax
+
+- `ci_passed`, `ci_failed` — CI check status
+- `approved` — PR has approvals
+- `has_conflicts` — PR has merge conflicts
+- `draft` — PR is in draft state
+- `has_label("name")` — PR has specific label
+- Operators: `&&` (AND), `||` (OR), `!` (NOT)
+
 ## Chat Bots
 
 ### Slack
