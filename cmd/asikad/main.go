@@ -19,6 +19,7 @@ import (
 	"asika/common/version"
 	"asika/daemon/server"
 	"asika/daemon/server/core"
+	"asika/daemon/workflow"
 )
 
 const (
@@ -29,12 +30,29 @@ const (
 func main() {
 	desktopMode := flag.Bool("desktop", false, "Run in desktop foreground mode (open browser to WebUI)")
 	versionFlag := flag.Bool("version", false, "Print version and exit")
+	workflowMode := flag.Bool("workflow", false, "Run in workflow mode for CI/CD integration")
 	shutdownTimeout := flag.Duration("shutdown-timeout", defaultShutdownTimeout, "Graceful shutdown timeout")
 	metricsInterval := flag.Duration("metrics-interval", metricsLogInterval, "Metrics logging interval (0 to disable)")
 	flag.Parse()
 
 	if *versionFlag {
 		fmt.Printf("Asika daemon version %s\n", version.Version)
+		return
+	}
+
+	if *workflowMode {
+		workDir, err := os.Getwd()
+		if err != nil {
+			slog.Error("failed to get working directory", "error", err)
+			os.Exit(1)
+		}
+
+		if err := workflow.Run(workDir); err != nil {
+			slog.Error("workflow execution failed", "error", err)
+			os.Exit(1)
+		}
+
+		slog.Info("workflow execution completed")
 		return
 	}
 
