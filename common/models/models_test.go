@@ -3,6 +3,8 @@ package models
 import (
 	"testing"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
 func TestUser(t *testing.T) {
@@ -220,5 +222,51 @@ func TestSyncRecord(t *testing.T) {
 	}
 	if record.Status != "success" {
 		t.Errorf("Status = %q, want success", record.Status)
+	}
+}
+
+func TestWorkflowConfigParsing(t *testing.T) {
+	configStr := `
+[workflow]
+enabled = true
+
+[[workflow.labels]]
+condition = "ci_passed"
+action = "add"
+label = "ready-to-merge"
+
+[workflow.merge]
+enabled = true
+condition = "ci_passed && approved"
+auto_merge = true
+merge_method = "merge"
+delete_branch = false
+
+[workflow.close]
+enabled = false
+condition = "ci_failed"
+comment = "Auto-closed"
+add_label = "closed"
+`
+
+	var cfg WorkflowConfig
+	if err := toml.Unmarshal([]byte(configStr), &cfg); err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+
+	if !cfg.Workflow.Enabled {
+		t.Error("expected enabled=true")
+	}
+
+	if len(cfg.Workflow.Labels) != 1 {
+		t.Errorf("expected 1 label rule, got %d", len(cfg.Workflow.Labels))
+	}
+
+	if cfg.Workflow.Labels[0].Condition != "ci_passed" {
+		t.Errorf("unexpected condition: %s", cfg.Workflow.Labels[0].Condition)
+	}
+
+	if cfg.Workflow.Merge.MergeMethod != "merge" {
+		t.Errorf("unexpected merge method: %s", cfg.Workflow.Merge.MergeMethod)
 	}
 }

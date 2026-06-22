@@ -511,3 +511,35 @@ type WebAuthnSession struct {
 	Challenge string    `json:"challenge"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type WorkflowConfig struct {
+	Workflow WorkflowRules `toml:"workflow" json:"workflow"`
+}
+
+type WorkflowRules struct {
+	Enabled bool                `toml:"enabled" json:"enabled"`
+	Labels  []WorkflowLabelRule `toml:"labels" json:"labels"`
+	Merge   WorkflowMergeRule   `toml:"merge" json:"merge"`
+	Close   WorkflowCloseRule   `toml:"close" json:"close"`
+}
+
+type WorkflowLabelRule struct {
+	Condition string `toml:"condition" json:"condition"`
+	Action    string `toml:"action" json:"action"`
+	Label     string `toml:"label" json:"label"`
+}
+
+type WorkflowMergeRule struct {
+	Enabled      bool   `toml:"enabled" json:"enabled"`
+	Condition    string `toml:"condition" json:"condition"`
+	AutoMerge    bool   `toml:"auto_merge" json:"auto_merge"`
+	MergeMethod  string `toml:"merge_method" json:"merge_method"`
+	DeleteBranch bool   `toml:"delete_branch" json:"delete_branch"`
+}
+
+type WorkflowCloseRule struct {
+	Enabled   bool   `toml:"enabled" json:"enabled"`
+	Condition string `toml:"condition" json:"condition"`
+	Comment   string `toml:"comment" json:"comment"`
+	AddLabel  string `toml:"add_label" json:"add_label"`
+}
