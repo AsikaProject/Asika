@@ -1,3 +1,68 @@
+## Workflow Mode (CI/CD Integration)
+
+**Location**: `daemon/workflow/`
+
+Workflow mode runs Asika in CI/CD pipelines as a one-shot process (no daemon, no webhooks). It detects the platform, reads `asika_workflow_config.toml`, evaluates conditions against PR state, and executes label/merge/close operations.
+
+### Components
+
+- **detector.go**: Platform detection from CI environment variables (GitHub Actions, GitLab CI, Gitea Actions, Forgejo Actions, Bitbucket Pipelines, Gerrit CI). Returns `PlatformInfo` with platform type, PR number, repository, token, branches, and API base URL.
+- **config.go**: Loads and validates `asika_workflow_config.toml` from repository root. Validates label actions (`add`/`remove`), merge methods (`merge`/`squash`/`rebase`), and required fields.
+- **evaluator.go**: Evaluates boolean conditions (`ci_passed`, `ci_failed`, `approved`, `has_conflicts`, `draft`, `has_label("name")`) with operators (`&&`, `||`, `!`). Fetches PR context via platform client (CI status from commit SHA, approvals, conflicts, labels).
+- **executor.go**: Executes operations via platform clients. Labels: add/remove based on conditions. Merge: auto-merge with configurable method and branch deletion. Close: with optional comment and label.
+- **workflow.go**: Main orchestrator. Entry point: `Run(workDir)` called by `asikad --workflow`. Flow: detect platform → load config → init client → fetch PR context → execute labels → execute merge → execute close.
+
+### Integration Points
+
+- **Platform clients**: Reuses `common/platforms/` implementations (GitHub, GitLab, Gitea, Bitbucket, Gerrit).
+- **Entry point**: `cmd/asikad/main.go` handles `--workflow` flag, calls `workflow.Run()`, exits after execution.
+- **Config file**: Repository-specific `asika_workflow_config.toml` (not global `asika.toml`).
+
+### Supported Platforms
+
+| Platform | Detection Variable | Token Variable | API URL Variable |
+|----------|-------------------|----------------|------------------|
+| GitHub Actions | `GITHUB_ACTIONS` | `GITHUB_TOKEN` | `GITHUB_API_URL` |
+| GitLab CI | `GITLAB_CI` | `CI_JOB_TOKEN` | `CI_API_V4_URL` |
+| Gitea Actions | `GITEA_ACTIONS` | `GITEA_TOKEN` | `GITEA_API_URL` |
+| Forgejo Actions | `FORGEJO_ACTIONS` | `FORGEJO_TOKEN` | `FORGEJO_API_URL` |
+| Bitbucket Pipelines | `BITBUCKET_PIPELINE_UUID` | `ASIKA_TOKEN` or `BITBUCKET_ACCESS_TOKEN` | (hardcoded) |
+| Gerrit CI | `GERRIT_CHANGE_NUMBER` | `ASIKA_TOKEN` or `GERRIT_HTTP_PASSWORD` | `GERRIT_HOST` |
+
+**Note**: Bitbucket and Gerrit require `ASIKA_TOKEN` environment variable (CI job secret) since they lack built-in token variables.
+
+### Condition Syntax
+
+- **Variables**: `ci_passed`, `ci_failed`, `has_conflicts`, `approved`, `draft`
+- **Functions**: `has_label("label-name")`
+- **Operators**: `&&` (AND), `||` (OR), `!` (NOT)
+- **Examples**: `ci_passed && approved`, `!draft && !has_conflicts`, `has_label("urgent") || has_label("hotfix")`
+
+### Example Config
+
+```toml
+[workflow]
+enabled = true
+
+[[workflow.labels]]
+condition = "ci_passed"
+action = "add"
+label = "ready-to-merge"
+
+[workflow.merge]
+enabled = true
+condition = "ci_passed && approved && !has_conflicts"
+auto_merge = true
+merge_method = "squash"
+delete_branch = true
+
+[workflow.close]
+enabled = false
+condition = "ci_failed"
+comment = "Auto-closed due to CI failure"
+add_label = "auto-closed"
+```
+
 ## Architecture
 
 ```mermaid

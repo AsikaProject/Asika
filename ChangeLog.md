@@ -1,5 +1,9 @@
 # ChangeLog for Asika
 
+## v20260622DEV
+
+- **Feature**: Add workflow mode for CI/CD integration. Run `asikad --workflow` in CI pipelines to automate PR operations (labeling, merging, closing) based on repository-specific `asika_workflow_config.toml` rules. Supports GitHub Actions, GitLab CI, Gitea Actions, Forgejo Actions, Bitbucket Pipelines, and Gerrit CI. Platform detection reads environment variables to identify the platform, PR number, repository, and token. Condition evaluator supports `ci_passed`, `ci_failed`, `approved`, `has_conflicts`, `draft`, `has_label("name")` with `&&`, `||`, `!` operators. Operations execute via existing platform clients with no daemon or webhook setup required.
+
 ## v20260617DEV
 
 - **Fix**: Resolve self-update asset lookup failure that made every `asika self-update` exit with "no binary asset found". Release tarballs are now correctly resolved by their actual `asika-<os>-<arch>.tar.gz` name and the target binary is extracted via the new `common/archive` package (streaming tar+gzip with size cap and path-traversal protection). The extracted binary is verified against `<binaryName>-<os>-<arch>.sha256sum`, which the release workflow computes over the bare binary rather than the tarball.
